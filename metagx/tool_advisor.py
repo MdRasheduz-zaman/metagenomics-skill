@@ -34,36 +34,54 @@ SHORT_PLATFORMS = {"illumina", "mgi", "bgi"}
 LONG_PLATFORMS = {"ont", "pacbio_hifi", "pacbio_clr", "pacbio"}
 
 
+def _context_from_record(s: Dict[str, Any]) -> Dict[str, Any]:
+    """Build one shape-complete advisor context from a sample record."""
+    plat = evidence_pack.normalize_platform(s.get("platform", "illumina"))
+    lib = str(s.get("library", "wgs")).lower()
+    layout = str(s.get("layout", "se")).lower()
+    if lib == "amplicon":
+        qc_key = "amplicon"
+    elif lib == "ancient" and layout == "pe":
+        qc_key = "ancient_pe"
+    else:
+        qc_key = plat
+    brl = s.get("bracken_read_length")
+    return {
+        "sample": s.get("sample"),
+        "platform": plat,
+        "library": lib,
+        "layout": layout,
+        "qc_key": qc_key,
+        "reads": s.get("r1") or s.get("R1") or s.get("reads"),
+        "bracken_read_length": int(brl) if str(brl or "").strip() else None,
+    }
+
+
+def _read_sample_sheet(path: str) -> List[Dict[str, Any]]:
+    """Parse a TSV sample sheet into records (empty list if unreadable)."""
+    import csv
+    try:
+        with open(path) as fh:
+            return [dict(row) for row in csv.DictReader(fh, delimiter="\t")]
+    except (OSError, csv.Error):
+        return []
+
+
 def sample_contexts(cfg: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Per-sample platform / library context from the sample sheet."""
+    """Per-sample platform / library context from the sample sheet.
+
+    Accepts either an inline list of records or a path to a TSV sample sheet — the
+    latter is parsed so the advisor uses real per-sample platforms (a TSV-path run is
+    the common case; previously it fell back to a single illumina context that was
+    also missing keys, crashing qc_routing_for). Returns a safe default only when the
+    sheet can't be read.
+    """
     samples = cfg.get("samples") or []
-    if not isinstance(samples, list):
-        return [{"platform": "illumina", "library": "wgs", "layout": "se"}]
-    out = []
-    for s in samples:
-        plat = evidence_pack.normalize_platform(s.get("platform", "illumina"))
-        lib = str(s.get("library", "wgs")).lower()
-        layout = str(s.get("layout", "se")).lower()
-        if lib == "amplicon":
-            qc_key = "amplicon"
-        elif lib == "ancient" and layout == "pe":
-            qc_key = "ancient_pe"
-        elif plat in SHORT_PLATFORMS:
-            qc_key = plat
-        elif plat in LONG_PLATFORMS:
-            qc_key = plat
-        else:
-            qc_key = plat
-        out.append({
-            "sample": s.get("sample"),
-            "platform": plat,
-            "library": lib,
-            "layout": layout,
-            "qc_key": qc_key,
-            "reads": s.get("r1") or s.get("reads"),
-            "bracken_read_length": s.get("bracken_read_length"),
-        })
-    return out
+    if isinstance(samples, str):
+        samples = _read_sample_sheet(samples)
+    if not isinstance(samples, list) or not samples:
+        return [_context_from_record({})]
+    return [_context_from_record(s) for s in samples]
 
 
 def _routing() -> Dict[str, Any]:

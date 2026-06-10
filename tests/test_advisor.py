@@ -7,6 +7,30 @@ import pytest
 from metagx import advise, catalog, evidence_pack, history, sync_help
 
 
+def test_sample_contexts_from_tsv_sheet_is_shape_complete(tmp_path):
+    """Regression: a TSV sample-sheet path must yield contexts with all keys.
+
+    Previously sample_contexts returned a fallback dict missing 'qc_key' for any
+    string (path) samples value, crashing the post-run advisor (qc_routing_for) for
+    every TSV-based run — the common case.
+    """
+    from metagx import tool_advisor
+    sheet = tmp_path / "samples.tsv"
+    sheet.write_text("sample\tr1\tplatform\tlayout\n"
+                     "s1\ts1.fastq\tont\tse\n"
+                     "s2\ts2.fastq\tillumina\tse\n")
+    cfg = {"samples": str(sheet), "modules": {"classify": True}}
+    ctxs = tool_advisor.sample_contexts(cfg)
+    assert len(ctxs) == 2
+    for c in ctxs:                                   # every context is shape-complete
+        for key in ("sample", "platform", "library", "layout", "qc_key", "reads"):
+            assert key in c
+    assert {c["platform"] for c in ctxs} == {"ont", "illumina"}   # real platforms, not fallback
+    # the full advisor path must not raise on a TSV-sheet config
+    rec = tool_advisor.recommend_config(cfg)
+    assert "qc_routing" in rec
+
+
 def test_diversity_suggestions_low_coverage():
     div = {"n_samples": 3, "core_taxa": [{"taxon": "A"}],
            "alpha": [{"sample": "s1", "goods_coverage": 0.80},
