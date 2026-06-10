@@ -201,7 +201,11 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   than in real samples are flagged and removed (`stats/decontam_flagged.tsv`,
   `stats/abundance_decontaminated.tsv`). Pure-Python. For low-biomass samples.
 - **Strain level** (`modules.strain`, needs `assembly`): inStrain SNV/microdiversity profiling
-  over the reads-vs-contigs mapping, resolving mixed strains abundance can't.
+  over the reads-vs-contigs mapping, resolving mixed strains abundance can't. **Short-read
+  (Illumina) only in practice** — inStrain's default `--min_read_ani 0.95` rejects most
+  ONT/PacBio reads (~5–15% error), so the advisor warns when `strain` is on with long-read
+  samples. Provision inStrain via `--use-conda` (bioconda), not pip — it pins an ancient
+  biopython that won't build on modern arm64/Python.
 - **Per-sample Bracken length**: kmer_distrib is length-specific. Priority for `-r`: sample
   sheet `bracken_read_length` column > `bracken_read_length_by_platform: {illumina: 150,
   ont: 1000}` > global `bracken.read_length`. The DB must have that `databaseXmers` built.

@@ -376,6 +376,44 @@ def classify_alternatives() -> List[Dict[str, Any]]:
     return block.get("alternatives", [])
 
 
+_LONG_PLATFORMS_ADVISOR = {"ont", "nanopore", "pacbio_clr", "pacbio", "pacbio_hifi"}
+
+
+def module_caveats(modules: Dict[str, Any], platforms: List[str],
+                   consensus: Dict[str, Any] | None = None) -> List[str]:
+    """Methodological caveats for the enabled module + platform combination.
+
+    Pure function (no I/O) so it is unit-testable. These encode bioinformatics
+    correctness that the hard config validation deliberately allows but should flag:
+    several tools assume accurate short reads and mislead on long-read (ONT/PacBio)
+    data without saying so.
+    """
+    mods = modules or {}
+    has_long = any(p in _LONG_PLATFORMS_ADVISOR for p in platforms)
+    has_short = any(p not in _LONG_PLATFORMS_ADVISOR for p in platforms)
+    out: List[str] = []
+    if mods.get("strain") and has_long:
+        out.append(
+            "strain (inStrain) assumes high-accuracy short reads: its default "
+            "--min_read_ani (0.95) rejects most ONT/PacBio reads (~5-15% error), so "
+            "strain-level SNV/microdiversity calls on long-read samples are unreliable. "
+            "Use Illumina for strain profiling, or treat long-read results as exploratory."
+        )
+    clf = str((consensus or {}).get("classifier", "metaphlan")).lower()
+    if mods.get("classify_consensus") and clf == "metaphlan" and has_long and not has_short:
+        out.append(
+            "classify_consensus with MetaPhlAn: its clade-specific marker genes are tuned "
+            "for short reads; on long-read-only data prefer consensus.classifier=kaiju "
+            "(translated-protein search) for a fairer second-classifier cross-check."
+        )
+    if mods.get("damage") and has_long:
+        out.append(
+            "damage (ancient-DNA authentication) models C→T/G→A deamination at the ends of "
+            "short fragments; it is designed for short-read libraries, not ONT/PacBio."
+        )
+    return out
+
+
 def recommend_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Full multi-tool recommendation payload for a config (interview / advise / CLI)."""
     contexts = sample_contexts(cfg)
@@ -418,6 +456,9 @@ def recommend_config(cfg: Dict[str, Any]) -> Dict[str, Any]:
     conf_rec = evidence_pack.recommend("kraken2", primary, param="confidence")
     if conf_rec.get("warnings"):
         warnings.extend(conf_rec["warnings"])
+
+    # methodological caveats for the enabled-module x platform combination
+    warnings.extend(module_caveats(cfg.get("modules") or {}, platforms, cfg.get("consensus")))
 
     return {
         "platforms": platforms,

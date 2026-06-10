@@ -7,6 +7,37 @@ import pytest
 from metagx import advise, catalog, evidence_pack, history, sync_help
 
 
+def test_module_caveats_strain_on_long_reads():
+    from metagx import tool_advisor
+    warns = tool_advisor.module_caveats({"strain": True}, ["ont"])
+    assert any("inStrain" in w and "long-read" in w for w in warns)
+    # short reads -> no strain caveat (inStrain's intended platform)
+    assert tool_advisor.module_caveats({"strain": True}, ["illumina"]) == []
+    # strain off -> nothing
+    assert tool_advisor.module_caveats({"strain": False}, ["ont"]) == []
+
+
+def test_module_caveats_metaphlan_consensus_long_read_only():
+    from metagx import tool_advisor
+    warns = tool_advisor.module_caveats({"classify_consensus": True}, ["pacbio_clr"],
+                                        consensus={"classifier": "metaphlan"})
+    assert any("kaiju" in w for w in warns)
+    # kaiju already chosen -> no nudge
+    assert tool_advisor.module_caveats({"classify_consensus": True}, ["ont"],
+                                       consensus={"classifier": "kaiju"}) == []
+    # mixed short+long -> MetaPhlAn still valid for the short samples, no nudge
+    assert tool_advisor.module_caveats({"classify_consensus": True}, ["ont", "illumina"],
+                                       consensus={"classifier": "metaphlan"}) == []
+
+
+def test_module_caveats_surface_in_recommend_config():
+    from metagx import tool_advisor
+    cfg = {"samples": [{"sample": "s", "platform": "ont", "r1": "s.fq"}],
+           "modules": {"classify": True, "assembly": True, "strain": True}}
+    rec = tool_advisor.recommend_config(cfg)
+    assert any("inStrain" in w for w in rec["warnings"])   # caveat reaches the advisor output
+
+
 def test_sample_contexts_from_tsv_sheet_is_shape_complete(tmp_path):
     """Regression: a TSV sample-sheet path must yield contexts with all keys.
 

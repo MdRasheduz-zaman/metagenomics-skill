@@ -1,5 +1,9 @@
 # Isolated conda env for strain-level microdiversity profiling (inStrain).
-# Created by `--use-conda`.
+# Created by `--use-conda`. NOTE: install inStrain from bioconda (here), NOT pip —
+# inStrain pins biopython<=1.74, which has no arm64/Python-3.11 wheel and fails to
+# source-compile on modern clang; conda ships a working prebuilt biopython.
+# Methodological note: inStrain assumes high-accuracy short reads (Illumina); it is
+# unreliable on ONT/PacBio (the advisor warns when strain is enabled on long reads).
 name: metagx-strain
 channels: [conda-forge, bioconda]
 dependencies:
