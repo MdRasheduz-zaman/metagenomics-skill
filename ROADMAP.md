@@ -20,6 +20,28 @@ Evidence: `phylogenetics_mafft.yaml`, `phylogenetics_iqtree.yaml`. Advisor inclu
 - `metagx recommend --config` — all enabled tools; `--tool` for single-param mode
 - Registry `recommend` / `warn_if` on kraken2, bracken, fastp, chopper, megahit, metabat2, porechop_abi, cutadapt, metaspades, kaiju, metaphlan, mafft, iqtree, …
 - `metagx advise` — post-run metrics + recommendations → `next_config.suggested.yaml`
-- `metagx history`, `sync-help`, `catalog`
+- `metagx history`, `sync-help`, `catalog`, `schedulers`
 
 **Incomplete (extend with new validation runs):** per-platform MAFFT method from real alignment benchmarks, binning depth thresholds, functional module defaults.
+
+## Verified by real execution (2026-06-10, run 3)
+
+Beyond dry-run, the following were executed against real tools on the dev machine and
+caught real bugs that dry-run cannot:
+
+- **Phylogenetics** — MAFFT (linsi) → TrimAl → FastTree on a 6-taxon fixture using the
+  bundled `.conda/phylogenetics` env (real alignment + Newick tree + plot; A/B clades
+  recovered). Fixed: `newick_stats` counted FastTree internal-node support values as leaves.
+  Gated real-execution test added (skips in CI).
+- **Core profiling + cross-sample stats** — fastp → kraken2 → Bracken → `modules.stats` on
+  the viral DB + 4 samples (`metagx-bio` env). The new diversity outputs (Chao1/ACE/Good's
+  coverage, analytic rarefaction, Jaccard, core microbiome) and the diversity-aware advisor
+  were verified on real Bracken output. Fixed: the post-run advisor crashed (`KeyError:
+  'qc_key'`) for any **TSV sample sheet** — the common case — because `sample_contexts`
+  returned an incomplete fallback; it now parses the sheet and uses real per-sample platforms.
+
+## HPC schedulers (2026-06-10)
+
+`metagx run --executor {local,slurm,lsf,sge,pbs,generic}` via bundled `workflow/profiles/`,
+one registry in `metagx/schedulers.py`, exposed on CLI + MCP + HTTP. slurm/lsf use native
+Snakemake plugins; sge/pbs/generic use cluster-generic with site-editable submit commands.
