@@ -27,7 +27,21 @@ from typing import Any, Dict, List, Optional
 
 from mcp.server.fastmcp import FastMCP
 
-from metagx import config_builder, dbbuild, paper, presets, registry, report, runner
+from metagx import (
+    advise,
+    catalog,
+    config_builder,
+    dbbuild,
+    evidence_pack,
+    history,
+    paper,
+    presets,
+    registry,
+    report,
+    runner,
+    sync_help,
+    tool_advisor,
+)
 
 mcp = FastMCP("metagx", json_response=True)
 
@@ -309,6 +323,81 @@ def generate_paper(config_path: str = "config.yaml", compile_pdf: bool = True) -
         return f"error: {config_path} not found"
     result = paper.generate(cfg, compile_pdf=compile_pdf)
     return json.dumps(result, indent=2)
+
+
+@mcp.tool()
+def get_recommendations(
+    config_path: str = "",
+    tool: str = "kraken2",
+    platform: str = "illumina",
+    param: str = "confidence",
+) -> str:
+    """Evidence-based parameter suggestions for enabled tools or one tool/platform/param.
+
+    Pass config_path for full multi-tool routing (QC, Bracken read length, kraken2, optional
+    modules). Otherwise returns a single param recommendation from registries + evidence/.
+    """
+    import yaml
+
+    if config_path:
+        try:
+            with open(config_path) as fh:
+                cfg = yaml.safe_load(fh)
+        except FileNotFoundError:
+            return f"error: {config_path} not found"
+        return json.dumps(tool_advisor.recommend_config(cfg), indent=2)
+    return json.dumps(evidence_pack.recommend(tool, platform, param=param), indent=2)
+
+
+@mcp.tool()
+def advise_run(
+    config_path: str = "config.yaml",
+    write_outputs: bool = True,
+    record_history: bool = False,
+) -> str:
+    """Post-run advisor: classification metrics, warnings, and next-config hints.
+
+    Reads finished results under results/<project>/ and returns rules-first suggestions.
+    Optionally writes results/<project>/advisor/advisor.json and appends to history.jsonl.
+    """
+    import yaml
+
+    try:
+        with open(config_path) as fh:
+            cfg = yaml.safe_load(fh)
+    except FileNotFoundError:
+        return f"error: {config_path} not found"
+    analysis = advise.analyze(cfg)
+    paths = advise.write_advisor_outputs(cfg, analysis) if write_outputs else {}
+    if record_history:
+        history.record_from_run(cfg, config_path, analysis, success=True, returncode=0)
+    return json.dumps({"analysis": analysis, "paths": paths}, indent=2)
+
+
+@mcp.tool()
+def get_run_history(limit: int = 20, best_metric: str = "") -> str:
+    """List recent pipeline trials from .metagx/history.jsonl.
+
+    Set best_metric (e.g. mean_percent_classified) to return only the top trial by that metric.
+    """
+    if best_metric:
+        best = history.best_trial(metric=best_metric)
+        return json.dumps(best or {}, indent=2)
+    return json.dumps(history.read_entries(limit=limit), indent=2)
+
+
+@mcp.tool()
+def sync_tool_help(tool: str = "") -> str:
+    """Diff live tool --help output against parameter registries (maintainer drift check)."""
+    if tool:
+        return json.dumps(sync_help.diff_registry(tool), indent=2)
+    return json.dumps(sync_help.sync_all(), indent=2)
+
+
+@mcp.tool()
+def get_catalog() -> str:
+    """Index of tools, evidence files, and workflow scripts."""
+    return json.dumps(catalog.build_catalog(), indent=2)
 
 
 # --------------------------------------------------------------------------- #

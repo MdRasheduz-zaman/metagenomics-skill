@@ -1,0 +1,36 @@
+# Parameter registry for MAFFT (multiple sequence alignment). See kraken2.yaml.
+tool: mafft
+command: mafft
+source_repo: https://github.com/GSLBiotech/mafft
+docs_url: https://mafft.cbrc.jp/alignment/software/
+description: >
+  Multiple sequence alignment for phylogenetics. Method presets are applied in the
+  phylogenetics workflow script (not all MAFFT modes map to a single CLI flag).
+params:
+  method:
+    type: enum
+    choices: [auto, linsi, einsi, fftnsi, fftns, retree2]
+    default: auto
+    tier: 1
+    ask: true
+    question: >
+      Alignment strategy: auto (MAFFT picks), linsi/einsi (accurate, <~200 seqs),
+      fftns/fftnsi (faster, larger sets), retree2 (very fast).
+    recommend:
+      default: auto
+      small: linsi
+      medium: fftnsi
+      large: fftns
+  maxiterate:
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Max refinement iterations for linsi/einsi (0 = method default).
+  thread:
+    type: int
+    managed: true
+  input:
+    type: path
+    managed: true

@@ -1,0 +1,7 @@
+# Amplicon primer-trim length guidance (cutadapt -m).
+platforms:
+  default:
+    minimum_length: 100
+    notes: >
+      After primer removal, discard reads shorter than ~100 bp to drop primer dimers
+      and partial amplicons before OTU/ASV clustering.

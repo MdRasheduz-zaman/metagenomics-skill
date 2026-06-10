@@ -1,0 +1,76 @@
+{
+  "build": "h7d5ae5b_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "brotli-bin 1.2.0 hc919400_1",
+    "libbrotlidec 1.2.0 hc919400_1",
+    "libbrotlienc 1.2.0 hc919400_1"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/brotli-1.2.0-h7d5ae5b_1",
+  "files": [
+    "include/brotli/decode.h",
+    "include/brotli/encode.h",
+    "include/brotli/port.h",
+    "include/brotli/shared_dictionary.h",
+    "include/brotli/types.h"
+  ],
+  "fn": "brotli-1.2.0-h7d5ae5b_1.conda",
+  "license": "MIT",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/brotli-1.2.0-h7d5ae5b_1",
+    "type": 1
+  },
+  "md5": "48ece20aa479be6ac9a284772827d00c",
+  "name": "brotli",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/brotli-1.2.0-h7d5ae5b_1.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "include/brotli/decode.h",
+        "path_type": "hardlink",
+        "sha256": "027b91e62e85de6955e6334628b2ba0c77901a449e169fd9f95d6ea1cc91f980",
+        "sha256_in_prefix": "027b91e62e85de6955e6334628b2ba0c77901a449e169fd9f95d6ea1cc91f980",
+        "size_in_bytes": 16913
+      },
+      {
+        "_path": "include/brotli/encode.h",
+        "path_type": "hardlink",
+        "sha256": "f1842e38da557efac517a35f1b27d288d464a723ef50316d3d20fe03f6046c06",
+        "sha256_in_prefix": "f1842e38da557efac517a35f1b27d288d464a723ef50316d3d20fe03f6046c06",
+        "size_in_bytes": 20068
+      },
+      {
+        "_path": "include/brotli/port.h",
+        "path_type": "hardlink",
+        "sha256": "72b484d7a2561f3a9ad35ebd0d4f97f7a2d9863b619782ada5b083a4b6f40df5",
+        "sha256_in_prefix": "72b484d7a2561f3a9ad35ebd0d4f97f7a2d9863b619782ada5b083a4b6f40df5",
+        "size_in_bytes": 11439
+      },
+      {
+        "_path": "include/brotli/shared_dictionary.h",
+        "path_type": "hardlink",
+        "sha256": "86230f0aaf533044d85d92f84b5aec8b7e4e231d4b64b098604083e7866e8097",
+        "sha256_in_prefix": "86230f0aaf533044d85d92f84b5aec8b7e4e231d4b64b098604083e7866e8097",
+        "size_in_bytes": 3535
+      },
+      {
+        "_path": "include/brotli/types.h",
+        "path_type": "hardlink",
+        "sha256": "ebbd136dc411cc8167636d6f54b66ad0c234dc18989265c37a28c242eaae2efd",
+        "sha256_in_prefix": "ebbd136dc411cc8167636d6f54b66ad0c234dc18989265c37a28c242eaae2efd",
+        "size_in_bytes": 2651
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "422ac5c91f8ef07017c594d9135b7ae068157393d2a119b1908c7e350938579d",
+  "size": 20237,
+  "subdir": "osx-arm64",
+  "timestamp": 1764018058000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/brotli-1.2.0-h7d5ae5b_1.conda",
+  "version": "1.2.0"
+}

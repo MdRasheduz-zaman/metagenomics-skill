@@ -1,0 +1,14 @@
+# metaSPAdes RAM cap (-m) guidance for short-read / hybrid assembly.
+platforms:
+  illumina:
+    default: 250
+    notes: >
+      SPAdes aborts if RAM exceeds -m. Use 250 GB for typical metagenomes; raise for
+      complex soil/sediment or hybrid runs with long reads.
+  mgi:
+    default: 250
+  bgi:
+    default: 250
+  ont:
+    default: 250
+    notes: Hybrid metaSPAdes (short + long) is memory-intensive.

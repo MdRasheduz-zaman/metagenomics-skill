@@ -13,6 +13,10 @@ params:
     tier: 1
     ask: true
     question: Minimum length of contigs to report (bp). 500-1000 is common for binning.
+    recommend:
+      default: 200
+      binning: 500
+      pathogen: 500
   k_min:
     flag: "--k-min"
     type: int
@@ -50,6 +54,10 @@ params:
     question: >
       Optional preset. meta-sensitive = more sensitive (slower); meta-large = for
       large & complex metagenomes (e.g. soil). Leave empty for defaults.
+    recommend:
+      default: ""
+      soil: meta-large
+      pathogen: meta-sensitive
   # --- managed by the workflow ---
   threads:
     flag: "--num-cpu-threads"

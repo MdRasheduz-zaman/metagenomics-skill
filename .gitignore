@@ -13,3 +13,4 @@ graphify-out/
 data/
 local_databases/
 tmp/
+.metagx/

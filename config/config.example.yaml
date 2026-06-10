@@ -50,6 +50,7 @@ modules:
   strain: false           # inStrain strain-level SNV/microdiversity profiling; needs assembly
   damage: false           # ancient-DNA damage authentication (mapDamage2); needs assembly + library=ancient sample(s)
   decontam: false         # prevalence-based contaminant removal from negative controls; needs abundance + a control sample
+  phylogenetics: false    # MAFFT → optional TrimAl → IQ-TREE 2 / FastTree from a FASTA (see phylogenetics block)
 
 # Optional first-class host/contaminant removal before classification (SE; map + keep unmapped):
 # host_removal: {genome: local_databases/host.fasta}
@@ -145,6 +146,16 @@ bracken:
 # damage_ct_threshold: 0.05
 # decontam (modules.decontam): mark negative/blank samples with `control: true`; taxa as/more
 # prevalent in controls than in real samples are flagged and removed.
+#
+# phylogenetics (modules.phylogenetics): build a tree from marker genes, MAGs, or OTU/ASV reps.
+# phylogenetics:
+#   input: data/markers.fasta       # or aligned_input: data/aln.fasta to skip MAFFT
+#   method: iqtree                   # iqtree | fasttree | auto (auto → FastTree if >500 seqs)
+#   sequence_type: nt               # nt | aa
+#   trim: true
+# mafft: {method: auto}
+# iqtree: {bootstrap: 1000, model: TEST}
+# fasttree: {model: gtr}
 
 # Per-sample Bracken read length: the kmer_distrib is length-specific, so mixed short+long runs
 # need the right -r per sample (and the DB must have that databaseXmers built). Priority:

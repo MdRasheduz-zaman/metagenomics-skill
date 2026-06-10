@@ -16,6 +16,12 @@ params:
     question: >
       A base is "qualified" if its Phred quality is at least this. 15 is lenient, 20
       is a common stricter choice.
+    recommend:
+      illumina: 15
+      mgi: 15
+      bgi: 15
+      pathogen: 20
+      ancient: 20
   unqualified_percent_limit:
     flag: "--unqualified_percent_limit"
     type: int
@@ -34,6 +40,10 @@ params:
     tier: 1
     ask: true
     question: Discard reads shorter than this after trimming.
+    recommend:
+      illumina: 50
+      ancient: 30
+      pathogen: 75
   n_base_limit:
     flag: "--n_base_limit"
     type: int

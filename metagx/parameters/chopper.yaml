@@ -18,6 +18,10 @@ params:
     question: >
       Minimum average read quality (Phred) to keep. ONT R10 data is often filtered at
       ~10; older/raw data lower.
+    recommend:
+      ont: 10
+      pacbio_hifi: 12
+      pacbio_clr: 8
   minlength:
     flag: "-l"
     type: int
@@ -26,6 +30,10 @@ params:
     tier: 1
     ask: true
     question: Discard reads shorter than this (bp). Long-read pipelines often use 500-1000.
+    recommend:
+      ont: 500
+      pacbio_hifi: 1000
+      pacbio_clr: 500
   maxlength:
     flag: "--maxlength"
     type: int

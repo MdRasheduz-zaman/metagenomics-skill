@@ -1,0 +1,58 @@
+{
+  "build": "hdae7583_19",
+  "build_number": 19,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [
+    "libgfortran 15.2.0"
+  ],
+  "depends": [
+    "libgcc >=15.2.0"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgfortran5-15.2.0-hdae7583_19",
+  "files": [
+    "lib/libgfortran.5.dylib",
+    "lib/libgfortran.dylib",
+    "share/licenses/libgfortran/RUNTIME.LIBRARY.EXCEPTION"
+  ],
+  "fn": "libgfortran5-15.2.0-hdae7583_19.conda",
+  "license": "GPL-3.0-only WITH GCC-exception-3.1",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgfortran5-15.2.0-hdae7583_19",
+    "type": 1
+  },
+  "md5": "ba36d8c606a6a53fe0b8c12d47267b3d",
+  "name": "libgfortran5",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgfortran5-15.2.0-hdae7583_19.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "lib/libgfortran.5.dylib",
+        "path_type": "hardlink",
+        "sha256": "9dfbecebc0e92496198d9235acf484b9ce897d90ef4c42885095d6a67eef1d3b",
+        "sha256_in_prefix": "9dfbecebc0e92496198d9235acf484b9ce897d90ef4c42885095d6a67eef1d3b",
+        "size_in_bytes": 2184496
+      },
+      {
+        "_path": "lib/libgfortran.dylib",
+        "path_type": "softlink",
+        "sha256": "9dfbecebc0e92496198d9235acf484b9ce897d90ef4c42885095d6a67eef1d3b",
+        "size_in_bytes": 2184496
+      },
+      {
+        "_path": "share/licenses/libgfortran/RUNTIME.LIBRARY.EXCEPTION",
+        "path_type": "hardlink",
+        "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "sha256_in_prefix": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "size_in_bytes": 3324
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "d0a68b7a121d115b80c169e24d1265dcc25a3fe58d107df1bbc430797e226d88",
+  "size": 599691,
+  "subdir": "osx-arm64",
+  "timestamp": 1778273075000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libgfortran5-15.2.0-hdae7583_19.conda",
+  "version": "15.2.0"
+}

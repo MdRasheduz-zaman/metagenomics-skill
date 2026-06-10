@@ -1,0 +1,66 @@
+{
+  "build": "hc919400_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/xorg-libxau-1.0.12-hc919400_1",
+  "files": [
+    "include/X11/Xauth.h",
+    "lib/libXau.6.dylib",
+    "lib/libXau.dylib",
+    "lib/pkgconfig/xau.pc"
+  ],
+  "fn": "xorg-libxau-1.0.12-hc919400_1.conda",
+  "license": "MIT",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/xorg-libxau-1.0.12-hc919400_1",
+    "type": 1
+  },
+  "md5": "78b548eed8227a689f93775d5d23ae09",
+  "name": "xorg-libxau",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/xorg-libxau-1.0.12-hc919400_1.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "include/X11/Xauth.h",
+        "path_type": "hardlink",
+        "sha256": "d0bc0612c0d2eb38bf7519190ebb60ea0d538c86589a6fbc06e0d761ec22f9c4",
+        "sha256_in_prefix": "d0bc0612c0d2eb38bf7519190ebb60ea0d538c86589a6fbc06e0d761ec22f9c4",
+        "size_in_bytes": 4973
+      },
+      {
+        "_path": "lib/libXau.6.dylib",
+        "path_type": "hardlink",
+        "sha256": "1be79e9b7286d0607d641c766f17477044265ed77d7235fff4ca8f9a1c46b89f",
+        "sha256_in_prefix": "1be79e9b7286d0607d641c766f17477044265ed77d7235fff4ca8f9a1c46b89f",
+        "size_in_bytes": 52848
+      },
+      {
+        "_path": "lib/libXau.dylib",
+        "path_type": "softlink",
+        "sha256": "1be79e9b7286d0607d641c766f17477044265ed77d7235fff4ca8f9a1c46b89f",
+        "size_in_bytes": 52848
+      },
+      {
+        "_path": "lib/pkgconfig/xau.pc",
+        "file_mode": "text",
+        "path_type": "hardlink",
+        "prefix_placeholder": "/Users/runner/miniforge3/conda-bld/xorg-libxau_1762976564416/_h_env_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placehold_placeho",
+        "sha256": "e15c6124a57dac71cc08385d7fade8fef769f2d97e311f65160cbf4a302d70c7",
+        "sha256_in_prefix": "f38be1307e2c1cfc7e2215a6b6c1f9507b630c3d8f6f0907d83ef62499549f63",
+        "size_in_bytes": 485
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "adae11db0f66f86156569415ed79cda75b2dbf4bea48d1577831db701438164f",
+  "size": 14105,
+  "subdir": "osx-arm64",
+  "timestamp": 1762976976000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/xorg-libxau-1.0.12-hc919400_1.conda",
+  "version": "1.0.12"
+}

@@ -10,7 +10,7 @@ params:
     type: int
     default: 100
     min: 30
-    max: 600
+    max: 2000
     tier: 1
     ask: true
     question: >
@@ -19,6 +19,22 @@ params:
       read length: short reads (Illumina) ~100/150/250 (use the mate length, e.g. 150 for
       2x150); long reads (ONT/PacBio) use the run's MEDIAN length (often 1000s) — check
       with `metagx readlen <reads>`. Mismatched length biases abundance estimates.
+    recommend:
+      illumina: 150
+      mgi: 150
+      bgi: 150
+      ont: 1000
+      pacbio_hifi: 1000
+      pacbio_clr: 1000
+      ancient: 50
+    warn_if:
+      - when: { platform: ont }
+        message: >
+          ONT Bracken read_length should match median read length (~500-2000); build the
+          Bracken DB at that length with `metagx build-db --read-length 1000`.
+      - when: { platform: illumina }
+        message: >
+          For 2x250 Illumina use read_length 250 (not 150) unless the DB was built for 150 only.
   level:
     flag: "-l"
     type: enum
@@ -29,6 +45,10 @@ params:
     question: >
       Taxonomic level to estimate abundance at: D domain, P phylum, C class, O order,
       F family, G genus, S species (default), S1 strain.
+    recommend:
+      default: S
+      soil: G
+      pathogen: S
   threshold:
     flag: "-t"
     type: int
@@ -39,6 +59,10 @@ params:
     question: >
       Minimum number of reads required at the level before Bracken will estimate it
       (-t). Filters very low-abundance noise; 10 is a common starting value.
+    recommend:
+      default: 10
+      ancient: 5
+      pathogen: 10
   # --- managed by the workflow ---
   db:
     flag: "-d"

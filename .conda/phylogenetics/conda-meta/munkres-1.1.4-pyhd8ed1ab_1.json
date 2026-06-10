@@ -1,0 +1,80 @@
+{
+  "build": "pyhd8ed1ab_1",
+  "build_number": 1,
+  "channel": "https://conda.anaconda.org/conda-forge/noarch",
+  "constrains": [],
+  "depends": [
+    "python >=3.9"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/munkres-1.1.4-pyhd8ed1ab_1",
+  "files": [
+    "lib/python3.11/site-packages/munkres-1.1.4-py3.9.egg-info/PKG-INFO",
+    "lib/python3.11/site-packages/munkres-1.1.4-py3.9.egg-info/SOURCES.txt",
+    "lib/python3.11/site-packages/munkres-1.1.4-py3.9.egg-info/dependency_links.txt",
+    "lib/python3.11/site-packages/munkres-1.1.4-py3.9.egg-info/top_level.txt",
+    "lib/python3.11/site-packages/munkres.py",
+    "lib/python3.11/site-packages/__pycache__/munkres.cpython-311.pyc"
+  ],
+  "fn": "munkres-1.1.4-pyhd8ed1ab_1.conda",
+  "license": "Apache-2.0",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/munkres-1.1.4-pyhd8ed1ab_1",
+    "type": 1
+  },
+  "md5": "37293a85a0f4f77bbd9cf7aaefc62609",
+  "name": "munkres",
+  "noarch": "python",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/munkres-1.1.4-pyhd8ed1ab_1.conda",
+  "package_type": "noarch_python",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "site-packages/munkres-1.1.4-py3.9.egg-info/PKG-INFO",
+        "path_type": "hardlink",
+        "sha256": "6692ce9bce7f1420a3e5dfb79644d0c98775f25172e483ab759b2d2186194bec",
+        "sha256_in_prefix": "6692ce9bce7f1420a3e5dfb79644d0c98775f25172e483ab759b2d2186194bec",
+        "size_in_bytes": 1173
+      },
+      {
+        "_path": "site-packages/munkres-1.1.4-py3.9.egg-info/SOURCES.txt",
+        "path_type": "hardlink",
+        "sha256": "1ba6a775bcb481361521f94dc86d763454c3c4e3c3544b841c14646038cab975",
+        "sha256_in_prefix": "1ba6a775bcb481361521f94dc86d763454c3c4e3c3544b841c14646038cab975",
+        "size_in_bytes": 235
+      },
+      {
+        "_path": "site-packages/munkres-1.1.4-py3.9.egg-info/dependency_links.txt",
+        "path_type": "hardlink",
+        "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "sha256_in_prefix": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+        "size_in_bytes": 1
+      },
+      {
+        "_path": "site-packages/munkres-1.1.4-py3.9.egg-info/top_level.txt",
+        "path_type": "hardlink",
+        "sha256": "9c8de01fc32b5e0ba5eab8ebcfb9b1da1b6a92a8edb3e09c2f7710c029bc98de",
+        "sha256_in_prefix": "9c8de01fc32b5e0ba5eab8ebcfb9b1da1b6a92a8edb3e09c2f7710c029bc98de",
+        "size_in_bytes": 8
+      },
+      {
+        "_path": "site-packages/munkres.py",
+        "path_type": "hardlink",
+        "sha256": "5653f10006d833bbe29f298bd673bf5b32a4eef0b179df5ae28f97a2d21ca551",
+        "sha256_in_prefix": "5653f10006d833bbe29f298bd673bf5b32a4eef0b179df5ae28f97a2d21ca551",
+        "size_in_bytes": 19406
+      },
+      {
+        "_path": "lib/python3.11/site-packages/__pycache__/munkres.cpython-311.pyc",
+        "path_type": "pyc_file"
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "d09c47c2cf456de5c09fa66d2c3c5035aa1fa228a1983a433c47b876aa16ce90",
+  "size": 15851,
+  "subdir": "noarch",
+  "timestamp": 1749895533000,
+  "url": "https://conda.anaconda.org/conda-forge/noarch/munkres-1.1.4-pyhd8ed1ab_1.conda",
+  "version": "1.1.4"
+}

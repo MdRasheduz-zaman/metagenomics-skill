@@ -20,8 +20,11 @@ params:
     default: 1
     min: 0
     tier: 2
-    ask: false
+    ask: true
     question: Discard reads shorter than this after primer removal.
+    recommend:
+      default: 100
+      amplicon: 100
   # --- managed by the workflow (primers + I/O + threads) ---
   fwd_primer:
     flag: "-g"

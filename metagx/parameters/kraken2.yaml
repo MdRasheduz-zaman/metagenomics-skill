@@ -15,6 +15,9 @@
 #   question    natural-language prompt the LLM uses during the interview
 tool: kraken2
 command: kraken2
+source_repo: https://github.com/DerrickWood/kraken2
+docs_url: https://github.com/DerrickWood/kraken2/wiki/Manual
+version_probe: kraken2 --version
 description: >
   Taxonomic classifier that assigns reads to taxa via exact k-mer matches against a
   reference database.
@@ -33,6 +36,25 @@ params:
       fraction of a read's k-mers that must point to a taxon before it is assigned.
       Higher = fewer false positives but more reads left unclassified. You can give a
       single value, or a LIST (e.g. 0.0, 0.1, 0.5) to run the comparison sweep.
+    recommend:
+      illumina: [0.0, 0.05, 0.1, 0.2]
+      mgi: [0.0, 0.05, 0.1, 0.2]
+      bgi: [0.0, 0.05, 0.1, 0.2]
+      ont: [0.0, 0.05, 0.1, 0.2]
+      pacbio_hifi: [0.0, 0.05, 0.1]
+      pacbio_clr: [0.0, 0.01, 0.02]
+    warn_if:
+      - when: { platform: pacbio_clr, confidence_gte: 0.05 }
+        message: >
+          PacBio CLR mock runs were nearly all unclassified at confidence ≥0.05;
+          cap sweeps at 0.02 or lower.
+      - when: { platform: pacbio_hifi, confidence_gte: 0.2 }
+        message: >
+          PacBio HiFi mock retained <50% classified at confidence 0.2; prefer ≤0.1.
+      - when: { platform: illumina, confidence_gte: 0.5 }
+        message: >
+          Illumina mock lost ~25% classified reads at confidence 0.5; use 0.2 unless
+          aggressively filtering false positives.
   minimum_hit_groups:
     flag: "--minimum-hit-groups"
     type: int
@@ -43,6 +65,18 @@ params:
     question: >
       Minimum number of separate hit groups (overlapping k-mers sharing a minimizer)
       required to make a call. Raising it (e.g. 3) reduces spurious assignments.
+    recommend:
+      illumina: 2
+      mgi: 2
+      bgi: 2
+      ont: 2
+      pacbio_hifi: 1
+      pacbio_clr: 1
+      pathogen: 3
+    warn_if:
+      - when: { platform: pacbio_clr }
+        message: >
+          Noisy CLR reads may need minimum_hit_groups 1; raising to 3 can over-filter.
   minimum_base_quality:
     flag: "--minimum-base-quality"
     type: int
@@ -53,6 +87,9 @@ params:
     ask: true
     question: >
       Minimum Phred base quality for a position to count (FASTQ only). 0 disables it.
+    recommend:
+      default: 0
+      low_quality: 15
   quick:
     flag: "--quick"
     type: bool

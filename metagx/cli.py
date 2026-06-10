@@ -24,7 +24,22 @@ import sys
 
 import yaml
 
-from . import config_builder, dbbuild, formats, paper, presets, registry, report, runner
+from . import (
+    advise,
+    catalog,
+    config_builder,
+    dbbuild,
+    evidence_pack,
+    formats,
+    history,
+    paper,
+    presets,
+    registry,
+    report,
+    runner,
+    sync_help,
+    tool_advisor,
+)
 
 
 def _print_json(obj) -> None:
@@ -145,7 +160,79 @@ def cmd_run(args) -> int:
                       use_conda=args.use_conda or args.slurm, profile=profile)
     sys.stdout.write(proc.stdout)
     sys.stderr.write(proc.stderr)
+    if proc.returncode == 0 and not args.dry_run and not args.no_history:
+        try:
+            with open(args.config) as fh:
+                cfg = yaml.safe_load(fh)
+            analysis = advise.analyze(cfg)
+            if not args.no_advisor:
+                advise.write_advisor_outputs(cfg, analysis)
+            history.record_from_run(
+                cfg, args.config, analysis,
+                success=True, returncode=0, path=args.history_file,
+            )
+        except OSError:
+            pass
     return proc.returncode
+
+
+def cmd_recommend(args) -> int:
+    cfg = None
+    if args.config:
+        with open(args.config) as fh:
+            cfg = yaml.safe_load(fh)
+        if args.all or args.tool is None:
+            _print_json(tool_advisor.recommend_config(cfg))
+            return 0
+    plat = args.platform
+    if not plat and cfg:
+        plats = advise.platforms_from_config(cfg)
+        plat = plats[0] if plats else "illumina"
+    plat = plat or "illumina"
+    _print_json(evidence_pack.recommend(args.tool or "kraken2", plat, param=args.param))
+    return 0
+
+
+def cmd_advise(args) -> int:
+    with open(args.config) as fh:
+        cfg = yaml.safe_load(fh)
+    analysis = advise.analyze(cfg)
+    paths = {}
+    if args.write:
+        paths = advise.write_advisor_outputs(cfg, analysis)
+    if args.record_history:
+        history.record_from_run(
+            cfg, args.config, analysis,
+            success=True, returncode=0, path=args.history_file,
+        )
+    out = {"analysis": analysis, "paths": paths}
+    _print_json(out)
+    return 0
+
+
+def cmd_history(args) -> int:
+    if args.best:
+        best = history.best_trial(path=args.history_file, metric=args.best)
+        if not best:
+            print("no history entries with metrics", file=sys.stderr)
+            return 1
+        _print_json(best)
+        return 0
+    _print_json(history.read_entries(path=args.history_file, limit=args.limit))
+    return 0
+
+
+def cmd_sync_help(args) -> int:
+    if args.tool:
+        _print_json(sync_help.diff_registry(args.tool))
+    else:
+        _print_json(sync_help.sync_all())
+    return 0
+
+
+def cmd_catalog(_args) -> int:
+    _print_json(catalog.build_catalog())
+    return 0
 
 
 def cmd_results(args) -> int:
@@ -209,7 +296,47 @@ def build_parser() -> argparse.ArgumentParser:
                     help="submit jobs via SLURM using the bundled profile (edit partition/account)")
     sp.add_argument("--profile", default=None,
                     help="path to a Snakemake profile dir (overrides --slurm)")
+    sp.add_argument("--no-history", action="store_true",
+                    help="do not append to .metagx/history.jsonl after a successful run")
+    sp.add_argument("--no-advisor", action="store_true",
+                    help="skip writing results/<project>/advisor/ after a successful run")
+    sp.add_argument("--history-file", default=None,
+                    help="history log path (default: .metagx/history.jsonl)")
     sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("recommend", help="evidence-based parameter suggestions for a platform")
+    sp.add_argument("--tool", default=None, help="single-tool mode (default: all tools when --config)")
+    sp.add_argument("--param", default="confidence")
+    sp.add_argument("--platform", default=None,
+                    help="illumina|ont|pacbio_hifi|pacbio_clr (default: from --config or illumina)")
+    sp.add_argument("--config", default=None, help="full multi-tool recommendations from a run config")
+    sp.add_argument("--all", action="store_true",
+                    help="with --config: recommend all enabled modules/tools (default when --config alone)")
+    sp.set_defaults(func=cmd_recommend)
+
+    sp = sub.add_parser("advise", help="post-run advisor: metrics, warnings, next-config hints")
+    sp.add_argument("--config", default="config.yaml")
+    sp.add_argument("--write", action="store_true",
+                    help="write advisor.json, trial_log.md, next_config.suggested.yaml")
+    sp.add_argument("--record-history", action="store_true",
+                    help="append this analysis to history.jsonl")
+    sp.add_argument("--history-file", default=None)
+    sp.set_defaults(func=cmd_advise)
+
+    sp = sub.add_parser("history", help="list prior run trials (.metagx/history.jsonl)")
+    sp.add_argument("--limit", type=int, default=20)
+    sp.add_argument("--history-file", default=None)
+    sp.add_argument("--best", default=None, metavar="METRIC",
+                    help="show best trial by metric (e.g. mean_percent_classified)")
+    sp.set_defaults(func=cmd_history)
+
+    sp = sub.add_parser("sync-help", help="diff live tool --help against parameter registries")
+    sp.add_argument("--tool", default=None, help="single tool; default: all registries")
+    sp.set_defaults(func=cmd_sync_help)
+
+    sub.add_parser("catalog", help="index of tools, evidence, and workflow scripts").set_defaults(
+        func=cmd_catalog
+    )
 
     sp = sub.add_parser("results", help="print result summary JSON files")
     sp.add_argument("--config", default="config.yaml")

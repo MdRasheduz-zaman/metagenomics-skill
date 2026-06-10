@@ -40,3 +40,4 @@ packages = ["metagx"]
 [tool.hatch.build.targets.wheel.force-include]
 "metagx/parameters" = "metagx/parameters"
 "metagx/presets" = "metagx/presets"
+"metagx/evidence" = "metagx/evidence"

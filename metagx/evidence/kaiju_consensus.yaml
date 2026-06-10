@@ -1,0 +1,8 @@
+# Kaiju as second classifier (classify_consensus): sensitivity vs specificity.
+platforms:
+  default:
+    min_match_length: 11
+    mismatches: 3
+    notes: >
+      Default -m 11 / -e 3 is a balanced Greedy search. Raise min_match_length to reduce
+      spurious viral hits; lower for divergent metagenomes.

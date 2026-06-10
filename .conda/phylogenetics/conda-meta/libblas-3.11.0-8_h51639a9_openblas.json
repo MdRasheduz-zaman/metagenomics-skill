@@ -1,0 +1,54 @@
+{
+  "build": "8_h51639a9_openblas",
+  "build_number": 8,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [
+    "blas 2.308 openblas",
+    "liblapack 3.11.0 8*_openblas",
+    "liblapacke 3.11.0 8*_openblas",
+    "libcblas 3.11.0 8*_openblas",
+    "mkl <2027"
+  ],
+  "depends": [
+    "libopenblas >=0.3.33,<0.3.34.0a0",
+    "libopenblas >=0.3.33,<1.0a0"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libblas-3.11.0-8_h51639a9_openblas",
+  "files": [
+    "lib/libblas.3.dylib",
+    "lib/libblas.dylib"
+  ],
+  "fn": "libblas-3.11.0-8_h51639a9_openblas.conda",
+  "license": "BSD-3-Clause",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libblas-3.11.0-8_h51639a9_openblas",
+    "type": 1
+  },
+  "md5": "dbfe729181a32741ae63ecb41eefbac6",
+  "name": "libblas",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libblas-3.11.0-8_h51639a9_openblas.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "lib/libblas.3.dylib",
+        "path_type": "softlink",
+        "sha256": "26e2bd17f9b09827be8284112ec059cbb63901d0908628e9b174c3c60a749476",
+        "size_in_bytes": 13459200
+      },
+      {
+        "_path": "lib/libblas.dylib",
+        "path_type": "softlink",
+        "sha256": "26e2bd17f9b09827be8284112ec059cbb63901d0908628e9b174c3c60a749476",
+        "size_in_bytes": 13459200
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "8f5ec18ead0619a9cf0f38b49796c22f6fc0f44850c0df2baea0f5277db16e75",
+  "size": 18949,
+  "subdir": "osx-arm64",
+  "timestamp": 1779859141000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libblas-3.11.0-8_h51639a9_openblas.conda",
+  "version": "3.11.0"
+}

@@ -51,6 +51,8 @@ if MODULES.get("differential", False):
     include: "rules/differential.smk"
 if MODULES.get("decontam", False):
     include: "rules/decontam.smk"
+if MODULES.get("phylogenetics", False):
+    include: "rules/phylogenetics.smk"
 if MODULES.get("bgc", False):
     include: "rules/bgc.smk"
 if MODULES.get("aggregate", False):
@@ -87,6 +89,11 @@ def final_targets():
     if MODULES.get("decontam", False):
         targets += [f"{OUT}/stats/decontam_flagged.tsv",
                     f"{OUT}/stats/abundance_decontaminated.tsv"]
+    if MODULES.get("phylogenetics", False):
+        targets += [f"{OUT}/phylogenetics/aligned.fasta",
+                    f"{OUT}/phylogenetics/tree.nwk",
+                    f"{OUT}/phylogenetics/phylogenetics.json",
+                    f"{OUT}/phylogenetics/tree.png"]
     # assembly-based steps apply to WGS samples only (not amplicon).
     if MODULES.get("assembly", False):
         targets += expand(f"{OUT}/assembly/{{sample}}/final.contigs.fa", sample=WGS_SAMPLES)

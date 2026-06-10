@@ -1,0 +1,98 @@
+{
+  "build": "hcbb3090_19",
+  "build_number": 19,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [
+    "libgcc-ng ==15.2.0 *_19",
+    "libgomp 15.2.0 19"
+  ],
+  "depends": [
+    "_openmp_mutex"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgcc-15.2.0-hcbb3090_19",
+  "files": [
+    "lib/libatomic.1.dylib",
+    "lib/libatomic.dylib",
+    "lib/libgcc_s.1.1.dylib",
+    "lib/libquadmath.0.dylib",
+    "lib/libquadmath.dylib",
+    "share/info/libgomp.info",
+    "share/info/libquadmath.info",
+    "share/licenses/gcc-libs/RUNTIME.LIBRARY.EXCEPTION"
+  ],
+  "fn": "libgcc-15.2.0-hcbb3090_19.conda",
+  "license": "GPL-3.0-only WITH GCC-exception-3.1",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgcc-15.2.0-hcbb3090_19",
+    "type": 1
+  },
+  "md5": "644058123986582db33aebd4ae2ca184",
+  "name": "libgcc",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgcc-15.2.0-hcbb3090_19.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "lib/libatomic.1.dylib",
+        "path_type": "hardlink",
+        "sha256": "a6a60512a50123bb999fe6ea1f4d42525e75c2372836e8669bfdd2d7bf026c96",
+        "sha256_in_prefix": "a6a60512a50123bb999fe6ea1f4d42525e75c2372836e8669bfdd2d7bf026c96",
+        "size_in_bytes": 94640
+      },
+      {
+        "_path": "lib/libatomic.dylib",
+        "path_type": "softlink",
+        "sha256": "a6a60512a50123bb999fe6ea1f4d42525e75c2372836e8669bfdd2d7bf026c96",
+        "size_in_bytes": 94640
+      },
+      {
+        "_path": "lib/libgcc_s.1.1.dylib",
+        "path_type": "hardlink",
+        "sha256": "76632e4d480b45261d63678507c2a606fd2524be85c3e9d3a86604684c87e235",
+        "sha256_in_prefix": "76632e4d480b45261d63678507c2a606fd2524be85c3e9d3a86604684c87e235",
+        "size_in_bytes": 181072
+      },
+      {
+        "_path": "lib/libquadmath.0.dylib",
+        "path_type": "hardlink",
+        "sha256": "9038a47566b38f4b88ef07b7b825b5d7d776b9b6e1a20d19c4c79d44e8faf6a8",
+        "sha256_in_prefix": "9038a47566b38f4b88ef07b7b825b5d7d776b9b6e1a20d19c4c79d44e8faf6a8",
+        "size_in_bytes": 354336
+      },
+      {
+        "_path": "lib/libquadmath.dylib",
+        "path_type": "softlink",
+        "sha256": "9038a47566b38f4b88ef07b7b825b5d7d776b9b6e1a20d19c4c79d44e8faf6a8",
+        "size_in_bytes": 354336
+      },
+      {
+        "_path": "share/info/libgomp.info",
+        "path_type": "hardlink",
+        "sha256": "9183a74823a2193acf72e08915a06714ee3f6de413a6751f3cc265f2764517f6",
+        "sha256_in_prefix": "9183a74823a2193acf72e08915a06714ee3f6de413a6751f3cc265f2764517f6",
+        "size_in_bytes": 359250
+      },
+      {
+        "_path": "share/info/libquadmath.info",
+        "path_type": "hardlink",
+        "sha256": "a8829e58df913add53edc8ec5570a17d6800a98fb69272ba7a18d54b08ba8f48",
+        "sha256_in_prefix": "a8829e58df913add53edc8ec5570a17d6800a98fb69272ba7a18d54b08ba8f48",
+        "size_in_bytes": 36603
+      },
+      {
+        "_path": "share/licenses/gcc-libs/RUNTIME.LIBRARY.EXCEPTION",
+        "path_type": "hardlink",
+        "sha256": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "sha256_in_prefix": "9d6b43ce4d8de0c878bf16b54d8e7a10d9bd42b75178153e3af6a815bdc90f74",
+        "size_in_bytes": 3324
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "06644fa4d34d57c9e48f4d84b1256f9e5f654fdb37f43acc8a58a396952d42b7",
+  "size": 404080,
+  "subdir": "osx-arm64",
+  "timestamp": 1778273064000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libgcc-15.2.0-hcbb3090_19.conda",
+  "version": "15.2.0"
+}

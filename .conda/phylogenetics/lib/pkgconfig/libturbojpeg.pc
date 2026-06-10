@@ -1,0 +1,10 @@
+prefix=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics
+exec_prefix=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics
+libdir=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/lib
+includedir=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/include
+
+Name: libturbojpeg
+Description: A SIMD-accelerated JPEG codec that provides the TurboJPEG API
+Version: 3.1.4.1
+Libs: -L${libdir} -lturbojpeg
+Cflags: -I${includedir}

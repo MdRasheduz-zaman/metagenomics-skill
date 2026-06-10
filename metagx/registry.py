@@ -37,6 +37,16 @@ def load_registry(tool: str) -> Dict[str, Any]:
     return _load_yaml(tool)
 
 
+def tool_metadata(tool: str) -> Dict[str, Any]:
+    """Upstream docs / version probe fields (optional per registry)."""
+    reg = load_registry(tool)
+    return {
+        k: reg[k]
+        for k in ("source_repo", "docs_url", "version_probe")
+        if reg.get(k)
+    }
+
+
 def _params(tool: str) -> Dict[str, Any]:
     return load_registry(tool)["params"]
 
@@ -60,19 +70,22 @@ def interview_spec(tool: str, max_tier: int = 2) -> List[Dict[str, Any]]:
             continue
         if spec.get("tier", 3) > max_tier:
             continue
-        out.append(
-            {
-                "name": name,
-                "type": spec["type"],
-                "default": spec.get("default"),
-                "min": spec.get("min"),
-                "max": spec.get("max"),
-                "choices": spec.get("choices"),
-                "tier": spec.get("tier", 3),
-                "sweepable": bool(spec.get("sweepable", False)),
-                "question": " ".join(str(spec.get("question", "")).split()),
-            }
-        )
+        entry: Dict[str, Any] = {
+            "name": name,
+            "type": spec["type"],
+            "default": spec.get("default"),
+            "min": spec.get("min"),
+            "max": spec.get("max"),
+            "choices": spec.get("choices"),
+            "tier": spec.get("tier", 3),
+            "sweepable": bool(spec.get("sweepable", False)),
+            "question": " ".join(str(spec.get("question", "")).split()),
+        }
+        if spec.get("recommend"):
+            entry["recommend"] = spec["recommend"]
+        if spec.get("warn_if"):
+            entry["warn_if"] = spec["warn_if"]
+        out.append(entry)
     out.sort(key=lambda p: p["tier"])
     return out
 

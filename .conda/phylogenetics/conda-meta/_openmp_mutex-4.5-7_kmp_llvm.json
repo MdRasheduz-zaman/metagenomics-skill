@@ -1,0 +1,47 @@
+{
+  "build": "7_kmp_llvm",
+  "build_number": 7,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [],
+  "depends": [
+    "llvm-openmp >=9.0.1"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/_openmp_mutex-4.5-7_kmp_llvm",
+  "files": [
+    "lib/libgomp.1.dylib",
+    "lib/libgomp.dylib"
+  ],
+  "fn": "_openmp_mutex-4.5-7_kmp_llvm.conda",
+  "license": "BSD-3-Clause",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/_openmp_mutex-4.5-7_kmp_llvm",
+    "type": 1
+  },
+  "md5": "a44032f282e7d2acdeb1c240308052dd",
+  "name": "_openmp_mutex",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/_openmp_mutex-4.5-7_kmp_llvm.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "lib/libgomp.1.dylib",
+        "path_type": "softlink",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_in_bytes": 0
+      },
+      {
+        "_path": "lib/libgomp.dylib",
+        "path_type": "softlink",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "size_in_bytes": 0
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "7acaa2e0782cad032bdaf756b536874346ac1375745fb250e9bdd6a48a7ab3cd",
+  "size": 8325,
+  "subdir": "osx-arm64",
+  "timestamp": 1764092507000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/_openmp_mutex-4.5-7_kmp_llvm.conda",
+  "version": "4.5"
+}

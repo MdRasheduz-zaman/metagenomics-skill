@@ -1,0 +1,160 @@
+# Platform-aware tool routing and optional alternatives.
+# wired: true  => metagx Snakefile invokes this tool.
+# wired: false => suggestion to install/use elsewhere or a future module.
+
+short_wgs_qc: &short_wgs_qc
+  default: fastp
+  pipeline: [fastp]
+  alternatives:
+    - tool: trimmomatic
+      wired: false
+      reason: Classic adapter/quality trimmer; metagx uses fastp by default for speed.
+      install: mamba install -c bioconda trimmomatic
+    - tool: sickle
+      wired: false
+      reason: Lightweight sliding-window trimmer for SE/PE.
+      install: mamba install -c bioconda sickle-trim
+    - tool: cutadapt
+      wired: true
+      reason: Use for amplicon/primer trimming, not generic WGS QC.
+
+qc:
+  illumina: *short_wgs_qc
+  mgi: *short_wgs_qc
+  bgi: *short_wgs_qc
+  ont:
+    default: porechop_abi
+    pipeline: [porechop_abi, chopper]
+    alternatives:
+      - tool: porechop
+        wired: false
+        reason: Fixed adapter DB; porechop_abi is preferred (ab initio).
+        install: mamba install -c bioconda porechop
+      - tool: nanoq
+        wired: false
+        reason: Fast ONT QC filter; chopper is the metagx default.
+        install: mamba install -c bioconda nanoq
+      - tool: filtlong
+        wired: false
+        reason: Length/quality filter tuned for assembly; pairs with Flye.
+        install: mamba install -c bioconda filtlong
+  pacbio_hifi:
+    default: chopper
+    pipeline: [chopper]
+    alternatives:
+      - tool: lima
+        wired: false
+        reason: PacBio demux/adapter removal from raw subreads.
+        install: mamba install -c bioconda lima
+  pacbio_clr:
+    default: chopper
+    pipeline: [chopper]
+    alternatives:
+      - tool: lima
+        wired: false
+        reason: CLR often needs adapter/barcode handling before QC.
+        install: mamba install -c bioconda lima
+  amplicon:
+    default: cutadapt
+    pipeline: [cutadapt]
+    alternatives:
+      - tool: fastp
+        wired: true
+        reason: Optional quality pass after primer trim on short amplicons.
+  ancient_pe:
+    default: fastp
+    pipeline: [fastp]
+    note: fastp merge mode collapses overlapping PE ancient fragments.
+
+assembly:
+  illumina:
+    default: megahit
+    wired_tools: [megahit, metaspades]
+    alternatives:
+      - tool: metaspades
+        wired: true
+        reason: Better on complex communities; slower and RAM-heavy.
+      - tool: megahit
+        wired: true
+        reason: Default short-read assembler; fast, moderate RAM.
+  ont:
+    default: flye
+    wired_tools: [flye, metaspades]
+    alternatives:
+      - tool: flye
+        wired: true
+        reason: metaFlye (--meta) default for long-read metagenomes.
+      - tool: metaspades
+        wired: true
+        reason: Hybrid when short reads are also available (long_reads config).
+  pacbio_hifi:
+    default: flye
+    wired_tools: [flye]
+  pacbio_clr:
+    default: flye
+    wired_tools: [flye]
+
+classify:
+  default: kraken2
+  wired_tools: [kraken2]
+  alternatives:
+    - tool: metaphlan
+      wired: true
+      module: classify_consensus
+      reason: Marker-gene profiling; enable modules.classify_consensus.
+    - tool: kaiju
+      wired: true
+      module: classify_consensus
+      reason: Translated search; good for viruses; pairs with kraken2 in consensus.
+    - tool: centrifuge
+      wired: false
+      reason: Compact index, fast; not wired in metagx yet.
+      install: mamba install -c bioconda centrifuge
+
+abundance:
+  default: bracken
+  wired_tools: [bracken]
+  note: Requires kraken2; read_length must match Bracken k-mer distribution.
+
+amplicon:
+  short_otu:
+    default: vsearch
+    wired_tools: [vsearch]
+    alternatives:
+      - tool: dada2
+        wired: true
+        reason: ASV denoising; set amplicon.method asv.
+  short_asv:
+    default: dada2
+    wired_tools: [dada2]
+  long:
+    default: emu
+    wired_tools: [emu]
+
+optional_modules:
+  - module: reconcile
+    tools: [kraken2]
+    when: { needs: [assembly, classify] }
+    reason: Compare read vs contig taxonomy; flags discordance.
+  - module: domain_taxonomy
+    tools: [genomad, checkv, gtdbtk, checkm2, eukrep, eukcc]
+    when: { needs: [assembly] }
+    reason: Viral/prok/euk contig annotation.
+  - module: functional
+    tools: [humann, amrfinderplus, abricate, bakta, eggnog]
+    when: { needs: [assembly] }
+    reason: AMR and gene annotation on contigs/MAGs.
+  - module: binning
+    tools: [metabat2, maxbin2, concoct, das_tool, drep]
+    when: { needs: [assembly] }
+    reason: Recover MAGs from assembly.
+  - module: stats
+    tools: []
+    when: { needs: [abundance], min_samples: 2 }
+    reason: Alpha/beta diversity from Bracken tables.
+  - module: phylogenetics
+    tools: [mafft, iqtree, fasttree]
+    when: {}
+    reason: >
+      MAFFT alignment → optional TrimAl → IQ-TREE 2 or FastTree from a marker/MAG FASTA
+      (phylogenetics.input).

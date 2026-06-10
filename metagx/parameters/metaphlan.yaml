@@ -18,6 +18,10 @@ params:
     question: >
       Quantile for the robust average of marker abundances (--stat_q). 0.2 is the v4
       default; lower is more sensitive to low-abundance clades.
+    recommend:
+      default: 0.2
+      sensitive: 0.1
+      strict: 0.3
   tax_lev:
     flag: "--tax_lev"
     type: enum

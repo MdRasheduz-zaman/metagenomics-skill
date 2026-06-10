@@ -1,0 +1,60 @@
+# Parameter registry for IQ-TREE 2 (maximum likelihood phylogeny). See kraken2.yaml.
+tool: iqtree
+command: iqtree2
+source_repo: https://github.com/iqtree/iqtree2
+docs_url: http://www.iqtree.org/
+description: >
+  Maximum likelihood tree inference with automatic model selection (TEST) and ultrafast
+  bootstrap. Default phylogenetics backend for <~2000 sequences.
+params:
+  model:
+    flag: "-m"
+    type: str
+    default: TEST
+    tier: 1
+    ask: true
+    question: >
+      Substitution model. TEST lets IQ-TREE pick the best model; or specify (e.g. GTR+G4
+      for DNA, LG+G4 for proteins).
+    recommend:
+      nt: TEST
+      aa: TEST
+      default: TEST
+  bootstrap:
+    flag: "-B"
+    type: int
+    default: 1000
+    min: 0
+    tier: 1
+    ask: true
+    question: Ultrafast bootstrap replicates (1000 recommended; 0 to skip).
+    recommend:
+      default: 1000
+      quick: 100
+      publication: 1000
+  alrt:
+    flag: "-alrt"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: SH-aLRT replicates (optional branch support; 0 = off).
+  threads:
+    flag: "-T"
+    type: int
+    managed: true
+  prefix:
+    flag: "--prefix"
+    type: path
+    managed: true
+  alignment:
+    flag: "-s"
+    type: path
+    managed: true
+  redo:
+    flag: "--redo"
+    type: bool
+    default: true
+    tier: 3
+    ask: false

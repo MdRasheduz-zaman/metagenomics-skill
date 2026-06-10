@@ -14,6 +14,10 @@ params:
     question: >
       Infer adapter sequences ab initio from the reads (recommended for ONT, catches
       adapters not in the built-in database).
+    recommend:
+      ont: true
+      pacbio_clr: true
+      default: true
   extra_end_trim:
     flag: "--extra_end_trim"
     type: int

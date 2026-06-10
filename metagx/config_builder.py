@@ -48,6 +48,7 @@ DEFAULT_MODULES = {
     "damage": False,
     "decontam": False,
     "strain": False,
+    "phylogenetics": False,
 }
 
 KNOWN_DOMAINS = {"viral", "prokaryote", "eukaryote"}
@@ -212,6 +213,35 @@ def _validate_differential(diff: Dict[str, Any] | None) -> Dict[str, Any]:
     return out
 
 
+def _validate_phylogenetics(phylo: Dict[str, Any]) -> Dict[str, Any]:
+    if not phylo.get("input") and not phylo.get("aligned_input"):
+        raise registry.ValidationError(
+            "phylogenetics needs 'input' (FASTA) or 'aligned_input' (pre-aligned FASTA)"
+        )
+    method = str(phylo.get("method", "iqtree")).lower()
+    if method not in {"iqtree", "fasttree", "auto"}:
+        raise registry.ValidationError(
+            "phylogenetics.method must be iqtree, fasttree, or auto"
+        )
+    seq_type = str(phylo.get("sequence_type", "nt")).lower()
+    if seq_type not in {"nt", "aa"}:
+        raise registry.ValidationError("phylogenetics.sequence_type must be nt or aa")
+    out: Dict[str, Any] = {
+        "method": method,
+        "sequence_type": seq_type,
+        "trim": bool(phylo.get("trim", True)),
+    }
+    if phylo.get("input"):
+        out["input"] = str(phylo["input"])
+    if phylo.get("aligned_input"):
+        out["aligned_input"] = str(phylo["aligned_input"])
+    if phylo.get("trimal_method"):
+        out["trimal_method"] = str(phylo["trimal_method"])
+    if phylo.get("fasttree_threshold") is not None:
+        out["fasttree_threshold"] = int(phylo["fasttree_threshold"])
+    return out
+
+
 def _sample_groups(samples: Any, group_column: str = "group") -> Dict[str, int]:
     """Count samples per group label (inline lists only; TSV checked at runtime)."""
     if not isinstance(samples, list):
@@ -278,6 +308,10 @@ def build_config(
     dada2: Dict[str, Any] | None = None,
     differential: Dict[str, Any] | None = None,
     bracken_read_length_by_platform: Dict[str, int] | None = None,
+    phylogenetics: Dict[str, Any] | None = None,
+    mafft: Dict[str, Any] | None = None,
+    iqtree: Dict[str, Any] | None = None,
+    fasttree: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Validate every section and return a clean config dict.
 
@@ -370,6 +404,8 @@ def build_config(
             raise registry.ValidationError(
                 "decontam needs at least one sample marked `control: true` (negative/blank)"
             )
+    if mods.get("phylogenetics"):
+        _validate_phylogenetics(phylogenetics or {})
     doms = [d.lower() for d in (domains or [])]
     bad = [d for d in doms if d not in KNOWN_DOMAINS]
     if bad:
@@ -411,6 +447,7 @@ def build_config(
         "metaspades": metaspades, "metaphlan": metaphlan, "kaiju": kaiju,
         "multiqc": multiqc, "krona": krona, "mapdamage": mapdamage, "instrain": instrain,
         "antismash": antismash, "dada2": dada2,
+        "mafft": mafft, "iqtree": iqtree, "fasttree": fasttree,
     }
     # Merge any preset-provided tool params under the user's overrides (user wins),
     # for every registry tool — so presets can tune new tools with no code changes here.
@@ -490,6 +527,8 @@ def build_config(
         cfg["read_filter"] = rf_clean
     if mods.get("differential") or differential:
         cfg["differential"] = _validate_differential(differential)
+    if mods.get("phylogenetics"):
+        cfg["phylogenetics"] = _validate_phylogenetics(phylogenetics or {})
     cfg.update(cleaned_sections)
     return cfg
 

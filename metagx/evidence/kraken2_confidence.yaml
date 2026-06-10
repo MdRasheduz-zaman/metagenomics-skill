@@ -1,0 +1,45 @@
+# Evidence from bundled validation experiments (config/experiments/*).
+# Used by `metagx recommend` and `metagx advise` — not executed by Snakemake.
+tool: kraken2
+param: confidence
+metric: percent_classified
+source: results/experiments/
+platforms:
+  illumina:
+    sweep_recommend: [0.0, 0.05, 0.1, 0.2, 0.5]
+    sweep_default: [0.0, 0.05, 0.1, 0.2]
+    avoid_above: 0.5
+    notes: Stable through 0.2 on wgsim PE; large drop at 0.5 (~75% classified).
+    observations:
+      - { confidence: 0.0, percent_classified: 99.97 }
+      - { confidence: 0.2, percent_classified: 99.75 }
+      - { confidence: 0.5, percent_classified: 75.29 }
+  mgi:
+    sweep_recommend: [0.0, 0.05, 0.1, 0.2]
+    sweep_default: [0.0, 0.05, 0.1, 0.2]
+    notes: Same short-read behaviour as Illumina (not re-benchmarked separately).
+  ont:
+    sweep_recommend: [0.0, 0.05, 0.1, 0.2]
+    sweep_default: [0.0, 0.05, 0.1, 0.2]
+    notes: Modest sensitivity; baseline ~50% classified on nanopore sim.
+    observations:
+      - { confidence: 0.0, percent_classified: 49.46 }
+      - { confidence: 0.2, percent_classified: 32.88 }
+  pacbio_hifi:
+    sweep_recommend: [0.0, 0.05, 0.1, 0.2]
+    sweep_default: [0.0, 0.05, 0.1]
+    avoid_above: 0.2
+    notes: Steep falloff as confidence rises; prefer ≤0.1 for profiling.
+    observations:
+      - { confidence: 0.0, percent_classified: 100.0 }
+      - { confidence: 0.1, percent_classified: 69.4 }
+      - { confidence: 0.2, percent_classified: 42.89 }
+  pacbio_clr:
+    sweep_recommend: [0.0, 0.01, 0.02]
+    sweep_default: [0.0, 0.01, 0.02]
+    avoid_above: 0.05
+    notes: Very noise-sensitive; ≥0.05 leaves almost all reads unclassified.
+    observations:
+      - { confidence: 0.0, percent_classified: 94.94 }
+      - { confidence: 0.01, percent_classified: 37.35 }
+      - { confidence: 0.02, percent_classified: 7.23 }

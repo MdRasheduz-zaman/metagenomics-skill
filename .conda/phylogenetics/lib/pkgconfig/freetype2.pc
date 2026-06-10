@@ -1,0 +1,13 @@
+prefix=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics
+exec_prefix=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics
+libdir=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/lib
+includedir=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/include
+
+Name: FreeType 2
+URL: https://freetype.org
+Description: A free, high-quality, and portable font engine.
+Version: 26.6.20
+Requires: 
+Libs: -L/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/lib -lfreetype
+Libs.private: 
+Cflags: -I${includedir}/freetype2

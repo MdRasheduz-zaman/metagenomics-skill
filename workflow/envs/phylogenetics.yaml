@@ -1,0 +1,10 @@
+# MAFFT + IQ-TREE 2 + FastTree (+ optional TrimAl) for modules.phylogenetics.
+name: metagx-phylogenetics
+channels: [conda-forge, bioconda]
+dependencies:
+  - mafft >=7.5
+  - iqtree >=2.2
+  - fasttree >=2.1
+  - trimal
+  - python >=3.10
+  - matplotlib

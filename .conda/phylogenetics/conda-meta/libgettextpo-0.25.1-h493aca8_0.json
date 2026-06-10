@@ -1,0 +1,43 @@
+{
+  "build": "h493aca8_0",
+  "build_number": 0,
+  "channel": "https://conda.anaconda.org/conda-forge/osx-arm64",
+  "constrains": [],
+  "depends": [
+    "__osx >=11.0",
+    "libiconv >=1.18,<2.0a0",
+    "libintl 0.25.1 h493aca8_0"
+  ],
+  "extracted_package_dir": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgettextpo-0.25.1-h493aca8_0",
+  "files": [
+    "lib/libgettextpo.0.dylib"
+  ],
+  "fn": "libgettextpo-0.25.1-h493aca8_0.conda",
+  "license": "GPL-3.0-or-later",
+  "link": {
+    "source": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgettextpo-0.25.1-h493aca8_0",
+    "type": 1
+  },
+  "md5": "98acd9989d0d8d5914ccc86dceb6c6c2",
+  "name": "libgettextpo",
+  "package_tarball_full_path": "/var/folders/g9/f71tdd5x4pg6kjwxk_dt2j_w0000gn/T/cursor-sandbox-cache/092605b95ebade991ba476437ccca8fe/conda/libgettextpo-0.25.1-h493aca8_0.conda",
+  "paths_data": {
+    "paths": [
+      {
+        "_path": "lib/libgettextpo.0.dylib",
+        "path_type": "hardlink",
+        "sha256": "3590344975197bd4d016a7a9c9829cb14b8d943466b85013dd5fe01808c72d3b",
+        "sha256_in_prefix": "3590344975197bd4d016a7a9c9829cb14b8d943466b85013dd5fe01808c72d3b",
+        "size_in_bytes": 507168
+      }
+    ],
+    "paths_version": 1
+  },
+  "requested_spec": "None",
+  "sha256": "3ba35ff26b3b9573b5df5b9bbec5c61476157ec3a9f12c698e2a9350cd4338fd",
+  "size": 183091,
+  "subdir": "osx-arm64",
+  "timestamp": 1751558452000,
+  "url": "https://conda.anaconda.org/conda-forge/osx-arm64/libgettextpo-0.25.1-h493aca8_0.conda",
+  "version": "0.25.1"
+}

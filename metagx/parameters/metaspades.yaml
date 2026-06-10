@@ -16,6 +16,12 @@ params:
     question: >
       Memory cap in GB (-m); SPAdes aborts rather than exceeding it. Set to your machine's
       available RAM for large soil/sediment assemblies.
+    recommend:
+      illumina: 250
+      mgi: 250
+      bgi: 250
+      ont: 250
+      default: 250
   only_assembler:
     flag: "--only-assembler"
     type: bool

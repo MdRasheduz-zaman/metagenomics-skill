@@ -1,0 +1,13 @@
+# Package Information for pkg-config
+
+prefix=/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: SQLite
+Description: SQL database engine
+Version: 3.53.2
+Libs: -L${libdir} -lsqlite3
+Libs.private:  -lz   -Wl,-rpath,/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/lib -L/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/lib -licui18n -licuuc -licudata
+Cflags: -I${includedir}

@@ -1,0 +1,14 @@
+# MAFFT method presets by alignment set size (phylogenetics module).
+platforms:
+  default:
+    method: auto
+    notes: MAFFT --auto picks a strategy from the input size.
+  small:
+    method: linsi
+    notes: <~200 sequences — local alignment with iterative refinement.
+  medium:
+    method: fftnsi
+    notes: Hundreds of sequences — FFT-NS-i is faster than L-INS-i.
+  large:
+    method: fftns
+    notes: ">500 sequences — progressive FFT-NS; pair with FastTree for tree build."

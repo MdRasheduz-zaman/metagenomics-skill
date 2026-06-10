@@ -1,0 +1,56 @@
+# Bracken read_length (-r) guidance. Value must match a length the Bracken DB was built for.
+# Run `metagx build-db --read-length 150,250,1000` to add distributions.
+tool: bracken
+param: read_length
+metric: abundance_calibration
+source: literature + metagx presets/experiments
+
+# Standard lengths to round toward when picking from median read length
+standard_lengths: [50, 75, 100, 150, 200, 250, 300, 500, 1000, 1500, 2000]
+
+platforms:
+  illumina:
+    default: 150
+    typical_range: [100, 250]
+    notes: >
+      Match mate length (e.g. 150 for 2x150, 250 for 2x250). If median is 148-152 use 150.
+    build_db_lengths: [100, 150, 250]
+  mgi:
+    default: 150
+    typical_range: [100, 250]
+    build_db_lengths: [100, 150, 250]
+  bgi:
+    default: 150
+    typical_range: [100, 250]
+    build_db_lengths: [100, 150, 250]
+  ont:
+    default: 1000
+    typical_range: [500, 2000]
+    notes: >
+      Use median read length from `metagx readlen`; Bracken long-read calibration is approximate.
+      Build DB with the chosen length via `metagx build-db --read-length 1000`.
+    build_db_lengths: [500, 1000, 1500]
+  pacbio_hifi:
+    default: 1000
+    typical_range: [500, 2000]
+    notes: HiFi reads are long; use median from data, often 1-5 kb for WGS fragments.
+    build_db_lengths: [500, 1000, 1500]
+  pacbio_clr:
+    default: 1000
+    typical_range: [500, 2000]
+    build_db_lengths: [500, 1000]
+  ancient:
+    default: 50
+    typical_range: [30, 100]
+    notes: Short damaged fragments; ancient-dna preset uses 50.
+
+use_cases:
+  pathogen_screening:
+    level: S
+    threshold: 10
+  soil_community:
+    level: G
+    threshold: 10
+  gut_microbiome:
+    level: S
+    threshold: 10

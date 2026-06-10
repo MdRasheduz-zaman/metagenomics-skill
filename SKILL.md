@@ -58,16 +58,24 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
 5. **Dry run, then run:** `metagx run --config config.yaml --dry-run`, then drop
    `--dry-run`. (Database not present? `snakemake --snakefile workflow/Snakefile
    fetch_kraken_db` — only when the user agrees, the index is large.)
-6. **Report results:** `metagx results --config config.yaml` for the JSON summaries
+   After a successful run, metagx auto-writes `results/<project>/advisor/` and appends
+   to `.metagx/history.jsonl` (use `--no-advisor` / `--no-history` to skip).
+6. **Recommend before sweeping:** `metagx recommend --platform pacbio_clr` (or
+   `--config config.yaml` to infer platform) returns evidence-based confidence grids
+   and warnings from `metagx/evidence/`.
+7. **Post-run advisor:** `metagx advise --config config.yaml --write` inspects finished
+   results and writes `advisor.json`, `trial_log.md`, and optional
+   `next_config.suggested.yaml`. Use `metagx history` to list prior trials.
+8. **Report results:** `metagx results --config config.yaml` for the JSON summaries
    (`results/<project>/summary/`: `*.matrix.json`, `*.heatmap.png`,
    `bracken_combined.tsv`).
-7. **Generate provenance + Methods.** `metagx report --config config.yaml` writes
+9. **Generate provenance + Methods.** `metagx report --config config.yaml` writes
    `results/<project>/report/`: `manifest.json` (tool versions, exact commands, DB
    identity, QC + % classified metrics), `methods.md` (a paste-into-paper Methods
    paragraph + citations — the "Copy as Methods" feature), and `report.md` (full report
    with parameter table, figures, abundance table). Add `--format latex|pdf` (needs
    pandoc) for those outputs.
-8. **Write the full paper.** `metagx paper --config config.yaml` elaborates the whole run
+10. **Write the full paper.** `metagx paper --config config.yaml` elaborates the whole run
    into a structured **IMRaD manuscript** (Introduction / Methods / Results / Discussion +
    abstract, tables, figures, references) and compiles it to PDF with **pdflatex** —
    `results/<project>/report/paper.{tex,pdf}`. Every number is read back from the result
@@ -76,6 +84,18 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    `.tex` if no LaTeX engine is installed.
 
 ## Key concepts
+- **Advisor layer (evidence, not codegen):** `metagx recommend --config config.yaml`
+  returns **multi-tool** guidance: platform QC routing (fastp vs porechop/chopper vs
+  cutadapt), Bracken `read_length` from median read length, kraken2 confidence +
+  `minimum_hit_groups`, assembly defaults, optional modules to enable, and **alternatives
+  to install** (e.g. trimmomatic, filtlong) when not wired in metagx. Single-param mode:
+  `metagx recommend --tool bracken --param read_length --platform ont`. `metagx advise`
+  merges post-run metrics with the same engine. History: `.metagx/history.jsonl`.
+  Does **not** replace Snakemake — it informs the next interview pass.
+- **Phylogenetics:** `modules.phylogenetics` runs MAFFT → optional TrimAl → IQ-TREE 2 or
+  FastTree on `phylogenetics.input` (or skip alignment with `aligned_input`). Registries:
+  `mafft`, `iqtree`, `fasttree`. Outputs: `results/<project>/phylogenetics/` (aligned FASTA,
+  Newick, JSON stats, tree figure). Use `method: auto` to pick FastTree when >500 sequences.
 - **Confidence sweep ("k-dense" matrix):** `sweep: {param: confidence, values: [...]}`
   runs kraken2 at each value and produces a per-sample matrix + line plot showing how
   each organism's read count changes with threshold. Never also pin the swept param in
@@ -84,7 +104,7 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   (Bracken); optional `assembly` (MEGAHIT/metaSPAdes/Flye), `binning` (MetaBAT2),
   `bin_refinement`, `reconcile`, `domain_taxonomy`, `filtered_assembly`, `stats`,
   `differential`, `classify_consensus`, `functional`, `bgc`, `aggregate`, `strain`,
-  `damage`, and `decontam`. Toggle in `modules:`.
+  `damage`, `decontam`, and `phylogenetics`. Toggle in `modules:`.
 - **Reconcile** (`modules.reconcile`, needs `assembly`+`classify`): classifies the
   assembled contigs with kraken2 and joins them to per-contig coverage and the read-level
   calls. Outputs under `results/<project>/reconcile/`: a per-contig taxonomy table, a

@@ -15,6 +15,10 @@ params:
     tier: 2
     ask: true
     question: Minimum match length in amino acids (-m). 11 is the default; raise to reduce spurious hits.
+    recommend:
+      default: 11
+      pathogen: 11
+      viral_screening: 9
   mismatches:
     flag: "-e"
     type: int

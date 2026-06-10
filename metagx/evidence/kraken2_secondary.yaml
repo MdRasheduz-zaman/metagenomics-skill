@@ -1,0 +1,29 @@
+# Secondary kraken2 parameters (non-confidence). Knowledge-based defaults; extend with benchmarks.
+tool: kraken2
+source: kraken2 manual + metagenomics best practice
+
+minimum_hit_groups:
+  illumina: 2
+  mgi: 2
+  bgi: 2
+  ont: 2
+  pacbio_hifi: 1
+  pacbio_clr: 1
+  pathogen_screening: 3
+  notes:
+    default: 2 is kraken2 default; raise to 3 for stricter pathogen screens.
+    long_read: Lower to 1 on noisy long reads to avoid over-filtering sparse k-mer hits.
+
+minimum_base_quality:
+  illumina: 0
+  ont: 0
+  pacbio_hifi: 0
+  pacbio_clr: 0
+  low_quality_runs: 15
+  notes: >
+    Enable (e.g. Q15) only when base quality is trustworthy; FASTA inputs skip this flag.
+
+quick:
+  huge_datasets: true
+  default: false
+  notes: Quick mode stops at first hit; use for prescreens, not final abundance.

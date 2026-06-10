@@ -15,6 +15,10 @@ params:
     question: >
       Minimum contig length for binning (-m). Must be >= 1500; 2500 is the default.
       Larger = fewer, higher-confidence bins.
+    recommend:
+      default: 2500
+      soil: 2500
+      quick: 1500
   min_cls_size:
     flag: "-s"
     type: int

@@ -1,0 +1,8 @@
+# IQ-TREE 2 bootstrap guidance (phylogenetics module).
+platforms:
+  default:
+    bootstrap: 1000
+    notes: Ultrafast bootstrap (-B 1000) for publication support.
+  quick:
+    bootstrap: 100
+    notes: Fast exploratory trees; not for final figures.

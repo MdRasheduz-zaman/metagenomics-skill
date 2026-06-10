@@ -1,0 +1,7 @@
+# MetaPhlAn 4 as second classifier (classify_consensus).
+platforms:
+  default:
+    stat_q: 0.2
+    notes: >
+      stat_q 0.2 is the v4 default (robust marker average). Lower (e.g. 0.1) is more
+      sensitive to low-abundance clades; raise for stricter calls.
