@@ -1,0 +1,21 @@
+# Parameter registry for Emu (long-read amplicon abundance). See kraken2.yaml for fields.
+tool: emu
+command: emu
+description: >
+  Relative abundance estimation for long-read (ONT/PacBio) full-length 16S amplicons using
+  expectation-maximization against a marker-gene database — the long-read amplicon analogue
+  of an OTU/abundance table.
+params:
+  min_abundance:
+    flag: "--min-abundance"
+    type: float
+    default: 0.0001
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: false
+    question: Drop taxa below this estimated relative abundance.
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

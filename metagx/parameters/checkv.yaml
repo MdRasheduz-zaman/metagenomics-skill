@@ -1,0 +1,11 @@
+# Parameter registry for CheckV (viral genome completeness/contamination). See kraken2.yaml.
+tool: checkv
+command: checkv
+description: >
+  Assesses quality, completeness, and contamination of metagenome-assembled viral genomes
+  (the viral analogue of CheckM). Run on viral contigs from geNomad.
+params:
+  threads:
+    flag: "-t"
+    type: int
+    managed: true

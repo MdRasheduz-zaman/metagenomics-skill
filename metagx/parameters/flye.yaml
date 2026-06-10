@@ -1,0 +1,48 @@
+# Parameter registry for Flye / metaFlye (long-read assembly). See kraken2.yaml.
+# The read-type flag (--nano-hq / --nano-raw / --pacbio-hifi / --pacbio-raw) doubles as the
+# input flag and is chosen by sample platform in the workflow, so it is managed.
+tool: flye
+command: flye
+description: >
+  De novo assembler for long reads (ONT / PacBio). With --meta it is metaFlye, tuned for
+  uneven coverage in metagenomes.
+params:
+  meta:
+    flag: "--meta"
+    type: bool
+    default: true
+    tier: 1
+    ask: true
+    question: Metagenome mode (metaFlye) — handles uneven coverage. Recommended for metagenomes.
+  min_overlap:
+    flag: "--min-overlap"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Minimum overlap between reads (bp). 0 / unset lets Flye choose automatically.
+  genome_size:
+    flag: "--genome-size"
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    question: Estimated metagenome size (e.g. 5m, 1g). Optional in recent Flye versions.
+  iterations:
+    flag: "--iterations"
+    type: int
+    default: 1
+    min: 1
+    tier: 3
+    ask: false
+    question: Number of polishing iterations.
+  # --- managed by the workflow ---
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true
+  out_dir:
+    flag: "--out-dir"
+    type: path
+    managed: true

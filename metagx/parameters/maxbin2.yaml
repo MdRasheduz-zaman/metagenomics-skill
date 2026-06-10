@@ -1,0 +1,50 @@
+# Parameter registry for MaxBin2 (a second binner, for DAS_Tool consensus). See kraken2.yaml.
+tool: maxbin2
+command: run_MaxBin.pl
+description: >
+  Bins assembled contigs into MAGs using tetranucleotide frequency + coverage with an
+  Expectation-Maximization algorithm. Run alongside MetaBAT2 and CONCOCT so DAS_Tool can
+  pick the best bins across methods.
+params:
+  min_contig_length:
+    flag: "-min_contig_length"
+    type: int
+    default: 1000
+    min: 500
+    tier: 2
+    ask: true
+    question: Minimum contig length to bin (-min_contig_length). 1000 is the MaxBin2 default.
+  prob_threshold:
+    flag: "-prob_threshold"
+    type: float
+    default: 0.9
+    min: 0.0
+    max: 1.0
+    tier: 3
+    ask: false
+    question: Probability threshold for assigning a contig to a bin.
+  max_iteration:
+    flag: "-max_iteration"
+    type: int
+    default: 50
+    min: 1
+    tier: 3
+    ask: false
+    question: Maximum EM iterations.
+  # --- managed by the workflow ---
+  contig:
+    flag: "-contig"
+    type: path
+    managed: true
+  abund:
+    flag: "-abund"
+    type: path
+    managed: true
+  out:
+    flag: "-out"
+    type: str
+    managed: true
+  thread:
+    flag: "-thread"
+    type: int
+    managed: true

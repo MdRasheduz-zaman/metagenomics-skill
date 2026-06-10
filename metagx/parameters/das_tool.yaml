@@ -1,0 +1,70 @@
+# Parameter registry for DAS_Tool (consensus bin selection across binners). See kraken2.yaml.
+tool: das_tool
+command: DAS_Tool
+description: >
+  Integrates the bin sets from MetaBAT2, MaxBin2 and CONCOCT and selects a single,
+  non-redundant set of the highest-scoring bins per contig (dereplication, aggregation
+  and scoring), producing a refined MAG set better than any single binner.
+params:
+  score_threshold:
+    flag: "--score_threshold"
+    type: float
+    default: 0.5
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: true
+    question: >
+      Minimum bin score (0-1) to keep a bin in the consensus set (--score_threshold).
+      Raise for higher-confidence MAGs, lower to retain more partial bins.
+  duplicate_penalty:
+    flag: "--duplicate_penalty"
+    type: float
+    default: 0.6
+    min: 0.0
+    max: 3.0
+    tier: 3
+    ask: false
+    question: Penalty for duplicate single-copy genes when scoring bins.
+  megabin_penalty:
+    flag: "--megabin_penalty"
+    type: float
+    default: 0.5
+    min: 0.0
+    max: 3.0
+    tier: 3
+    ask: false
+    question: Penalty for oversized ("mega") bins when scoring.
+  search_engine:
+    flag: "--search_engine"
+    type: enum
+    choices: [diamond, blast, usearch]
+    default: diamond
+    tier: 3
+    ask: false
+    question: Search engine for single-copy gene identification.
+  # --- managed by the workflow ---
+  bins:
+    flag: "-i"
+    type: str
+    managed: true
+  labels:
+    flag: "-l"
+    type: str
+    managed: true
+  contigs:
+    flag: "-c"
+    type: path
+    managed: true
+  outputbasename:
+    flag: "-o"
+    type: str
+    managed: true
+  write_bins:
+    flag: "--write_bins"
+    type: bool
+    managed: true
+  threads:
+    flag: "-t"
+    type: int
+    managed: true

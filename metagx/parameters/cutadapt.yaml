@@ -1,0 +1,37 @@
+# Parameter registry for cutadapt (amplicon primer removal). See kraken2.yaml for fields.
+tool: cutadapt
+command: cutadapt
+description: >
+  Removes PCR primers (and adapters) from amplicon reads before OTU/ASV inference or
+  abundance estimation. Primer sequences come from the `amplicon` config block.
+params:
+  quality_cutoff:
+    flag: "-q"
+    type: int
+    default: 0
+    min: 0
+    max: 40
+    tier: 2
+    ask: false
+    question: 3' quality trim threshold (0 = none).
+  minimum_length:
+    flag: "-m"
+    type: int
+    default: 1
+    min: 0
+    tier: 2
+    ask: false
+    question: Discard reads shorter than this after primer removal.
+  # --- managed by the workflow (primers + I/O + threads) ---
+  fwd_primer:
+    flag: "-g"
+    type: str
+    managed: true
+  rev_primer:
+    flag: "-G"
+    type: str
+    managed: true
+  threads:
+    flag: "-j"
+    type: int
+    managed: true

@@ -1,0 +1,9 @@
+sample	r1	r2	platform	layout	library
+gut_pe	data/gut_R1.fastq.gz	data/gut_R2.fastq.gz	illumina	pe	wgs
+soil_se	data/soil.fastq.gz			illumina	se	wgs
+miseq_interleaved	data/miseq_12.fastq.gz			illumina	interleaved	wgs
+gut_nanopore	data/gut_ont.fastq.gz			ont	se	wgs
+gut_hifi	data/gut_hifi.fastq.gz			pacbio_hifi	se	wgs
+viral_fasta	data/simulated_metagenomic_reads.fasta			illumina	se	wgs
+amplicon_16s_pe	data/16s_R1.fastq.gz	data/16s_R2.fastq.gz	illumina	pe	amplicon
+amplicon_16s_ont	data/16s_ont.fastq.gz			ont	se	amplicon

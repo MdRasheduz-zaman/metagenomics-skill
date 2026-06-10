@@ -1,0 +1,51 @@
+# Parameter registry for dRep (cross-sample genome dereplication). See kraken2.yaml.
+tool: drep
+command: dRep
+description: >
+  Dereplicates MAGs across samples into a non-redundant set of representative genomes by
+  clustering on ANI, keeping the best genome per cluster. The multi-sample step that turns
+  per-sample bins into a study-level genome catalog.
+params:
+  completeness:
+    flag: "-comp"
+    type: float
+    default: 75.0
+    min: 0.0
+    max: 100.0
+    tier: 2
+    ask: true
+    question: Minimum CheckM completeness (%) for a genome to enter dereplication (-comp).
+  contamination:
+    flag: "-con"
+    type: float
+    default: 25.0
+    min: 0.0
+    max: 100.0
+    tier: 2
+    ask: true
+    question: Maximum CheckM contamination (%) allowed (-con).
+  s_ani:
+    flag: "-sa"
+    type: float
+    default: 0.95
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: true
+    question: >
+      Secondary-cluster ANI threshold for calling two genomes the same (-sa). 0.95 ≈
+      species level; raise toward 0.99 for strain-level separation.
+  p_ani:
+    flag: "-pa"
+    type: float
+    default: 0.9
+    min: 0.0
+    max: 1.0
+    tier: 3
+    ask: false
+    question: Primary-cluster (Mash) ANI threshold used to pre-group genomes.
+  # --- managed by the workflow ---
+  processors:
+    flag: "-p"
+    type: int
+    managed: true

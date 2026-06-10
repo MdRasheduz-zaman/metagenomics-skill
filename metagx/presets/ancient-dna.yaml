@@ -1,0 +1,13 @@
+name: ancient-dna
+description: Authenticate and profile ancient / degraded DNA from a shotgun sample.
+when_to_use: >
+  Use for ancient or degraded DNA (paleogenomics, museum / forensic / sedaDNA specimens):
+  short overlapping fragments that need read-merging, lenient length filtering, classification
+  and assembly, plus post-mortem damage authentication (C→T / G→A deamination). Mark the
+  relevant samples with `library: ancient` in the sample sheet (paired-end, short-read).
+config:
+  modules: {qc: true, classify: true, abundance: true, assembly: true, binning: false, damage: true}
+  fastp: {qualified_quality_phred: 20, length_required: 25, merge: true, correction: true}
+  kraken2: {confidence: 0.1, minimum_hit_groups: 2}
+  bracken: {read_length: 50, level: S, threshold: 5}
+  mapdamage: {length: 70}

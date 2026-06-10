@@ -1,0 +1,41 @@
+# Parameter registry for ABRicate (mass screening of contigs for AMR / virulence). See kraken2.yaml.
+tool: abricate
+command: abricate
+description: >
+  Mass-screens assembled contigs against a chosen resistance/virulence database
+  (NCBI, CARD, ResFinder, ARG-ANNOT, VFDB, PlasmidFinder) by BLAST. A fast,
+  database-flexible complement to AMRFinderPlus.
+params:
+  db:
+    flag: "--db"
+    type: enum
+    choices: [ncbi, card, resfinder, argannot, vfdb, plasmidfinder, ecoh, megares]
+    default: ncbi
+    tier: 1
+    ask: true
+    question: >
+      Which reference database to screen against: ncbi/card/resfinder/argannot (AMR),
+      vfdb (virulence), plasmidfinder (replicons). Pick the one that matches your question.
+  minid:
+    flag: "--minid"
+    type: float
+    default: 80.0
+    min: 0.0
+    max: 100.0
+    tier: 2
+    ask: true
+    question: Minimum nucleotide identity to report a hit (--minid, percent 0-100).
+  mincov:
+    flag: "--mincov"
+    type: float
+    default: 80.0
+    min: 0.0
+    max: 100.0
+    tier: 2
+    ask: true
+    question: Minimum proportion of the reference gene covered to report a hit (--mincov, percent).
+  # --- managed by the workflow ---
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

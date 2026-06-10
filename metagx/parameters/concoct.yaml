@@ -1,0 +1,48 @@
+# Parameter registry for CONCOCT (a third binner, for DAS_Tool consensus). See kraken2.yaml.
+tool: concoct
+command: concoct
+description: >
+  Bins contigs by clustering on sequence composition + coverage across samples using
+  Gaussian mixture models. Run alongside MetaBAT2 and MaxBin2 to feed DAS_Tool.
+params:
+  length_threshold:
+    flag: "-l"
+    type: int
+    default: 1000
+    min: 0
+    tier: 2
+    ask: true
+    question: Minimum contig length to cluster (-l). Contigs shorter than this are ignored.
+  clusters:
+    flag: "--clusters"
+    type: int
+    default: 400
+    min: 1
+    tier: 3
+    ask: false
+    question: Maximum number of clusters for the variational Bayesian GMM.
+  iterations:
+    flag: "-i"
+    type: int
+    default: 500
+    min: 1
+    tier: 3
+    ask: false
+    question: Maximum number of VBGMM iterations.
+  # --- managed by the workflow ---
+  composition_file:
+    flag: "--composition_file"
+    type: path
+    managed: true
+  coverage_file:
+    flag: "--coverage_file"
+    type: path
+    managed: true
+  basename:
+    flag: "-b"
+    type: str
+    managed: true
+  threads:
+    flag: "-t"
+    type: int
+    managed: true

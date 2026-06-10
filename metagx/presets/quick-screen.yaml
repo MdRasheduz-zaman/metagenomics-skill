@@ -1,0 +1,8 @@
+name: quick-screen
+description: Fast "what's in here?" classification with minimal preprocessing.
+when_to_use: >
+  Use for a rapid first look or large batches: skips QC and abundance re-estimation, runs
+  kraken2 in quick mode at a single permissive threshold. Trade accuracy for speed.
+config:
+  modules: {qc: false, classify: true, abundance: false, assembly: false, binning: false}
+  kraken2: {confidence: 0.0, quick: true}

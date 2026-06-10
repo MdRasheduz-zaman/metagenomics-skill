@@ -1,0 +1,6 @@
+# Isolated conda env for the Kaiju protein-level classifier (consensus second opinion).
+# Created by `--use-conda`.
+name: metagx-kaiju
+channels: [conda-forge, bioconda]
+dependencies:
+  - kaiju >=1.10

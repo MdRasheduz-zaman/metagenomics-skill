@@ -1,0 +1,11 @@
+# Parameter registry for GTDB-Tk (prokaryotic bin/MAG taxonomy). See kraken2.yaml.
+tool: gtdbtk
+command: gtdbtk
+description: >
+  Genome-level taxonomic classification of bacterial/archaeal bins against the Genome
+  Taxonomy Database (GTDB) using marker genes. Run on MetaBAT2 bins.
+params:
+  cpus:
+    flag: "--cpus"
+    type: int
+    managed: true

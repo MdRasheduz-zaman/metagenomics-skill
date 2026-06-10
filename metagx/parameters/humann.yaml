@@ -1,0 +1,57 @@
+# Parameter registry for HUMAnN 3 (read-based functional/pathway profiling). See kraken2.yaml.
+tool: humann
+command: humann
+description: >
+  Profiles the functional potential of a shotgun metagenome — gene families (UniRef),
+  reactions, and MetaCyc pathways — directly from QC'd reads (no assembly required).
+params:
+  prescreen_threshold:
+    flag: "--prescreen-threshold"
+    type: float
+    default: 0.01
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: true
+    question: >
+      Minimum fraction of reads a species must carry before its pangenome is included in
+      the nucleotide search (--prescreen-threshold). Lower = more sensitive but slower.
+  translated_subject_coverage_threshold:
+    flag: "--translated-subject-coverage-threshold"
+    type: float
+    default: 50.0
+    min: 0.0
+    max: 100.0
+    tier: 3
+    ask: false
+    question: Minimum coverage of a protein subject in the translated search to keep a hit.
+  bypass_translated_search:
+    flag: "--bypass-translated-search"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Skip the (slow) translated protein search and use only the nucleotide search.
+      Much faster; misses functions absent from the species-level pangenomes.
+  # --- managed by the workflow: never interviewed, always rendered ---
+  input:
+    flag: "--input"
+    type: path
+    managed: true
+  output:
+    flag: "--output"
+    type: path
+    managed: true
+  nucleotide_database:
+    flag: "--nucleotide-database"
+    type: path
+    managed: true
+  protein_database:
+    flag: "--protein-database"
+    type: path
+    managed: true
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

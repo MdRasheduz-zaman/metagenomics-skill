@@ -1,0 +1,7 @@
+# Isolated conda env for ancient-DNA damage authentication (mapDamage2 + samtools).
+# Created by `--use-conda`.
+name: metagx-ancient
+channels: [conda-forge, bioconda]
+dependencies:
+  - mapdamage2 >=2.2
+  - samtools >=1.18

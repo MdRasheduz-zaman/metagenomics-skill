@@ -1,0 +1,62 @@
+# Parameter registry for DADA2 (amplicon sequence variants / ASVs). See kraken2.yaml.
+# DADA2 is an R/Bioconductor package with no CLI, so these flags are parsed by
+# workflow/scripts/dada2_asv.R (one tiny arg parser); I/O is injected by the rule.
+tool: dada2
+command: Rscript
+description: >
+  Resolves amplicon (16S/18S/ITS) reads into exact amplicon sequence variants (ASVs) by
+  modelling and correcting sequencing error, rather than clustering into 97% OTUs. ASVs are
+  reproducible across studies and resolve single-nucleotide differences OTUs cannot.
+params:
+  trunc_len_f:
+    flag: "--trunc_len_f"
+    type: int
+    default: 0
+    min: 0
+    tier: 1
+    ask: true
+    question: >
+      Truncate forward reads to this length (--trunc_len_f); 0 = no truncation. Set from the
+      read-quality drop-off (e.g. 240 for 2x250 V4). Reads shorter than this are discarded.
+  trunc_len_r:
+    flag: "--trunc_len_r"
+    type: int
+    default: 0
+    min: 0
+    tier: 1
+    ask: true
+    question: Truncate reverse reads to this length (--trunc_len_r); 0 = no truncation. Paired only.
+  max_ee_f:
+    flag: "--max_ee_f"
+    type: float
+    default: 2.0
+    min: 0.0
+    tier: 2
+    ask: true
+    question: Max expected errors allowed in a forward read (--max_ee_f). Lower = stricter.
+  max_ee_r:
+    flag: "--max_ee_r"
+    type: float
+    default: 2.0
+    min: 0.0
+    tier: 2
+    ask: true
+    question: Max expected errors allowed in a reverse read (--max_ee_r). Paired only.
+  trunc_q:
+    flag: "--trunc_q"
+    type: int
+    default: 2
+    min: 0
+    tier: 3
+    ask: false
+    question: Truncate reads at the first base with quality <= this (--trunc_q).
+  pool:
+    flag: "--pool"
+    type: enum
+    choices: ["independent", "pseudo", "true"]
+    default: "independent"
+    tier: 3
+    ask: false
+    question: >
+      Sample pooling for denoising (--pool). independent (fast), pseudo (shares info, balanced),
+      true (most sensitive to rare variants, slowest).

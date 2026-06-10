@@ -1,0 +1,58 @@
+# Parameter registry for Bracken (abundance re-estimation). See kraken2.yaml for fields.
+tool: bracken
+command: bracken
+description: >
+  Bayesian re-estimation of species/genus abundance from a kraken2 report, redistributing
+  reads assigned to higher ranks down to the chosen level.
+params:
+  read_length:
+    flag: "-r"
+    type: int
+    default: 100
+    min: 30
+    max: 600
+    tier: 1
+    ask: true
+    question: >
+      Read length for Bracken's k-mer distribution (-r), and it MUST match a length the
+      Bracken DB was built for (databaseXmers.kmer_distrib). Set it to your data's actual
+      read length: short reads (Illumina) ~100/150/250 (use the mate length, e.g. 150 for
+      2x150); long reads (ONT/PacBio) use the run's MEDIAN length (often 1000s) — check
+      with `metagx readlen <reads>`. Mismatched length biases abundance estimates.
+  level:
+    flag: "-l"
+    type: enum
+    choices: ["D", "P", "C", "O", "F", "G", "S", "S1"]
+    default: "S"
+    tier: 1
+    ask: true
+    question: >
+      Taxonomic level to estimate abundance at: D domain, P phylum, C class, O order,
+      F family, G genus, S species (default), S1 strain.
+  threshold:
+    flag: "-t"
+    type: int
+    default: 0
+    min: 0
+    tier: 2
+    ask: true
+    question: >
+      Minimum number of reads required at the level before Bracken will estimate it
+      (-t). Filters very low-abundance noise; 10 is a common starting value.
+  # --- managed by the workflow ---
+  db:
+    flag: "-d"
+    type: path
+    managed: true
+  input:
+    flag: "-i"
+    type: path
+    managed: true
+  output:
+    flag: "-o"
+    type: path
+    managed: true
+  report_out:
+    flag: "-w"
+    type: path
+    managed: true

@@ -1,0 +1,16 @@
+# Keep the build context small and reproducible.
+.git
+.github
+**/__pycache__
+**/*.pyc
+.venv
+.gstack
+.snakemake
+
+venv
+results
+local_databases
+graphify-out
+*.egg-info
+.pytest_cache
+data

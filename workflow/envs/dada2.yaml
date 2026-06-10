@@ -1,0 +1,6 @@
+# Isolated conda env for ASV inference (DADA2). Created by `--use-conda`.
+name: metagx-dada2
+channels: [conda-forge, bioconda]
+dependencies:
+  - bioconductor-dada2 >=1.30
+  - r-base >=4.3

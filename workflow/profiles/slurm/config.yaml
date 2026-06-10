@@ -1,0 +1,76 @@
+# Snakemake v8 SLURM profile for metagx on an HPC cluster.
+#   metagx run --config config.yaml --slurm           # uses this profile
+#   (or: snakemake --workflow-profile workflow/profiles/slurm --configfile config.yaml)
+#
+# EDIT the two lines marked <<< before first use (your cluster's partition + account).
+# Requires the executor plugin in the env: pip/conda install snakemake-executor-plugin-slurm
+# Each rule is submitted as its own sbatch job; resources below size them per step.
+
+executor: slurm
+jobs: 64                      # max concurrent cluster jobs
+use-conda: true              # auto-provision per-rule conda envs (domain tools) on the node
+printshellcmds: true
+rerun-incomplete: true
+latency-wait: 60
+
+default-resources:
+  slurm_partition: "CHANGE_ME_PARTITION"   # <<< e.g. "standard" / "compute"
+  slurm_account: "CHANGE_ME_ACCOUNT"       # <<< your allocation
+  mem_mb: 8000
+  runtime: 120               # minutes
+  cpus_per_task: 4
+
+# Threads per rule (kraken2/assembly/mapping scale well).
+set-threads:
+  kraken2: 16
+  bracken: 4
+  fastp_pe: 8
+  fastp_se: 8
+  fastp_interleaved: 8
+  ont_qc: 8
+  pacbio_qc: 8
+  megahit: 16
+  flye: 16
+  map_to_contigs: 16
+  metabat2: 8
+  classify_contigs: 16
+  cat_classify: 16
+  genomad: 16
+  checkv: 8
+  gtdbtk: 16
+  checkm2: 16
+  eukcc: 8
+
+# Memory / walltime per rule. kraken2/Bracken memory tracks the DB size — tune for yours
+# (a viral DB needs a few GB; PlusPF/standard ~64 GB; GTDB-Tk ~128 GB).
+set-resources:
+  kraken2:
+    mem_mb: 64000
+    runtime: 240
+  classify_contigs:
+    mem_mb: 64000
+  bracken:
+    mem_mb: 32000
+  megahit:
+    mem_mb: 48000
+    runtime: 720
+  flye:
+    mem_mb: 64000
+    runtime: 1440
+  map_to_contigs:
+    mem_mb: 32000
+    runtime: 240
+  metabat2:
+    mem_mb: 16000
+  genomad:
+    mem_mb: 32000
+    runtime: 360
+  checkv:
+    mem_mb: 16000
+  gtdbtk:
+    mem_mb: 128000
+    runtime: 720
+  checkm2:
+    mem_mb: 32000
+  eukcc:
+    mem_mb: 32000

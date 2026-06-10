@@ -1,0 +1,67 @@
+# Parameter registry for antiSMASH (biosynthetic gene cluster mining). See kraken2.yaml.
+tool: antismash
+command: antismash
+description: >
+  Genome-mining of assembled contigs for biosynthetic gene clusters (BGCs) — the loci that
+  encode secondary metabolites (antibiotics, siderophores, NRPS/PKS products). Detects and
+  classifies clusters, with optional comparison to known clusters (MIBiG) and Pfam/GO mapping.
+params:
+  taxon:
+    flag: "--taxon"
+    type: enum
+    choices: ["bacteria", "fungi"]
+    default: "bacteria"
+    tier: 1
+    ask: true
+    question: Source kingdom of the contigs (--taxon). bacteria for prokaryotic metagenomes.
+  genefinding_tool:
+    flag: "--genefinding-tool"
+    type: enum
+    choices: ["prodigal", "prodigal-m", "glimmerhmm", "none"]
+    default: "prodigal"
+    tier: 2
+    ask: true
+    question: >
+      Gene caller for raw nucleotide contigs (--genefinding-tool). prodigal is standard for
+      metagenomic contigs; use 'none' only if the input already has annotations.
+  cb_general:
+    flag: "--cb-general"
+    type: bool
+    default: false
+    tier: 2
+    ask: true
+    question: Compare detected clusters against the antiSMASH cluster database (--cb-general).
+  cb_knownclusters:
+    flag: "--cb-knownclusters"
+    type: bool
+    default: false
+    tier: 2
+    ask: true
+    question: Compare detected clusters against known MIBiG clusters (--cb-knownclusters).
+  pfam2go:
+    flag: "--pfam2go"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Map Pfam domains to Gene Ontology terms (--pfam2go).
+  asf:
+    flag: "--asf"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Run active-site finder analysis (--asf).
+  # --- managed by the workflow ---
+  cpus:
+    flag: "--cpus"
+    type: int
+    managed: true
+  output_dir:
+    flag: "--output-dir"
+    type: path
+    managed: true
+  databases:
+    flag: "--databases"
+    type: path
+    managed: true

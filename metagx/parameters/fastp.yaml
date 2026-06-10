@@ -1,0 +1,160 @@
+# Parameter registry for fastp (read QC / trimming). See kraken2.yaml for field docs.
+tool: fastp
+command: fastp
+description: >
+  Fast all-in-one FASTQ preprocessor: adapter trimming, quality filtering, length
+  filtering, optional deduplication and low-complexity filtering.
+params:
+  qualified_quality_phred:
+    flag: "--qualified_quality_phred"
+    type: int
+    default: 15
+    min: 0
+    max: 40
+    tier: 1
+    ask: true
+    question: >
+      A base is "qualified" if its Phred quality is at least this. 15 is lenient, 20
+      is a common stricter choice.
+  unqualified_percent_limit:
+    flag: "--unqualified_percent_limit"
+    type: int
+    default: 40
+    min: 0
+    max: 100
+    tier: 2
+    ask: true
+    question: >
+      Discard a read if more than this percent of its bases are unqualified.
+  length_required:
+    flag: "--length_required"
+    type: int
+    default: 15
+    min: 0
+    tier: 1
+    ask: true
+    question: Discard reads shorter than this after trimming.
+  n_base_limit:
+    flag: "--n_base_limit"
+    type: int
+    default: 5
+    min: 0
+    tier: 2
+    ask: false
+    question: Discard reads with more than this many N bases.
+  detect_adapter_for_pe:
+    flag: "--detect_adapter_for_pe"
+    type: bool
+    default: true
+    tier: 2
+    ask: false
+    question: Auto-detect adapters for paired-end data (recommended for PE).
+  cut_right:
+    flag: "--cut_right"
+    type: bool
+    default: false
+    tier: 2
+    ask: true
+    question: >
+      Sliding-window quality trimming from 5'->3', dropping the read tail once mean
+      window quality falls below the cutoff. Good general-purpose trimming.
+  cut_mean_quality:
+    flag: "--cut_mean_quality"
+    type: int
+    default: 20
+    min: 0
+    max: 40
+    tier: 3
+    ask: false
+    question: Mean quality threshold for the sliding-window cut options.
+  dedup:
+    flag: "--dedup"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Remove duplicated reads (PCR/optical). Costs memory.
+  low_complexity_filter:
+    flag: "--low_complexity_filter"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Filter low-complexity reads (e.g. long homopolymer runs).
+  trim_front1:
+    flag: "--trim_front1"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Hard-trim this many bases from the front of read 1.
+  trim_tail1:
+    flag: "--trim_tail1"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Hard-trim this many bases from the tail of read 1.
+  merge:
+    flag: "--merge"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Merge/collapse overlapping read pairs into single longer reads (writes --merged_out).
+      Used for ancient DNA, where fragments are short and read pairs overlap fully.
+  correction:
+    flag: "--correction"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Correct mismatched bases in the overlapping region of merged pairs.
+  overlap_len_require:
+    flag: "--overlap_len_require"
+    type: int
+    default: 30
+    min: 0
+    tier: 3
+    ask: false
+    question: Minimum overlap length required to merge a pair.
+  # --- managed by the workflow ---
+  merged_out:
+    flag: "--merged_out"
+    type: path
+    managed: true
+  thread:
+    flag: "--thread"
+    type: int
+    managed: true
+  interleaved_in:
+    flag: "--interleaved_in"
+    type: bool
+    managed: true
+  in1:
+    flag: "--in1"
+    type: path
+    managed: true
+  in2:
+    flag: "--in2"
+    type: path
+    managed: true
+  out1:
+    flag: "--out1"
+    type: path
+    managed: true
+  out2:
+    flag: "--out2"
+    type: path
+    managed: true
+  json:
+    flag: "--json"
+    type: path
+    managed: true
+  html:
+    flag: "--html"
+    type: path
+    managed: true

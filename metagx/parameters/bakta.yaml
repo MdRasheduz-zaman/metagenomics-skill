@@ -1,0 +1,48 @@
+# Parameter registry for Bakta (rapid, standardized bacterial genome/MAG annotation). See kraken2.yaml.
+tool: bakta
+command: bakta
+description: >
+  Annotates prokaryotic genomes and MAGs — CDS, rRNA/tRNA, ncRNA, CRISPR — with stable,
+  database-backed identifiers. Run per recovered bin to give MAGs a gene catalog.
+params:
+  min_contig_length:
+    flag: "--min-contig-length"
+    type: int
+    default: 200
+    min: 1
+    tier: 2
+    ask: true
+    question: >
+      Minimum contig length to annotate (--min-contig-length). 200 keeps short contigs;
+      raise (e.g. 500) to annotate only substantial sequence.
+  complete:
+    flag: "--complete"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Treat replicons as complete/closed (affects edge-feature handling).
+  keep_contig_headers:
+    flag: "--keep-contig-headers"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Keep original contig headers instead of renaming them to Bakta locus tags.
+  # --- managed by the workflow ---
+  db:
+    flag: "--db"
+    type: path
+    managed: true
+  output:
+    flag: "--output"
+    type: path
+    managed: true
+  prefix:
+    flag: "--prefix"
+    type: str
+    managed: true
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

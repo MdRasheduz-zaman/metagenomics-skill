@@ -1,0 +1,11 @@
+# Parameter registry for CheckM2 (prokaryotic bin completeness/contamination). See kraken2.yaml.
+tool: checkm2
+command: checkm2
+description: >
+  Machine-learning estimation of completeness and contamination for bacterial/archaeal
+  bins (MAGs). Run on MetaBAT2 bins.
+params:
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

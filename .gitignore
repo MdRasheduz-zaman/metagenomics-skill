@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+.pytest_cache/
+*.pyc
+.DS_Store
+.gstack
+.vscode/
+.snakemake/
+
+# Large / regeneratable outputs
+results/
+graphify-out/
+data/
+local_databases/
+tmp/

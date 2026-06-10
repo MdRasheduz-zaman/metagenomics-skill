@@ -1,0 +1,20 @@
+name: ci
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (core + test)
+        run: pip install -e ".[test]"
+      - name: Unit tests
+        run: pytest -q
+      - name: Registry/config import smoke test
+        run: |
+          python -c "import metagx; print('tools:', metagx.list_tools())"
+          python -c "from metagx import config_builder as c; c.build_config(samples=[{'sample':'s','r1':'s.fastq.gz'}], db={'kraken2':'k'}, modules={'assembly':False}); print('build_config OK')"

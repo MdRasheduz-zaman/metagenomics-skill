@@ -1,0 +1,7 @@
+# Isolated conda env for MAG annotation (Bakta gene calling + eggNOG-mapper functional terms).
+# Created by `--use-conda`.
+name: metagx-annotate
+channels: [conda-forge, bioconda]
+dependencies:
+  - bakta >=1.9
+  - eggnog-mapper >=2.1

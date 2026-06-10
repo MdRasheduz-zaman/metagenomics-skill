@@ -1,0 +1,25 @@
+# Parameter registry for EukRep (eukaryotic vs prokaryotic contig separation). See kraken2.yaml.
+tool: eukrep
+command: EukRep
+description: >
+  Classifies assembled contigs as eukaryotic or prokaryotic, used to split a mixed
+  metagenome before eukaryote-specific downstream analysis.
+params:
+  mode:
+    flag: "-m"
+    type: enum
+    choices: ["strict", "balanced", "lenient"]
+    default: "balanced"
+    tier: 2
+    ask: true
+    question: >
+      Stringency for calling a contig eukaryotic: strict (high precision), balanced
+      (default), or lenient (high recall).
+  min_length:
+    flag: "--min"
+    type: int
+    default: 1000
+    min: 0
+    tier: 2
+    ask: false
+    question: Minimum contig length (bp) to classify.

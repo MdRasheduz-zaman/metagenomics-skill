@@ -1,0 +1,129 @@
+# Parameter registry for kraken2 (classification).
+# This is the single source of truth: it drives the interview, config validation,
+# MCP tool schemas, and dynamic command-line construction in the Snakefile.
+#
+# Each param entry fields:
+#   flag        CLI flag emitted (omit for positional/managed inputs)
+#   type        bool | int | float | str | path | enum
+#   default     value kraken2 itself uses (informational; we only emit set values)
+#   min / max   numeric bounds (validated)
+#   choices     allowed values for enum
+#   managed     true => supplied by the workflow (db, threads, io); never interviewed
+#   sweepable   true => may be given as a LIST to run the comparison matrix
+#   tier        1 core / 2 common / 3 advanced  (controls how eagerly to ask)
+#   ask         whether the interview should raise it at all
+#   question    natural-language prompt the LLM uses during the interview
+tool: kraken2
+command: kraken2
+description: >
+  Taxonomic classifier that assigns reads to taxa via exact k-mer matches against a
+  reference database.
+params:
+  confidence:
+    flag: "--confidence"
+    type: float
+    default: 0.0
+    min: 0.0
+    max: 1.0
+    sweepable: true
+    tier: 1
+    ask: true
+    question: >
+      How strict should classification be? The confidence threshold (0.0-1.0) is the
+      fraction of a read's k-mers that must point to a taxon before it is assigned.
+      Higher = fewer false positives but more reads left unclassified. You can give a
+      single value, or a LIST (e.g. 0.0, 0.1, 0.5) to run the comparison sweep.
+  minimum_hit_groups:
+    flag: "--minimum-hit-groups"
+    type: int
+    default: 2
+    min: 1
+    tier: 2
+    ask: true
+    question: >
+      Minimum number of separate hit groups (overlapping k-mers sharing a minimizer)
+      required to make a call. Raising it (e.g. 3) reduces spurious assignments.
+  minimum_base_quality:
+    flag: "--minimum-base-quality"
+    type: int
+    default: 0
+    min: 0
+    max: 60
+    tier: 2
+    ask: true
+    question: >
+      Minimum Phred base quality for a position to count (FASTQ only). 0 disables it.
+  quick:
+    flag: "--quick"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Quick mode: stop classifying a read after the first database hit. Much faster,
+      slightly less accurate. Useful for huge datasets.
+  use_names:
+    flag: "--use-names"
+    type: bool
+    default: true
+    tier: 2
+    ask: false
+    question: Print scientific names instead of bare taxonomy IDs in the output.
+  report_zero_counts:
+    flag: "--report-zero-counts"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Include taxa with zero reads in the report (larger, complete tree).
+  report_minimizer_data:
+    flag: "--report-minimizer-data"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Add distinct-minimizer columns to the report (useful to spot false positives
+      from low minimizer diversity). Note: changes report column layout.
+  memory_mapping:
+    flag: "--memory-mapping"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Memory-map the database instead of loading it into RAM. Use on machines with
+      less RAM than the database size; slower but avoids OOM.
+  # --- managed by the workflow: never interviewed, always rendered ---
+  db:
+    flag: "--db"
+    type: path
+    managed: true
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true
+  report:
+    flag: "--report"
+    type: path
+    managed: true
+  output:
+    flag: "--output"
+    type: path
+    managed: true
+  paired:
+    flag: "--paired"
+    type: bool
+    managed: true
+  gzip_compressed:
+    flag: "--gzip-compressed"
+    type: bool
+    managed: true
+  classified_out:
+    flag: "--classified-out"
+    type: path
+    managed: true
+  unclassified_out:
+    flag: "--unclassified-out"
+    type: path
+    managed: true

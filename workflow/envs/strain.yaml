@@ -1,0 +1,7 @@
+# Isolated conda env for strain-level microdiversity profiling (inStrain).
+# Created by `--use-conda`.
+name: metagx-strain
+channels: [conda-forge, bioconda]
+dependencies:
+  - instrain >=1.9
+  - samtools >=1.18

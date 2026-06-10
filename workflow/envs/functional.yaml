@@ -1,0 +1,7 @@
+# Isolated conda env for read-based functional/pathway profiling (HUMAnN 3 + MetaPhlAn).
+# HUMAnN pulls a large dependency tree, so it gets its own env. Created by `--use-conda`.
+name: metagx-functional
+channels: [conda-forge, bioconda]
+dependencies:
+  - humann >=3.9
+  - metaphlan >=4.1

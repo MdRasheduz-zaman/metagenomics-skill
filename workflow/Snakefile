@@ -1,0 +1,165 @@
+# metagx — schema-driven metagenomics workflow.
+#
+# Modules (qc / classify / abundance / assembly / binning) are toggled in the config.
+# Every tool's command line is built from metagx parameter registries, so adding a
+# flag in metagx/parameters/<tool>.yaml is enough to expose it here.
+#
+# Run:  snakemake --snakefile workflow/Snakefile --configfile config.yaml --cores all
+# or:   metagx run --config config.yaml
+
+import os
+import sys
+
+# Make the in-repo metagx package importable when running from the source tree.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(workflow.snakefile))))
+
+# Config is supplied via --configfile (the metagx CLI/MCP always pass it). Running
+# snakemake directly therefore requires:  --configfile <your-config.yaml>
+if not config:
+    raise WorkflowError(
+        "No config provided. Pass --configfile <config.yaml> "
+        "(or use `metagx run --config <config.yaml>`)."
+    )
+
+include: "rules/common.smk"
+
+if config.get("subsample"):
+    include: "rules/subsample.smk"
+if MODULES.get("qc", True) or config.get("host_removal", {}).get("genome") or AMPLICON_SAMPLES:
+    include: "rules/qc.smk"
+if MODULES.get("classify", True):
+    include: "rules/classify.smk"
+if MODULES.get("classify_consensus", False):
+    include: "rules/consensus.smk"
+if MODULES.get("abundance", True):
+    include: "rules/abundance.smk"
+if MODULES.get("assembly", False) or MODULES.get("binning", False) or MODULES.get("reconcile", False):
+    include: "rules/assembly.smk"
+if MODULES.get("bin_refinement", False):
+    include: "rules/binning_refine.smk"
+if MODULES.get("strain", False):
+    include: "rules/strain.smk"
+if MODULES.get("damage", False):
+    include: "rules/damage.smk"
+if MODULES.get("reconcile", False):
+    include: "rules/reconcile.smk"
+if MODULES.get("domain_taxonomy", False):
+    include: "rules/domains.smk"
+if MODULES.get("stats", False):
+    include: "rules/stats.smk"
+if MODULES.get("differential", False):
+    include: "rules/differential.smk"
+if MODULES.get("decontam", False):
+    include: "rules/decontam.smk"
+if MODULES.get("bgc", False):
+    include: "rules/bgc.smk"
+if MODULES.get("aggregate", False):
+    include: "rules/aggregate.smk"
+if MODULES.get("functional", False):
+    include: "rules/functional.smk"
+if MODULES.get("filtered_assembly", False):
+    include: "rules/filter.smk"
+if AMPLICON_SAMPLES:
+    include: "rules/amplicon.smk"
+    if MODULES.get("classify", True):
+        logger.warning(
+            "metagx: amplicon samples present and classify is on — kraken2/Bracken will run "
+            "on amplicon reads, but a marker-gene DB (SILVA/GreenGenes/UNITE) + the amplicon "
+            "branch (OTU/Emu) are more appropriate. Assembly-based steps are skipped for them."
+        )
+
+
+def final_targets():
+    targets = []
+    if MODULES.get("classify", True):
+        targets += expand(f"{OUT}/summary/{{sample}}.matrix.json", sample=list(SAMPLES))
+        targets += expand(f"{OUT}/summary/{{sample}}.heatmap.png", sample=list(SAMPLES))
+    if MODULES.get("abundance", True):
+        targets.append(f"{OUT}/summary/bracken_combined.tsv")
+    # second-classifier consensus cross-check (WGS samples)
+    if MODULES.get("classify_consensus", False):
+        targets += expand(f"{OUT}/consensus/{{sample}}.consensus.json", sample=WGS_SAMPLES)
+    # run-level aggregate report + interactive taxonomy chart
+    if MODULES.get("aggregate", False):
+        targets.append(f"{OUT}/report/multiqc/multiqc_report.html")
+        targets.append(f"{OUT}/report/krona.html")
+    # control-based decontamination over the combined Bracken table
+    if MODULES.get("decontam", False):
+        targets += [f"{OUT}/stats/decontam_flagged.tsv",
+                    f"{OUT}/stats/abundance_decontaminated.tsv"]
+    # assembly-based steps apply to WGS samples only (not amplicon).
+    if MODULES.get("assembly", False):
+        targets += expand(f"{OUT}/assembly/{{sample}}/final.contigs.fa", sample=WGS_SAMPLES)
+    if MODULES.get("binning", False):
+        targets += expand(f"{OUT}/binning/{{sample}}/bins.done", sample=WGS_SAMPLES)
+    # multi-binner refinement: per-sample DAS_Tool consensus + one run-level dRep catalog
+    if MODULES.get("bin_refinement", False):
+        targets += expand(f"{OUT}/binning/{{sample}}/refined/dastool.done", sample=WGS_SAMPLES)
+        targets.append(f"{OUT}/binning/drep/drep.done")
+    # strain-level microdiversity (inStrain) on WGS samples
+    if MODULES.get("strain", False):
+        targets += expand(f"{OUT}/strain/{{sample}}/instrain.done", sample=WGS_SAMPLES)
+    # ancient-DNA damage authentication (ancient-library samples only)
+    if MODULES.get("damage", False):
+        targets += expand(f"{OUT}/ancient/{{sample}}/authentication.json", sample=ANCIENT_SAMPLES)
+    if MODULES.get("reconcile", False):
+        targets += expand(f"{OUT}/reconcile/{{sample}}.reconciliation.tsv", sample=WGS_SAMPLES)
+        targets += expand(f"{OUT}/reconcile/{{sample}}.reconcile.json", sample=WGS_SAMPLES)
+        targets += expand(f"{OUT}/reconcile/{{sample}}.read_accuracy.json", sample=WGS_SAMPLES)
+    if MODULES.get("filtered_assembly", False):
+        targets += expand(f"{OUT}/filtered_assembly/{{sample}}.assembly_comparison.json",
+                          sample=WGS_SAMPLES)
+    if MODULES.get("stats", False):
+        targets += [f"{OUT}/stats/alpha_diversity.tsv", f"{OUT}/stats/diversity.json",
+                    f"{OUT}/stats/pcoa.tsv", f"{OUT}/stats/composition_barplot.png"]
+    # differential abundance between sample groups (CLR + permutation test)
+    if MODULES.get("differential", False):
+        targets += [f"{OUT}/stats/differential_abundance.tsv",
+                    f"{OUT}/stats/differential_abundance.json",
+                    f"{OUT}/stats/differential_volcano.png"]
+    # biosynthetic gene clusters on contigs (antiSMASH; WGS samples)
+    if MODULES.get("bgc", False):
+        targets += expand(f"{OUT}/bgc/{{sample}}/antismash.done", sample=WGS_SAMPLES)
+    # functional layer (WGS-only; sub-steps scale with assembly/binning availability)
+    if MODULES.get("functional", False):
+        targets += expand(f"{OUT}/functional/{{sample}}/humann/input_pathabundance.tsv",
+                          sample=WGS_SAMPLES)
+        if MODULES.get("assembly", False):
+            targets += expand(f"{OUT}/functional/{{sample}}/amr/amrfinder.tsv", sample=WGS_SAMPLES)
+            targets += expand(f"{OUT}/functional/{{sample}}/amr/abricate.tsv", sample=WGS_SAMPLES)
+        if MODULES.get("binning", False):
+            targets += expand(f"{OUT}/functional/{{sample}}/annotate/eggnog/bins.emapper.annotations",
+                              sample=WGS_SAMPLES)
+    # amplicon branch (data-driven: runs whenever amplicon samples are present).
+    # short reads -> VSEARCH OTUs (default) or DADA2 ASVs (amplicon.method: asv); long -> Emu.
+    targets += expand(f"{OUT}/amplicon/{{sample}}/otu_table.txt", sample=SHORT_AMPLICON_OTU)
+    targets += expand(f"{OUT}/amplicon/{{sample}}/asv_table.tsv", sample=SHORT_AMPLICON_ASV)
+    targets += expand(f"{OUT}/amplicon/{{sample}}/emu_rel-abundance.tsv", sample=LONG_AMPLICON)
+    if MODULES.get("domain_taxonomy", False):
+        s = WGS_SAMPLES
+        if "viral" in DOMAINS:
+            targets += expand(f"{OUT}/viral/{{sample}}/genomad.done", sample=s)
+            targets += expand(f"{OUT}/viral/{{sample}}/checkv/quality_summary.tsv", sample=s)
+        if "prokaryote" in DOMAINS:
+            targets += expand(f"{OUT}/prok/{{sample}}/gtdbtk.done", sample=s)
+            targets += expand(f"{OUT}/prok/{{sample}}/checkm2/quality_report.tsv", sample=s)
+        if "eukaryote" in DOMAINS:
+            targets += expand(f"{OUT}/euk/{{sample}}/eukcc/eukcc.csv", sample=s)
+    return targets
+
+
+rule all:
+    input:
+        final_targets()
+
+
+# Optional, explicit-only helper to fetch a standard kraken2/Bracken index.
+# Never runs automatically (not a dependency of `all`): call it directly with
+#   snakemake --snakefile workflow/Snakefile fetch_kraken_db
+rule fetch_kraken_db:
+    output:
+        directory(DB["kraken2"]),
+    params:
+        url=config.get("db_url", "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20250714.tar.gz"),
+    shell:
+        "mkdir -p {output} && curl -L {params.url} | tar -xzf - -C {output}"

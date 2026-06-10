@@ -1,0 +1,7 @@
+# Isolated conda env for the viral-domain tools (created automatically by
+# `snakemake --use-conda` / `metagx run --use-conda`).
+name: metagx-viral
+channels: [conda-forge, bioconda]
+dependencies:
+  - genomad >=1.7
+  - checkv >=1.0

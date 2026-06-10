@@ -1,0 +1,40 @@
+# Core metagx environment — everything the default pipeline (QC, classify, abundance,
+# assembly, binning, contig reconciliation) needs. Create once with:
+#     conda env create -f environment.yml        # or: mamba env create -f environment.yml
+#     conda activate metagx && uv pip install -e .
+#
+# The heavy domain-taxonomy tools (geNomad/CheckV, GTDB-Tk/CheckM2, EukRep/EukCC) live in
+# isolated envs under workflow/envs/ and are provisioned automatically when you run with
+# `metagx run --use-conda` (Snakemake creates them per-rule on first use).
+#
+# Apple Silicon (arm64) note: set `CONDA_SUBDIR=osx-64` before creating (Rosetta), since
+# bioconda lacks native arm64 builds for several of these. Bracken's osx-64 conda build is
+# broken — see scripts/install_bio_macos_arm64.sh.
+name: metagx
+channels: [conda-forge, bioconda]
+dependencies:
+  - python >=3.10
+  # classification + abundance
+  - kraken2 >=2.1
+  - bracken >=2.9
+  # QC (short + long read)
+  - fastp >=0.23
+  - porechop_abi >=0.5
+  - chopper >=0.7
+  - seqtk >=1.4
+  # assembly + mapping + binning
+  - megahit >=1.2
+  - flye >=2.9
+  - minimap2 >=2.26
+  - samtools >=1.18
+  - metabat2 >=2.15
+  # contig taxonomy (CAT cross-check)
+  - cat >=6.0
+  - diamond >=2.1
+  - prodigal >=2.6
+  # workflow + python libs
+  - snakemake-minimal >=8.10
+  - snakemake-executor-plugin-slurm   # for `metagx run --slurm` on HPC
+  - pandas >=2.2
+  - matplotlib >=3.8
+  - pyyaml >=6.0

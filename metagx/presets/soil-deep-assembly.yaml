@@ -1,0 +1,13 @@
+name: soil-deep-assembly
+description: Recover draft genomes (MAGs) from complex, high-diversity samples.
+when_to_use: >
+  Use for soil / sediment / other complex metagenomes where you want assembled contigs and
+  genome bins, not just read classification. Enables assembly + binning with a sensitive,
+  large-metagenome MEGAHIT preset; still classifies reads for an overview.
+config:
+  modules: {qc: true, classify: true, abundance: true, assembly: true, binning: true}
+  fastp: {qualified_quality_phred: 20, length_required: 75, cut_right: true}
+  kraken2: {confidence: 0.1, minimum_hit_groups: 2}
+  bracken: {read_length: 150, level: G, threshold: 10}
+  megahit: {min_contig_len: 1000, presets: meta-large}
+  metabat2: {min_contig: 2500}

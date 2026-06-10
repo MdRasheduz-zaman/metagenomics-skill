@@ -1,0 +1,16 @@
+name: amr-surveillance
+description: Profile resistance genes, virulence, and functional pathways from a shotgun sample.
+when_to_use: >
+  Use for clinical / wastewater / surveillance shotgun samples where the question is "what
+  resistance and virulence is present, and what can it do". Classifies reads, assembles +
+  bins for genome context, then runs the functional layer: HUMAnN pathways, AMRFinderPlus +
+  ABRicate on contigs, and Bakta + eggNOG annotation of recovered bins.
+config:
+  modules: {qc: true, classify: true, abundance: true, assembly: true, binning: true, functional: true}
+  fastp: {qualified_quality_phred: 20, length_required: 75, cut_right: true}
+  kraken2: {confidence: 0.1, minimum_hit_groups: 3}
+  bracken: {read_length: 150, level: S, threshold: 10}
+  megahit: {min_contig_len: 500, presets: meta-sensitive}
+  metabat2: {min_contig: 2500}
+  abricate: {db: card, minid: 80, mincov: 80}
+  amrfinderplus: {plus: true, coverage_min: 0.5}

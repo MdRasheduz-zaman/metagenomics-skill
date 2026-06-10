@@ -1,0 +1,57 @@
+# Parameter registry for MEGAHIT (metagenomic assembly, optional). See kraken2.yaml.
+tool: megahit
+command: megahit
+description: >
+  Memory-efficient de novo assembler for metagenomes, building contigs from QC'd reads
+  using a succinct de Bruijn graph over multiple k-mer sizes.
+params:
+  min_contig_len:
+    flag: "--min-contig-len"
+    type: int
+    default: 200
+    min: 100
+    tier: 1
+    ask: true
+    question: Minimum length of contigs to report (bp). 500-1000 is common for binning.
+  k_min:
+    flag: "--k-min"
+    type: int
+    default: 21
+    min: 15
+    max: 255
+    tier: 3
+    ask: false
+    question: Smallest k-mer size in the iterative assembly.
+  k_max:
+    flag: "--k-max"
+    type: int
+    default: 141
+    min: 15
+    max: 255
+    tier: 3
+    ask: false
+    question: Largest k-mer size in the iterative assembly.
+  k_step:
+    flag: "--k-step"
+    type: int
+    default: 12
+    min: 2
+    max: 28
+    tier: 3
+    ask: false
+    question: Increment between k-mer sizes.
+  presets:
+    flag: "--presets"
+    type: enum
+    choices: ["meta-sensitive", "meta-large"]
+    default: ""
+    tier: 2
+    ask: true
+    question: >
+      Optional preset. meta-sensitive = more sensitive (slower); meta-large = for
+      large & complex metagenomes (e.g. soil). Leave empty for defaults.
+  # --- managed by the workflow ---
+  threads:
+    flag: "--num-cpu-threads"
+    type: int
+    managed: true

@@ -1,0 +1,49 @@
+# Parameter registry for mapDamage2 (ancient-DNA damage authentication). See kraken2.yaml.
+tool: mapdamage
+command: mapDamage
+description: >
+  Quantifies post-mortem DNA damage from reads mapped to a reference: C→T at 5' ends and
+  G→A at 3' ends (cytosine deamination) plus fragment-length and base-misincorporation
+  patterns. The signature that distinguishes authentic ancient DNA from modern contamination.
+params:
+  length:
+    flag: "-l"
+    type: int
+    default: 70
+    min: 10
+    tier: 2
+    ask: true
+    question: >
+      Number of nucleotides from each read end to analyze for misincorporation (-l). 70 is
+      the default; shorter for very short aDNA fragments.
+  rescale:
+    flag: "--rescale"
+    type: bool
+    default: false
+    tier: 2
+    ask: false
+    question: >
+      Rescale base qualities downward in likely-damaged positions (produces a damage-aware
+      BAM for downstream variant calling).
+  ymax:
+    flag: "-y"
+    type: float
+    default: 0.3
+    min: 0.0
+    max: 1.0
+    tier: 3
+    ask: false
+    question: Y-axis maximum for the misincorporation plots.
+  # --- managed by the workflow ---
+  input:
+    flag: "-i"
+    type: path
+    managed: true
+  reference:
+    flag: "-r"
+    type: path
+    managed: true
+  folder:
+    flag: "-d"
+    type: path
+    managed: true

@@ -1,0 +1,7 @@
+# Isolated conda env for run-level reporting/visualization (MultiQC + Krona).
+# Created by `--use-conda`.
+name: metagx-aggregate
+channels: [conda-forge, bioconda]
+dependencies:
+  - multiqc >=1.21
+  - krona >=2.8

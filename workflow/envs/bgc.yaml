@@ -1,0 +1,8 @@
+# Isolated conda env for biosynthetic gene cluster mining (antiSMASH).
+# Created by `--use-conda`. antiSMASH also needs its reference databases:
+#   download-antismash-databases --database-dir <db.antismash>
+name: metagx-bgc
+channels: [conda-forge, bioconda]
+dependencies:
+  - antismash >=7.1
+  - prodigal >=2.6

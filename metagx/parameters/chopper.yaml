@@ -1,0 +1,57 @@
+# Parameter registry for chopper (long-read quality/length filtering). See kraken2.yaml.
+# NOTE: chopper reads from stdin and writes to stdout, so input/output are handled by
+# shell redirection in the workflow, not as flags. Only --threads is a managed flag.
+tool: chopper
+command: chopper
+description: >
+  Quality and length filtering for long reads (ONT / PacBio). Successor to NanoFilt;
+  streams FASTQ from stdin to stdout.
+params:
+  quality:
+    flag: "-q"
+    type: int
+    default: 10
+    min: 0
+    max: 50
+    tier: 1
+    ask: true
+    question: >
+      Minimum average read quality (Phred) to keep. ONT R10 data is often filtered at
+      ~10; older/raw data lower.
+  minlength:
+    flag: "-l"
+    type: int
+    default: 500
+    min: 0
+    tier: 1
+    ask: true
+    question: Discard reads shorter than this (bp). Long-read pipelines often use 500-1000.
+  maxlength:
+    flag: "--maxlength"
+    type: int
+    default: 0
+    min: 0
+    tier: 2
+    ask: false
+    question: Discard reads longer than this (bp). 0 / unset = no upper limit.
+  headcrop:
+    flag: "--headcrop"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Trim this many bases from the start of every read.
+  tailcrop:
+    flag: "--tailcrop"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Trim this many bases from the end of every read.
+  # --- managed by the workflow (I/O is via stdin/stdout, not flags) ---
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

@@ -1,0 +1,24 @@
+# Parameter registry for Krona (interactive taxonomy charts from kraken2 reports). See kraken2.yaml.
+tool: krona
+command: ktImportTaxonomy
+description: >
+  Renders kraken2 reports as an interactive, zoomable multi-layered pie chart (one HTML file,
+  all samples) for exploring community composition by clade.
+params:
+  # --- managed by the workflow: column layout is fixed by the kraken2 report format ---
+  tax_field:
+    flag: "-t"
+    type: int
+    managed: true
+  magnitude_field:
+    flag: "-m"
+    type: int
+    managed: true
+  output:
+    flag: "-o"
+    type: path
+    managed: true
+  taxonomy:
+    flag: "-tax"
+    type: path
+    managed: true

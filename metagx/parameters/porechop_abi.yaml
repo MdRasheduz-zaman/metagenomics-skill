@@ -1,0 +1,44 @@
+# Parameter registry for Porechop_ABI (ONT adapter removal). See kraken2.yaml for fields.
+tool: porechop_abi
+command: porechop_abi
+description: >
+  Removes adapters from Oxford Nanopore reads. The ABI mode infers adapter sequences ab
+  initio from the data rather than relying only on a known-adapter database.
+params:
+  ab_initio:
+    flag: "--ab_initio"
+    type: bool
+    default: true
+    tier: 1
+    ask: true
+    question: >
+      Infer adapter sequences ab initio from the reads (recommended for ONT, catches
+      adapters not in the built-in database).
+  extra_end_trim:
+    flag: "--extra_end_trim"
+    type: int
+    default: 2
+    min: 0
+    tier: 3
+    ask: false
+    question: Additional bases to trim from read ends once an adapter is found.
+  discard_middle:
+    flag: "--discard_middle"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Discard reads with adapters in the middle (likely chimeras) instead of splitting.
+  # --- managed by the workflow ---
+  input:
+    flag: "-i"
+    type: path
+    managed: true
+  output:
+    flag: "-o"
+    type: path
+    managed: true
+  threads:
+    flag: "-t"
+    type: int
+    managed: true

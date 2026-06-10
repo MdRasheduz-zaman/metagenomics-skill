@@ -1,0 +1,63 @@
+# Parameter registry for AMRFinderPlus (acquired AMR + stress/virulence genes). See kraken2.yaml.
+tool: amrfinderplus
+command: amrfinder
+description: >
+  Identifies acquired antimicrobial-resistance genes (and, with --plus, stress/biocide and
+  virulence genes) on assembled contigs using NCBI's curated AMR reference gene catalog + HMMs.
+params:
+  plus:
+    flag: "--plus"
+    type: bool
+    default: true
+    tier: 2
+    ask: true
+    question: >
+      Also report the "plus" content — stress, biocide, metal-resistance and virulence
+      genes — not just antimicrobial resistance. Recommended for surveillance.
+  coverage_min:
+    flag: "--coverage_min"
+    type: float
+    default: 0.5
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: true
+    question: >
+      Minimum fraction of the reference gene that must be covered by the hit
+      (--coverage_min, 0-1). Raise to reduce partial/false calls.
+  ident_min:
+    flag: "--ident_min"
+    type: float
+    default: -1.0
+    min: -1.0
+    max: 1.0
+    tier: 3
+    ask: false
+    question: >
+      Minimum identity to the reference (0-1). -1 uses AMRFinder's per-gene curated
+      cutoffs (recommended); set a fixed value only to override them.
+  organism:
+    flag: "--organism"
+    type: str
+    tier: 2
+    ask: true
+    question: >
+      Optional organism (e.g. Escherichia, Salmonella, Staphylococcus_aureus) to enable
+      organism-specific point-mutation detection. Leave unset for mixed metagenomes.
+  # --- managed by the workflow ---
+  nucleotide:
+    flag: "-n"
+    type: path
+    managed: true
+  output:
+    flag: "-o"
+    type: path
+    managed: true
+  database:
+    flag: "-d"
+    type: path
+    managed: true
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

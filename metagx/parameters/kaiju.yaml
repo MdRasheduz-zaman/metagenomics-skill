@@ -1,0 +1,58 @@
+# Parameter registry for Kaiju (protein-level taxonomic classifier). See kraken2.yaml.
+# Used as the second, independent classifier for a kraken2-vs-protein consensus check.
+tool: kaiju
+command: kaiju
+description: >
+  Classifies reads by translated-protein matches (BWT/FM-index over a protein reference),
+  which is more robust to novel/divergent organisms than nucleotide k-mers. A protein-space
+  second opinion to cross-check kraken2's nucleotide calls.
+params:
+  min_match_length:
+    flag: "-m"
+    type: int
+    default: 11
+    min: 9
+    tier: 2
+    ask: true
+    question: Minimum match length in amino acids (-m). 11 is the default; raise to reduce spurious hits.
+  mismatches:
+    flag: "-e"
+    type: int
+    default: 3
+    min: 0
+    tier: 2
+    ask: true
+    question: Number of mismatches allowed in a match (-e), in Greedy mode.
+  run_mode:
+    flag: "-a"
+    type: enum
+    choices: [greedy, mem]
+    default: greedy
+    tier: 3
+    ask: false
+    question: Algorithm — 'greedy' (allows mismatches, more sensitive) or 'mem' (exact matches only).
+  # --- managed by the workflow ---
+  nodes:
+    flag: "-t"
+    type: path
+    managed: true
+  fmi:
+    flag: "-f"
+    type: path
+    managed: true
+  input1:
+    flag: "-i"
+    type: path
+    managed: true
+  input2:
+    flag: "-j"
+    type: path
+    managed: true
+  output:
+    flag: "-o"
+    type: path
+    managed: true
+  threads:
+    flag: "-z"
+    type: int
+    managed: true

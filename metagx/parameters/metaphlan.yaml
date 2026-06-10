@@ -1,0 +1,49 @@
+# Parameter registry for MetaPhlAn 4 (marker-gene taxonomic profiler). See kraken2.yaml.
+# Used as the second, independent classifier for a kraken2-vs-marker consensus check.
+tool: metaphlan
+command: metaphlan
+description: >
+  Profiles community composition from shotgun reads using clade-specific marker genes.
+  Independent of kraken2's k-mer/DB approach, so agreement between the two is a strong
+  confidence signal and disagreement flags DB-completeness false positives.
+params:
+  stat_q:
+    flag: "--stat_q"
+    type: float
+    default: 0.2
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: true
+    question: >
+      Quantile for the robust average of marker abundances (--stat_q). 0.2 is the v4
+      default; lower is more sensitive to low-abundance clades.
+  tax_lev:
+    flag: "--tax_lev"
+    type: enum
+    choices: [a, k, p, c, o, f, g, s]
+    default: a
+    tier: 3
+    ask: false
+    question: Taxonomic level to report ('a' = all; 's' = species only).
+  # --- managed by the workflow ---
+  input_type:
+    flag: "--input_type"
+    type: str
+    managed: true
+  bowtie2db:
+    flag: "--bowtie2db"
+    type: path
+    managed: true
+  bowtie2out:
+    flag: "--bowtie2out"
+    type: path
+    managed: true
+  output_file:
+    flag: "-o"
+    type: path
+    managed: true
+  nproc:
+    flag: "--nproc"
+    type: int
+    managed: true

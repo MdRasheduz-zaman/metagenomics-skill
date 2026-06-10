@@ -1,0 +1,7 @@
+# Isolated conda env for contig-based AMR / virulence screening (AMRFinderPlus + ABRicate).
+# Created by `--use-conda`.
+name: metagx-amr
+channels: [conda-forge, bioconda]
+dependencies:
+  - ncbi-amrfinderplus >=4.0
+  - abricate >=1.0

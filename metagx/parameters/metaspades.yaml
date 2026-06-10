@@ -1,0 +1,54 @@
+# Parameter registry for metaSPAdes (paired-end short-read / hybrid assembler). See kraken2.yaml.
+tool: metaspades
+command: spades.py
+description: >
+  De novo metagenome assembler (SPAdes in --meta mode) for paired-end short reads, with
+  optional hybrid assembly when long reads are also supplied for a sample. An accuracy-
+  oriented alternative to MEGAHIT (slower, higher memory). Paired-end input required.
+params:
+  memory_gb:
+    flag: "-m"
+    type: int
+    default: 250
+    min: 4
+    tier: 2
+    ask: true
+    question: >
+      Memory cap in GB (-m); SPAdes aborts rather than exceeding it. Set to your machine's
+      available RAM for large soil/sediment assemblies.
+  only_assembler:
+    flag: "--only-assembler"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Skip the read error-correction stage (faster; use only if reads are pre-corrected).
+  # --- managed by the workflow ---
+  meta:
+    flag: "--meta"
+    type: bool
+    managed: true
+  pe1:
+    flag: "-1"
+    type: path
+    managed: true
+  pe2:
+    flag: "-2"
+    type: path
+    managed: true
+  nanopore:
+    flag: "--nanopore"
+    type: path
+    managed: true
+  pacbio:
+    flag: "--pacbio"
+    type: path
+    managed: true
+  out:
+    flag: "-o"
+    type: path
+    managed: true
+  threads:
+    flag: "-t"
+    type: int
+    managed: true

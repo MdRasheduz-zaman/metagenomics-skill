@@ -1,0 +1,5 @@
+label	platform	platform_class	kreport	reads	contigs	reference
+ONT (long, noisy)	ont	long	results/ont_sim/kraken2/ont_sim.confidence_0.0.kreport	data/simulated_metagenomic_reads.fasta	results/experiments/cross_platform_assembly/ont/contigs.fa	data/genomes.fasta
+Illumina (short, accurate)	illumina	short	results/illumina_sim/kraken2/illumina_sim.confidence_0.0.kreport	data/illumina_sim/illumina_sim_R1.fastq.gz,data/illumina_sim/illumina_sim_R2.fastq.gz	results/experiments/cross_platform_assembly/illumina/contigs.fa	data/genomes.fasta
+PacBio CLR (long, noisy)	pacbio_clr	long	results/pacbio_clr_sim/kraken2/pacbio_clr_sim.confidence_0.0.kreport	data/pacbio_sim/pacbio_clr_simlord.fastq.gz	results/experiments/cross_platform_assembly/pacbio_clr/contigs.fa	data/genomes.fasta
+PacBio HiFi (long, accurate)	pacbio_hifi	long	results/pacbio_hifi_sim/kraken2/pacbio_hifi_sim.confidence_0.0.kreport	data/pacbio_sim/pacbio_hifi.fastq.gz	results/experiments/cross_platform_assembly/pacbio_hifi/contigs.fa	data/genomes.fasta

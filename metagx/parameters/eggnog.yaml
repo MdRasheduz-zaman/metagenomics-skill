@@ -1,0 +1,52 @@
+# Parameter registry for eggNOG-mapper (functional annotation of MAG proteins). See kraken2.yaml.
+tool: eggnog
+command: emapper.py
+description: >
+  Assigns orthology-based functional annotation — COG categories, KEGG KOs/pathways, GO
+  terms, CAZy, EC numbers — to predicted proteins from a MAG/genome via eggNOG orthologs.
+params:
+  itype:
+    flag: "--itype"
+    type: enum
+    choices: [proteins, CDS, genome, metagenome]
+    default: proteins
+    tier: 2
+    ask: true
+    question: >
+      Input type: proteins (e.g. Bakta .faa), CDS (nucleotide genes), or genome/metagenome
+      (eggNOG-mapper predicts genes first). Use 'proteins' when annotating Bakta output.
+  sensmode:
+    flag: "--sensmode"
+    type: enum
+    choices: [default, fast, mid-sensitive, sensitive, more-sensitive, very-sensitive, ultra-sensitive]
+    default: sensitive
+    tier: 3
+    ask: false
+    question: Diamond search sensitivity; higher = more annotations but slower.
+  tax_scope:
+    flag: "--tax_scope"
+    type: str
+    tier: 3
+    ask: false
+    question: Taxonomic scope for ortholog selection (e.g. 'auto', 'Bacteria').
+  # --- managed by the workflow ---
+  input:
+    flag: "-i"
+    type: path
+    managed: true
+  output:
+    flag: "-o"
+    type: str
+    managed: true
+  output_dir:
+    flag: "--output_dir"
+    type: path
+    managed: true
+  data_dir:
+    flag: "--data_dir"
+    type: path
+    managed: true
+  cpu:
+    flag: "--cpu"
+    type: int
+    managed: true

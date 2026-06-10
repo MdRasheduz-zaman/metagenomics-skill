@@ -1,0 +1,6 @@
+# Isolated conda env for eukaryotic contig sorting + bin quality. Created by `--use-conda`.
+name: metagx-euk
+channels: [conda-forge, bioconda]
+dependencies:
+  - eukrep >=0.6
+  - eukcc >=2.1

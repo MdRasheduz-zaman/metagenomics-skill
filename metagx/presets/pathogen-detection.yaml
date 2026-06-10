@@ -1,0 +1,13 @@
+name: pathogen-detection
+description: High-precision taxonomic detection for clinical / low-biomass samples.
+when_to_use: >
+  Use when false positives are costly (pathogen ID, clinical metagenomics, contamination
+  screening). Strict QC + high kraken2 confidence + hit-group floor, swept so you can see
+  exactly which calls survive tightening.
+# Partial config merged UNDER the user's answers (samples & db are always user-supplied).
+config:
+  modules: {qc: true, classify: true, abundance: true, assembly: false, binning: false}
+  sweep: {param: confidence, values: [0.05, 0.1, 0.2]}
+  fastp: {qualified_quality_phred: 20, length_required: 50, cut_right: true}
+  kraken2: {minimum_hit_groups: 3, minimum_base_quality: 10}
+  bracken: {read_length: 150, level: S, threshold: 10}

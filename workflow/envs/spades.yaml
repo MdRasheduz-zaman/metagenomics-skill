@@ -1,0 +1,6 @@
+# Isolated conda env for the metaSPAdes assembler (optional alternative to MEGAHIT).
+# Created by `--use-conda`.
+name: metagx-spades
+channels: [conda-forge, bioconda]
+dependencies:
+  - spades >=4.0

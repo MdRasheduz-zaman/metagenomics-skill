@@ -1,0 +1,42 @@
+# Parameter registry for inStrain (strain-level microdiversity / SNV profiling). See kraken2.yaml.
+tool: instrain
+command: inStrain
+description: >
+  Profiles within-population microdiversity from reads mapped to contigs/MAGs: per-position
+  SNVs, nucleotide diversity (π), coverage, and breadth — enabling strain-level comparison
+  and detection of mixed strains that abundance profiling cannot resolve.
+params:
+  min_cov:
+    flag: "--min_cov"
+    type: int
+    default: 5
+    min: 1
+    tier: 2
+    ask: true
+    question: Minimum coverage to call a position (--min_cov). 5 is the default.
+  min_freq:
+    flag: "--min_freq"
+    type: float
+    default: 0.05
+    min: 0.0
+    max: 1.0
+    tier: 2
+    ask: true
+    question: Minimum minor-allele frequency to call a variant (--min_freq).
+  min_snp:
+    flag: "--min_snp"
+    type: int
+    default: 20
+    min: 1
+    tier: 3
+    ask: false
+    question: Minimum number of reads to call a SNP (--min_snp).
+  # --- managed by the workflow ---
+  output:
+    flag: "-o"
+    type: path
+    managed: true
+  processors:
+    flag: "-p"
+    type: int
+    managed: true

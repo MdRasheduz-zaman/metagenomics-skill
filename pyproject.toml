@@ -1,0 +1,42 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "metagx"
+version = "0.1.0"
+description = "Schema-driven, multi-client metagenomics pipeline (kraken2/Bracken/fastp + optional assembly)."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pyyaml>=6.0",
+    "numpy>=1.24",
+    "pandas>=2.2.0",
+    "matplotlib>=3.8.0",
+    "snakemake>=8.10.0",
+]
+
+[project.optional-dependencies]
+# Needed only to serve the MCP / HTTP surfaces.
+serve = [
+    "mcp[cli]>=1.2.0",
+    "fastapi>=0.110.0",
+    "uvicorn>=0.29.0",
+]
+test = [
+    "pytest>=8.0",
+    "numpy>=1.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[project.scripts]
+metagx = "metagx.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["metagx"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"metagx/parameters" = "metagx/parameters"
+"metagx/presets" = "metagx/presets"

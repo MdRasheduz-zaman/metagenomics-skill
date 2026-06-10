@@ -1,0 +1,8 @@
+# Isolated conda env for the amplicon branch (primer removal + OTU/abundance). Created by
+# `metagx run --use-conda`.
+name: metagx-amplicon
+channels: [conda-forge, bioconda]
+dependencies:
+  - cutadapt >=4.4
+  - vsearch >=2.22
+  - emu >=3.4

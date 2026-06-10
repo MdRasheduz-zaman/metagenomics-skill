@@ -1,0 +1,11 @@
+# Parameter registry for EukCC (eukaryotic genome/bin completeness). See kraken2.yaml.
+tool: eukcc
+command: eukcc
+description: >
+  Estimates completeness and contamination of eukaryotic genomes/bins recovered from
+  metagenomes (the eukaryotic analogue of CheckM/CheckV).
+params:
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

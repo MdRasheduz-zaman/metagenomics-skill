@@ -1,0 +1,34 @@
+# Parameter registry for MultiQC (aggregate QC + tool reports into one HTML). See kraken2.yaml.
+tool: multiqc
+command: multiqc
+description: >
+  Scans the results directory and aggregates per-sample reports (fastp, kraken2, and more)
+  into a single interactive HTML report with read-flow accounting across all samples.
+params:
+  flat:
+    flag: "--flat"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Render static (flat) plots instead of interactive ones (smaller, print-friendly).
+  zip_data_dir:
+    flag: "--zip-data-dir"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Compress the parsed-data directory MultiQC writes alongside the report.
+  # --- managed by the workflow ---
+  outdir:
+    flag: "-o"
+    type: path
+    managed: true
+  filename:
+    flag: "-n"
+    type: str
+    managed: true
+  force:
+    flag: "-f"
+    type: bool
+    managed: true

@@ -1,0 +1,12 @@
+name: gut-profiling
+description: Standard shotgun community profiling at species level.
+when_to_use: >
+  Use for general microbiome composition (gut, environmental) where you want species-level
+  relative abundance. Moderate QC, a light confidence sweep to sanity-check thresholds,
+  Bracken at species level.
+config:
+  modules: {qc: true, classify: true, abundance: true, assembly: false, binning: false}
+  sweep: {param: confidence, values: [0.0, 0.1]}
+  fastp: {qualified_quality_phred: 15, length_required: 50}
+  kraken2: {minimum_hit_groups: 2}
+  bracken: {read_length: 150, level: S, threshold: 10}
