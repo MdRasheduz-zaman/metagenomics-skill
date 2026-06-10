@@ -67,6 +67,54 @@ def test_generate_writes_tex_and_reads_results(tmp_path):
     assert res["compiled"] is False                 # we asked not to compile
 
 
+def _tabular_column_counts_consistent(tex: str):
+    """Every row in every tabular must have the same cell count as its column spec.
+
+    A row with more '&' than the spec allows is the 'Extra alignment tab' LaTeX fatal
+    error — invalid output PDF. This generic check catches header/row drift in ANY table.
+    """
+    import re
+    problems = []
+    # spec may contain one level of nested braces (e.g. p{0.45\linewidth}), so allow it
+    for m in re.finditer(
+            r"\\begin\{tabular\}\{((?:[^{}]|\{[^{}]*\})*)\}(.*?)\\end\{tabular\}", tex, re.S):
+        spec, body = m.group(1), m.group(2)
+        # count columns in the spec: l/r/c and each p{...} = one column
+        n_cols = len(re.findall(r"p\{[^}]*\}|[lrc]", spec))
+        for line in body.split("\\\\"):
+            line = line.strip()
+            if not line or line.startswith("\\hline") or "tabular" in line:
+                continue
+            cells = line.replace("\\hline", "").count("&") + 1
+            if cells > 1 and cells != n_cols:
+                problems.append((spec, n_cols, cells, line[:60]))
+    return problems
+
+
+def test_paper_alpha_table_matches_wide_tsv(tmp_path):
+    """Regression: alpha_diversity.tsv gained Chao1/ACE/Good's columns (5->8); the paper
+    table header was hardcoded to 5, producing invalid LaTeX. Header must track the file."""
+    cfg = _cfg(tmp_path, stats=True)
+    outdir = os.path.join(str(tmp_path), "p")
+    _write(os.path.join(outdir, "summary", "bracken_combined.tsv"),
+           "sample\tlabel\tname\tnew_est_reads\tfraction_total_reads\n"
+           "a1\tconfidence_0.0\tEscherichia coli\t100\t0.5\n"
+           "b1\tconfidence_0.0\tBacteroides fragilis\t80\t0.4\n")
+    # the full 8-column alpha table metagx/diversity.py now writes
+    _write(os.path.join(outdir, "stats", "alpha_diversity.tsv"),
+           "sample\trichness\tchao1\tace\tgoods_coverage\tshannon\tsimpson\tpielou_evenness\n"
+           "a1\t29\t29.0\t29.0\t1.0\t3.01\t0.94\t0.89\n"
+           "b1\t30\t30.0\t30.6\t0.999\t3.00\t0.94\t0.88\n")
+    _write(os.path.join(outdir, "stats", "diversity.json"),
+           json.dumps({"n_samples": 2, "n_taxa": 2, "pcoa_explained": [0.9, 0.1],
+                       "alpha": [{"sample": "a1"}, {"sample": "b1"}]}))
+    res = paper.generate(cfg, compile_pdf=False)
+    tex = open(res["paths"]["paper_tex"]).read()
+    assert "Chao1" in tex and "Good's cov." in tex          # new columns surfaced
+    problems = _tabular_column_counts_consistent(tex)
+    assert not problems, f"inconsistent table column counts (invalid LaTeX): {problems}"
+
+
 def test_no_results_is_graceful(tmp_path):
     cfg = _cfg(tmp_path)
     res = paper.generate(cfg, compile_pdf=False)

@@ -116,12 +116,33 @@ def _read_json(path: str) -> Optional[dict]:
         return None
 
 
-def _alpha_rows(outdir: str) -> List[List[str]]:
+# Friendly column labels for the alpha-diversity table (any unlisted column is
+# title-cased). Derived from the TSV header so the table can never drift out of sync
+# with the columns metagx/diversity.py actually writes.
+_ALPHA_LABELS = {
+    "sample": "Sample", "richness": "Richness", "chao1": "Chao1", "ace": "ACE",
+    "goods_coverage": "Good's cov.", "shannon": "Shannon", "simpson": "Simpson",
+    "pielou_evenness": "Evenness",
+}
+
+
+def _alpha_table(outdir: str) -> "Optional[tuple[List[str], List[List[str]]]]":
+    """(header, rows) for the alpha-diversity table, read straight from the TSV.
+
+    The header tracks the file's columns, so adding a metric to alpha_diversity.tsv
+    flows into the paper with no change here (previously a hardcoded 5-column header
+    desynced from the 8-column file and produced invalid LaTeX)."""
     path = os.path.join(outdir, "stats", "alpha_diversity.tsv")
     if not os.path.isfile(path):
-        return []
+        return None
     with open(path) as fh:
-        return [list(r.values()) for r in csv.DictReader(fh, delimiter="\t")]
+        reader = csv.reader(fh, delimiter="\t")
+        cols = next(reader, [])
+        if not cols:
+            return None
+        header = [_ALPHA_LABELS.get(c, c.replace("_", " ").title()) for c in cols]
+        rows = [r for r in reader if r]
+    return header, rows
 
 
 # --------------------------------------------------------------------------- #
@@ -243,9 +264,10 @@ def _results(cfg: Dict[str, Any], manifest: Dict[str, Any], outdir: str) -> str:
     div = _read_json(os.path.join(outdir, "stats", "diversity.json"))
     if div:
         blocks.append("\\subsection*{Diversity}")
-        ar = _alpha_rows(outdir)
-        if ar:
-            blocks.append(_table(["Sample", "Richness", "Shannon", "Simpson", "Evenness"], ar,
+        alpha = _alpha_table(outdir)
+        if alpha:
+            header, ar = alpha
+            blocks.append(_table(header, ar,
                                  "Alpha-diversity per sample.", "alpha"))
         expl = div.get("pcoa_explained")
         pc = os.path.join(outdir, "stats", "pcoa.png")
