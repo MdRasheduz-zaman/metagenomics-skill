@@ -188,6 +188,10 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   second, independent classifier — `consensus: {classifier: metaphlan|kaiju}` — and writes a
   per-sample species concordance JSON vs kraken2 (`results/<project>/consensus/`). Agreement =
   confidence; kraken2-only taxa flag DB-completeness false positives. DB: `db.{metaphlan|kaiju}`.
+  No NCBI Kaiju DB? Build one from your reference genomes (no download):
+  `metagx build-kaiju-db --genomes <fa> --db <dir> --taxonomy <kraken2_db>/taxonomy` (uses the
+  same synthetic taxids as `build-db`, so the kraken2-vs-kaiju cross-check lines up). On
+  long-read-only data prefer `kaiju` over `metaphlan` (markers are short-read-tuned).
 - **Aggregate report** (`modules.aggregate`, needs `classify`): run-level MultiQC report +
   interactive Krona taxonomy chart under `results/<project>/report/`.
 - **Ancient DNA** (`library: ancient` + `modules.damage`, needs `assembly`): short-read PE

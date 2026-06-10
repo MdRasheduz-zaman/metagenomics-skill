@@ -241,6 +241,22 @@ def build_database(genomes: str, db_dir: str, read_length: int = 150, threads: i
 
 
 @mcp.tool()
+def build_kaiju_database(genomes: str, db_dir: str, taxonomy_dir: str, threads: int = 4,
+                         dry_run: bool = False) -> str:
+    """Build a custom Kaiju (protein) database from reference genomes — no NCBI download.
+
+    Predicts proteins (prodigal), labels each with its genome's synthetic taxid, and builds
+    the Kaiju FM-index. The output dir is a drop-in `db.kaiju` for the consensus module
+    (`modules.classify_consensus` with `consensus.classifier: kaiju`). `taxonomy_dir` is a
+    dir with names.dmp + nodes.dmp (e.g. the kraken2 db's taxonomy/ from build_database, so
+    the taxids line up for the kraken2-vs-kaiju cross-check). Returns commands + per-step status.
+    """
+    result = dbbuild.build_kaiju_db(genomes=genomes, db_dir=db_dir, taxonomy_dir=taxonomy_dir,
+                                    threads=threads, run=not dry_run)
+    return json.dumps(result, indent=2)
+
+
+@mcp.tool()
 def run_pipeline(config_path: str = "config.yaml", cores: str = "all", dry_run: bool = False,
                  use_conda: bool = False, executor: str | None = None) -> str:
     """Run the Snakemake workflow against a config. Set dry_run to preview the plan.

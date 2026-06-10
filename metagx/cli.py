@@ -101,6 +101,14 @@ def cmd_build_cat_db(args) -> int:
     return 0 if result.get("ok", not result.get("ran", False)) else 1
 
 
+def cmd_build_kaiju_db(args) -> int:
+    result = dbbuild.build_kaiju_db(genomes=args.genomes, db_dir=args.db,
+                                    taxonomy_dir=args.taxonomy, threads=args.threads,
+                                    run=not args.dry_run)
+    _print_json(result)
+    return 0 if result.get("ok", not result.get("ran", False)) else 1
+
+
 def cmd_report(args) -> int:
     with open(args.config) as fh:
         cfg = yaml.safe_load(fh)
@@ -396,6 +404,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--taxonomy", required=True, help="dir with names.dmp + nodes.dmp (e.g. the kraken2 db's taxonomy/)")
     sp.add_argument("--dry-run", action="store_true")
     sp.set_defaults(func=cmd_build_cat_db)
+
+    sp = sub.add_parser("build-kaiju-db",
+                        help="build a custom Kaiju (protein) db from genomes for the consensus module")
+    sp.add_argument("--genomes", required=True, help="FASTA of reference genomes")
+    sp.add_argument("--db", required=True, help="output Kaiju db directory (becomes db.kaiju)")
+    sp.add_argument("--taxonomy", required=True,
+                    help="dir with names.dmp + nodes.dmp (e.g. the kraken2 db's taxonomy/)")
+    sp.add_argument("--threads", type=int, default=4)
+    sp.add_argument("--dry-run", action="store_true")
+    sp.set_defaults(func=cmd_build_kaiju_db)
 
     sp = sub.add_parser("compare", help="compare the same sample across sequencing platforms (manifest TSV)")
     sp.add_argument("--manifest", default=None,

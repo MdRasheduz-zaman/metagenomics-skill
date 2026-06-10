@@ -144,6 +144,97 @@ def build_cat_db(genomes: str, db_dir: str, taxonomy_dir: str, run: bool = True)
     return result
 
 
+def build_kaiju_db(genomes: str, db_dir: str, taxonomy_dir: str,
+                   threads: int = 4, run: bool = True) -> Dict:
+    """Build a custom Kaiju (protein) database from reference genomes — no NCBI download.
+
+    Predicts proteins (prodigal), labels each with its genome's synthetic taxid (Kaiju reads
+    the taxid as the protein header), then runs kaiju-mkbwt + kaiju-mkfmi. Copies
+    names.dmp/nodes.dmp from ``taxonomy_dir`` (e.g. the kraken2 db's taxonomy/ from build_db)
+    so the directory is a drop-in ``db.kaiju`` for the consensus module: it ends up holding
+    ``kaiju_db.fmi`` + ``nodes.dmp`` + ``names.dmp``, exactly what rules/consensus.smk expects.
+    """
+    os.makedirs(db_dir, exist_ok=True)
+    raw_proteins = os.path.join(db_dir, "proteins.faa")
+    kaiju_proteins = os.path.join(db_dir, "kaiju_proteins.faa")
+    prefix = os.path.join(db_dir, "kaiju_db")  # -> kaiju_db.bwt/.sa/.fmi
+
+    # genome accession -> synthetic taxid (FASTA order, matching build_db/build_cat_db)
+    acc_tax, i = {}, 0
+    with _open(genomes) as fh:
+        for line in fh:
+            if line.startswith(">"):
+                i += 1
+                acc_tax[line[1:].split()[0]] = FIRST_TAXID - 1 + i
+
+    result = {"db": os.path.abspath(db_dir), "n_genomes": len(acc_tax),
+              "fmi": os.path.abspath(prefix + ".fmi"),
+              "commands": {
+                  "prodigal": f"prodigal -i {genomes} -a {raw_proteins} -p meta -q",
+                  "mkbwt": f"kaiju-mkbwt -n {threads} -a protein -o {prefix} {kaiju_proteins}",
+                  "mkfmi": f"kaiju-mkfmi {prefix}"}}
+
+    missing = [t for t in ("prodigal", "kaiju-mkbwt", "kaiju-mkfmi") if not _have(t)]
+    if not run or missing:
+        result["ran"] = False
+        if missing:
+            result["note"] = f"tools not on PATH: {', '.join(missing)} — not executed"
+        return result
+
+    p = subprocess.run(["prodigal", "-i", genomes, "-a", raw_proteins, "-p", "meta", "-q"],
+                       capture_output=True, text=True)
+    if p.returncode != 0:
+        return {**result, "ran": True, "ok": False, "failed_step": "prodigal",
+                "tail": (p.stderr or "")[-800:]}
+
+    # Relabel each protein header to its taxid (Kaiju parses the taxid from the header),
+    # and drop prodigal's trailing '*' stop char which kaiju-mkbwt rejects.
+    n, total_aa = 0, 0
+    with open(raw_proteins) as fin, open(kaiju_proteins, "w") as out:
+        seq, taxid = [], None
+
+        def _flush():
+            nonlocal total_aa
+            if taxid and seq:
+                s = "".join(seq).replace("*", "")
+                out.write(f">{taxid}\n{s}\n")
+                total_aa += len(s)
+                return 1
+            return 0
+        for line in fin:
+            if line.startswith(">"):
+                n += _flush()
+                seq = []
+                pid = line[1:].split()[0]               # prodigal: <contig>_<gene>
+                taxid = acc_tax.get(pid.rsplit("_", 1)[0])
+            else:
+                seq.append(line.strip())
+        n += _flush()
+    result["n_proteins"] = n
+
+    # kaiju-mkbwt estimates its buffer from file size, which underflows for small custom
+    # DBs ("Not enough memory allocated"); pass an explicit length in millions (>=1, rounded up).
+    import math
+    length_mb = max(1, math.ceil(total_aa / 1_000_000))
+    result["commands"]["mkbwt"] = (
+        f"kaiju-mkbwt -n {threads} -a protein -l {length_mb} -o {prefix} {kaiju_proteins}")
+    for step, cmd in (("mkbwt", ["kaiju-mkbwt", "-n", str(threads), "-a", "protein",
+                                 "-l", str(length_mb), "-o", prefix, kaiju_proteins]),
+                      ("mkfmi", ["kaiju-mkfmi", prefix])):
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            return {**result, "ran": True, "ok": False, "failed_step": step,
+                    "tail": ((proc.stdout or "") + (proc.stderr or ""))[-1000:]}
+
+    # copy the taxonomy alongside the index so the dir is a self-contained db.kaiju
+    for dmp in ("nodes.dmp", "names.dmp"):
+        src = os.path.join(taxonomy_dir, dmp)
+        if os.path.isfile(src):
+            shutil.copy(src, os.path.join(db_dir, dmp))
+    result.update(ran=True, ok=os.path.isfile(prefix + ".fmi"))
+    return result
+
+
 def build_db(
     genomes: str,
     db_dir: str,

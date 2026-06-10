@@ -33,6 +33,11 @@ caught real bugs that dry-run cannot:
   bundled `.conda/phylogenetics` env (real alignment + Newick tree + plot; A/B clades
   recovered). Fixed: `newick_stats` counted FastTree internal-node support values as leaves.
   Gated real-execution test added (skips in CI).
+- **Consensus classifier (Kaiju)** — added `metagx build-kaiju-db` (custom Kaiju protein DB
+  from genomes via prodigal + kaiju-mkbwt/mkfmi, synthetic taxids, no NCBI download), built it
+  from the bundled genomes, ran Kaiju on the real ont_sim reads (9.7k classified), and the
+  classifier_consensus cross-check vs kraken2: 30 shared species, Jaccard 0.94, full top-10
+  overlap. Converts `modules.classify_consensus` (kaiju path) from dry-run-only to verified.
 - **Functional / AMR (ABRicate)** — ran `abricate --db card` (real tool + bundled CARD/NCBI/
   ResFinder/VFDB DBs, installed osx-64) on the real ont_sim contigs (valid output, 0 hits =
   correct for viral) AND on an ErmA positive-control fixture (correctly detected the resistance
