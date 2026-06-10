@@ -28,6 +28,51 @@ def _worst_classified(metrics: Dict[str, Any]) -> Optional[float]:
     return min(vals) if vals else None
 
 
+def read_diversity(outdir: str) -> Optional[Dict[str, Any]]:
+    """Load stats/diversity.json from a finished run (None if stats wasn't run)."""
+    path = os.path.join(outdir, "stats", "diversity.json")
+    if not os.path.isfile(path):
+        return None
+    try:
+        with open(path) as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return None
+
+
+def diversity_suggestions(div: Dict[str, Any],
+                          coverage_floor: float = 0.95) -> "tuple[List[str], Dict[str, Any]]":
+    """Turn a diversity.json payload into (suggestions, metric summary).
+
+    Pure function (no I/O) so it is unit-testable. Keys off Good's coverage — the
+    standard sampling-completeness metric (1 - f1/N) — and the core microbiome.
+    """
+    suggestions: List[str] = []
+    alpha = div.get("alpha") or []
+    cov = [a["goods_coverage"] for a in alpha if a.get("goods_coverage") is not None]
+    mean_cov = round(sum(cov) / len(cov), 4) if cov else None
+    low = [a["sample"] for a in alpha
+           if a.get("goods_coverage") is not None and a["goods_coverage"] < coverage_floor]
+    n_core = len(div.get("core_taxa") or [])
+    n_samples = div.get("n_samples") or len(alpha)
+
+    if mean_cov is not None and mean_cov < coverage_floor:
+        suggestions.append(
+            f"Good's coverage averages {mean_cov} (<{coverage_floor}) — communities are "
+            f"under-sampled (many rare taxa unseen); the rarefaction curves are not yet "
+            f"saturated. Consider deeper sequencing"
+            + (f"; lowest: {', '.join(low[:5])}." if low else ".")
+        )
+    if n_samples and n_samples >= 3 and n_core == 0:
+        suggestions.append(
+            "Core microbiome is empty (no taxon shared across the prevalence threshold) — "
+            "samples are highly heterogeneous; check grouping/metadata or lower "
+            "`stats.core_prevalence`."
+        )
+    return suggestions, {"mean_goods_coverage": mean_cov, "n_core_taxa": n_core,
+                         "low_coverage_samples": low}
+
+
 def analyze(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Inspect finished results and return advisor payload (rules-first, all active tools)."""
     outdir = _outdir(cfg)
@@ -79,6 +124,13 @@ def analyze(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "platform-aware grids."
         )
 
+    # Diversity-aware advice (when modules.stats ran): sampling completeness + core.
+    div = read_diversity(outdir)
+    diversity_metrics: Dict[str, Any] = {}
+    if div:
+        div_sugg, diversity_metrics = diversity_suggestions(div)
+        suggestions.extend(div_sugg)
+
     verdict = "ok"
     if worst_pc is not None and worst_pc < 30:
         verdict = "poor"
@@ -95,6 +147,7 @@ def analyze(cfg: Dict[str, Any]) -> Dict[str, Any]:
             "classification": class_metrics,
             "mean_percent_classified": mean_pc,
             "worst_percent_classified": worst_pc,
+            "diversity": diversity_metrics,
         },
         "recommendations": multi,
         "warnings": list(dict.fromkeys(w for w in warnings if w)),

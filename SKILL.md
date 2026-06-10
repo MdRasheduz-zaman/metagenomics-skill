@@ -90,8 +90,11 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   `minimum_hit_groups`, assembly defaults, optional modules to enable, and **alternatives
   to install** (e.g. trimmomatic, filtlong) when not wired in metagx. Single-param mode:
   `metagx recommend --tool bracken --param read_length --platform ont`. `metagx advise`
-  merges post-run metrics with the same engine. History: `.metagx/history.jsonl`.
-  Does **not** replace Snakemake — it informs the next interview pass.
+  merges post-run metrics with the same engine — including **diversity-aware advice** when
+  `modules.stats` ran: it reads `stats/diversity.json` and flags under-sampling (mean Good's
+  coverage < 0.95 → rarefaction not saturated, sequence deeper) and an empty core microbiome
+  (high heterogeneity → check grouping or lower `stats.core_prevalence`). History:
+  `.metagx/history.jsonl`. Does **not** replace Snakemake — it informs the next interview pass.
 - **Phylogenetics:** `modules.phylogenetics` runs MAFFT → optional TrimAl → IQ-TREE 2 or
   FastTree on `phylogenetics.input` (or skip alignment with `aligned_input`). Registries:
   `mafft`, `iqtree`, `fasttree`. Outputs: `results/<project>/phylogenetics/` (aligned FASTA,
