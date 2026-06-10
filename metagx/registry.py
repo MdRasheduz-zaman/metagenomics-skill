@@ -173,6 +173,10 @@ def render_args(tool: str, values: Dict[str, Any], managed: Dict[str, Any] | Non
         if name not in params:
             continue
         spec = params[name]
+        # `interpreted` params are user-facing (asked + validated) but consumed by a
+        # workflow script, not emitted as a CLI flag — never render them here.
+        if spec.get("interpreted"):
+            continue
         flag = spec.get("flag")
         if value is None or value == "":
             continue

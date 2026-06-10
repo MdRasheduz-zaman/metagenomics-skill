@@ -6,7 +6,7 @@ import glob
 import os
 from typing import Any, Dict
 
-from . import evidence_pack, registry
+from . import evidence_pack, registry, schedulers
 
 
 def workflow_scripts(root: str | None = None) -> list:
@@ -28,6 +28,8 @@ def build_catalog() -> Dict[str, Any]:
         "registry_tools": tools,
         "evidence_files": evidence_pack.list_evidence(),
         "workflow_scripts": workflow_scripts(),
+        "schedulers": schedulers.list_schedulers(),
         "planned_modules": [],
-        "advisor_commands": ["recommend", "advise", "history", "sync-help", "catalog"],
+        "advisor_commands": ["recommend", "advise", "history", "sync-help",
+                             "catalog", "schedulers"],
     }

@@ -1,0 +1,38 @@
+# metagx LOCAL profile — one workstation / fat node, no cluster scheduler.
+#   metagx run --config config.yaml --executor local
+#
+# Use this on a big shared machine where you want per-rule thread + memory caps
+# (so kraken2/assembly don't oversubscribe) but there is no SLURM/SGE/etc. to submit to.
+# Snakemake runs rules as local subprocesses, capped by --cores.
+
+use-conda: true
+printshellcmds: true
+rerun-incomplete: true
+
+# Cap total local parallelism here, or override on the CLI with --cores.
+cores: 8
+
+# Per-rule threads — the memory-heavy / parallel steps get more.
+set-threads:
+  kraken2: 8
+  classify_contigs: 8
+  bracken: 4
+  megahit: 8
+  metaspades: 8
+  flye: 8
+  map_to_contigs: 8
+  metabat2: 4
+  genomad: 8
+  gtdbtk: 8
+  checkm2: 8
+
+# Soft memory hints (MB) — Snakemake schedules so concurrent rules fit `cores`.
+set-resources:
+  kraken2:
+    mem_mb: 16000
+  megahit:
+    mem_mb: 16000
+  flye:
+    mem_mb: 24000
+  gtdbtk:
+    mem_mb: 64000

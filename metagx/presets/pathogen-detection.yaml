@@ -1,9 +1,16 @@
 name: pathogen-detection
-description: High-precision taxonomic detection for clinical / low-biomass samples.
+description: High-precision taxonomic detection for clinical / low-biomass / host-associated samples.
 when_to_use: >
-  Use when false positives are costly (pathogen ID, clinical metagenomics, contamination
-  screening). Strict QC + high kraken2 confidence + hit-group floor, swept so you can see
-  exactly which calls survive tightening.
+  Use when false positives are costly (pathogen ID, clinical metagenomics, host–pathogen
+  samples, contamination screening). Strict QC + high kraken2 confidence + hit-group floor,
+  swept so you can see exactly which calls survive tightening. For host-associated samples
+  (tissue, swab, blood, stool), ALSO recommend two things the preset can't hardcode because
+  they need user paths: (1) host depletion — set `host_removal.genome` to the host reference
+  (e.g. human T2T-CHM13) so host reads are removed before classification, which both enriches
+  the pathogen signal and cuts host-mapping false positives; and (2) the consensus cross-check
+  — enable `classify_consensus` with a second classifier (MetaPhlAn or Kaiju, `db.metaphlan`/
+  `db.kaiju`) so a pathogen call confirmed by two independent methods is trustworthy and a
+  kraken2-only call is flagged as a possible DB-completeness artifact.
 # Partial config merged UNDER the user's answers (samples & db are always user-supplied).
 config:
   modules: {qc: true, classify: true, abundance: true, assembly: false, binning: false}

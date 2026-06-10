@@ -48,11 +48,34 @@ def test_every_registry_is_well_formed(tool):
         assert spec.get("type") in VALID_TYPES, f"{tool}.{name}: bad type {spec.get('type')}"
         if spec.get("type") == "enum":
             assert spec.get("choices"), f"{tool}.{name}: enum needs choices"
-        if not spec.get("managed"):
-            assert spec.get("flag"), f"{tool}.{name}: user param needs a flag"
+        # A user param needs a `flag` unless it is `interpreted` (consumed by a
+        # workflow script, not rendered to a CLI flag). `managed` params are
+        # injected by the workflow and also flagless. Requiring one of the three
+        # keeps a genuinely forgotten flag a failure.
+        if not spec.get("managed") and not spec.get("interpreted"):
+            assert spec.get("flag"), f"{tool}.{name}: user param needs a flag (or interpreted: true)"
+        # `interpreted` and `managed` are mutually exclusive intents.
+        assert not (spec.get("managed") and spec.get("interpreted")), \
+            f"{tool}.{name}: cannot be both managed and interpreted"
     # interview + render must not raise for any registry
     registry.interview_spec(tool, max_tier=3)
     registry.render_args(tool, {})
+
+
+def test_interpreted_params_are_never_rendered():
+    """`interpreted` params are consumed by workflow scripts, not emitted as flags."""
+    for tool in registry.list_tools():
+        reg = registry.load_registry(tool)
+        interpreted = [n for n, s in reg["params"].items() if s.get("interpreted")]
+        for name in interpreted:
+            spec = reg["params"][name]
+            # use the default (or a choice) as a plausible value
+            val = spec.get("default")
+            if val is None and spec.get("choices"):
+                val = spec["choices"][0]
+            args = registry.render_args(tool, {name: val})
+            assert name.replace("_", "-") not in " ".join(args), \
+                f"{tool}.{name} is interpreted but was rendered into args"
 
 
 def test_new_gap_closing_registries_present():

@@ -39,6 +39,7 @@ from metagx import (
     registry,
     report,
     runner,
+    schedulers,
     sync_help,
     tool_advisor,
 )
@@ -92,6 +93,14 @@ def get_preset(name: str) -> str:
         return json.dumps(presets.get_preset_config(name), indent=2)
     except KeyError as e:
         return f"error: {e}"
+
+
+@mcp.tool()
+def list_schedulers() -> str:
+    """List HPC scheduler backends for run_pipeline's `executor` (local/slurm/lsf/sge/pbs/
+    generic): the executor each uses, the plugin it needs, and what to edit before first use.
+    """
+    return json.dumps(schedulers.describe(), indent=2)
 
 
 @mcp.tool()
@@ -233,13 +242,23 @@ def build_database(genomes: str, db_dir: str, read_length: int = 150, threads: i
 
 @mcp.tool()
 def run_pipeline(config_path: str = "config.yaml", cores: str = "all", dry_run: bool = False,
-                 use_conda: bool = False) -> str:
+                 use_conda: bool = False, executor: str | None = None) -> str:
     """Run the Snakemake workflow against a config. Set dry_run to preview the plan.
 
     use_conda lets Snakemake auto-provision per-rule tools (workflow/envs/) — needed for the
     domain-taxonomy tools (geNomad/CheckV, GTDB-Tk/CheckM2, EukRep/EukCC) if not installed.
+
+    executor submits to an HPC scheduler via a bundled profile (local/slurm/lsf/sge/pbs/
+    generic — see list_schedulers). The bundled profile must be edited for your site first.
     """
-    proc = runner.run(config=config_path, cores=cores, dry_run=dry_run, use_conda=use_conda)
+    profile = None
+    if executor:
+        try:
+            profile = schedulers.profile_path(executor)
+        except (KeyError, FileNotFoundError) as e:
+            return json.dumps({"ok": False, "error": str(e)}, indent=2)
+    proc = runner.run(config=config_path, cores=cores, dry_run=dry_run,
+                      use_conda=use_conda, profile=profile)
     ok = proc.returncode == 0
     tail = (proc.stdout or "")[-3000:] + "\n" + (proc.stderr or "")[-3000:]
     return json.dumps({"ok": ok, "returncode": proc.returncode, "log": tail}, indent=2)
@@ -432,6 +451,7 @@ if _HAVE_FASTAPI:
         modules: Optional[Dict[str, bool]] = None
         sweep: Optional[Dict[str, Any]] = None
         run: bool = False
+        executor: Optional[str] = None   # HPC backend when run=True (see list_schedulers)
 
     @app.get("/api/v1/tools")
     def http_tools():
@@ -454,7 +474,7 @@ if _HAVE_FASTAPI:
 
     @app.post("/api/v1/build-and-run")
     def http_build_and_run(req: BuildRequest):
-        payload = {k: v for k, v in req.model_dump(exclude={"run"}).items()
+        payload = {k: v for k, v in req.model_dump(exclude={"run", "executor"}).items()
                    if k in _BUILD_PARAMS}
         try:
             cfg = config_builder.build_config(**payload)
@@ -463,7 +483,13 @@ if _HAVE_FASTAPI:
         path = config_builder.write_config(cfg)
         if not req.run:
             return {"status": "config_written", "path": path, "config": cfg}
-        proc = runner.run(config=path)
+        profile = None
+        if req.executor:
+            try:
+                profile = schedulers.profile_path(req.executor)
+            except (KeyError, FileNotFoundError) as e:
+                return {"status": "error", "error": str(e)}
+        proc = runner.run(config=path, profile=profile)
         return {
             "status": "success" if proc.returncode == 0 else "error",
             "returncode": proc.returncode,

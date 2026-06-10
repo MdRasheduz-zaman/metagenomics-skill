@@ -7,6 +7,7 @@ description: >
 params:
   sequence_type:
     type: enum
+    interpreted: true   # selects the FastTree alphabet flag (-nt) in the workflow script
     choices: [nt, aa]
     default: nt
     tier: 1
@@ -17,6 +18,7 @@ params:
       protein_marker: aa
   model:
     type: enum
+    interpreted: true   # maps to a FastTree model flag in the workflow script (alphabet-dependent)
     choices: [gtr, jc, lg, wag, jtt]
     default: gtr
     tier: 2

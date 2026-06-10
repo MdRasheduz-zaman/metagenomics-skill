@@ -37,6 +37,7 @@ from . import (
     registry,
     report,
     runner,
+    schedulers,
     sync_help,
     tool_advisor,
 )
@@ -152,12 +153,39 @@ def cmd_validate(args) -> int:
     return 0
 
 
+def cmd_schedulers(_args) -> int:
+    """List the bundled HPC scheduler backends (for `metagx run --executor`)."""
+    _print_json(schedulers.describe())
+    return 0
+
+
+def _resolve_profile(args) -> str | None:
+    """Pick the Snakemake profile dir from --profile / --executor / --slurm.
+
+    Precedence: an explicit external --profile wins; then --executor <name>;
+    then the legacy --slurm alias. Returns None for a plain local run.
+    """
+    if args.profile:
+        return args.profile
+    name = args.executor
+    if not name and args.slurm:
+        name = "slurm"          # legacy alias, kept for back-compat
+    if not name or name == "local":
+        # `local` still routes through its bundled profile (thread/mem caps);
+        # truly plain local runs (no --executor) get None.
+        if name == "local":
+            return schedulers.profile_path("local")
+        return None
+    try:
+        return schedulers.profile_path(name)
+    except (KeyError, FileNotFoundError) as e:
+        raise SystemExit(f"metagx run: {e}")
+
+
 def cmd_run(args) -> int:
-    profile = args.profile
-    if args.slurm and not profile:
-        profile = os.path.join(os.path.dirname(runner.workflow_path()), "profiles", "slurm")
+    profile = _resolve_profile(args)
     proc = runner.run(config=args.config, cores=args.cores, dry_run=args.dry_run,
-                      use_conda=args.use_conda or args.slurm, profile=profile)
+                      use_conda=args.use_conda, profile=profile)
     sys.stdout.write(proc.stdout)
     sys.stderr.write(proc.stderr)
     if proc.returncode == 0 and not args.dry_run and not args.no_history:
@@ -292,10 +320,14 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--use-conda", action="store_true",
                     help="auto-provision per-rule tools via conda (workflow/envs/)")
+    sp.add_argument("--executor", default=None, metavar="NAME",
+                    help="HPC scheduler backend: "
+                         f"{'|'.join(schedulers.list_schedulers())} "
+                         "(see `metagx schedulers`; edit the bundled profile first)")
     sp.add_argument("--slurm", action="store_true",
-                    help="submit jobs via SLURM using the bundled profile (edit partition/account)")
+                    help="alias for --executor slurm (back-compat)")
     sp.add_argument("--profile", default=None,
-                    help="path to a Snakemake profile dir (overrides --slurm)")
+                    help="path to a custom Snakemake profile dir (overrides --executor)")
     sp.add_argument("--no-history", action="store_true",
                     help="do not append to .metagx/history.jsonl after a successful run")
     sp.add_argument("--no-advisor", action="store_true",
@@ -337,6 +369,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("catalog", help="index of tools, evidence, and workflow scripts").set_defaults(
         func=cmd_catalog
     )
+
+    sub.add_parser("schedulers", help="list HPC scheduler backends for `run --executor`"
+                   ).set_defaults(func=cmd_schedulers)
 
     sp = sub.add_parser("results", help="print result summary JSON files")
     sp.add_argument("--config", default="config.yaml")

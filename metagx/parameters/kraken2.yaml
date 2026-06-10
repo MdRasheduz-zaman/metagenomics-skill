@@ -9,6 +9,8 @@
 #   min / max   numeric bounds (validated)
 #   choices     allowed values for enum
 #   managed     true => supplied by the workflow (db, threads, io); never interviewed
+#   interpreted true => user-facing (asked + validated) but consumed by a workflow script,
+#               not emitted as a CLI flag (e.g. a method/alphabet selector). No `flag` needed.
 #   sweepable   true => may be given as a LIST to run the comparison matrix
 #   tier        1 core / 2 common / 3 advanced  (controls how eagerly to ask)
 #   ask         whether the interview should raise it at all

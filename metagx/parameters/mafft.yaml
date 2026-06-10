@@ -9,6 +9,7 @@ description: >
 params:
   method:
     type: enum
+    interpreted: true   # consumed by scripts/phylogenetics.py (maps to a MAFFT mode), not a single flag
     choices: [auto, linsi, einsi, fftnsi, fftns, retree2]
     default: auto
     tier: 1
@@ -23,6 +24,7 @@ params:
       large: fftns
   maxiterate:
     type: int
+    interpreted: true   # applied by the workflow script only for linsi/einsi, not rendered globally
     default: 0
     min: 0
     tier: 3

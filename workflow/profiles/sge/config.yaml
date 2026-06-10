@@ -1,0 +1,61 @@
+# metagx SGE profile — Sun Grid Engine / Univa (UGE) / Open Grid Scheduler (qsub).
+#   metagx run --config config.yaml --executor sge
+#
+# SGE has no native Snakemake v8 plugin, so we drive it through the generic-cluster
+# executor with an explicit qsub command. Install the plugin first:
+#   pip install snakemake-executor-plugin-cluster-generic
+#
+# EDIT the submit command for your site (marked <<<): the parallel-environment name
+# after -pe (often "smp", "make", or "threads") and the memory resource (some sites use
+# h_vmem, others mem_free / m_mem_free) vary between clusters — check `qconf -spl`.
+
+executor: cluster-generic
+jobs: 64
+use-conda: true
+printshellcmds: true
+rerun-incomplete: true
+latency-wait: 60
+
+default-resources:
+  mem_mb: 8000
+  runtime: 120              # minutes
+  threads: 4
+
+# qsub: -cwd run in workdir, -V inherit env, -pe <PE> {threads} request cores,
+# -l h_vmem per-core memory, -l h_rt walltime (SGE wants H:MM:SS).
+# {resources.mem_mb}, {threads}, {resources.runtime} are filled per job by Snakemake.
+#   <<< EDIT: "smp" is the parallel-environment name — change to yours (qconf -spl).
+#   <<< EDIT: some sites use mem_free/m_mem_free instead of h_vmem.
+# (Keep it a single line — do not add inline # comments inside this quoted string.)
+cluster-generic-submit-cmd:
+  "qsub -cwd -V -terse -pe smp {threads} -l h_vmem={resources.mem_mb}M -l h_rt=00:{resources.runtime}:00 -o .snakemake/sge_logs/ -e .snakemake/sge_logs/"
+cluster-generic-cancel-cmd: "qdel"
+
+set-threads:
+  kraken2: 16
+  bracken: 4
+  fastp_pe: 8
+  megahit: 16
+  metaspades: 16
+  flye: 16
+  map_to_contigs: 16
+  metabat2: 8
+  classify_contigs: 16
+  genomad: 16
+  gtdbtk: 16
+
+set-resources:
+  kraken2:
+    mem_mb: 64000
+    runtime: 240
+  classify_contigs:
+    mem_mb: 64000
+  megahit:
+    mem_mb: 48000
+    runtime: 720
+  flye:
+    mem_mb: 64000
+    runtime: 1440
+  gtdbtk:
+    mem_mb: 128000
+    runtime: 720

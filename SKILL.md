@@ -198,6 +198,18 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   ont: 1000}` > global `bracken.read_length`. The DB must have that `databaseXmers` built.
 - **Reproducibility**: `Dockerfile` (core image) + `containers/README.md` (conda-lock for
   bit-exact pins, Apptainer/Singularity). Per-rule conda envs via `metagx run --use-conda`.
+- **HPC / schedulers** (`metagx run --executor <name>`): the same workflow submits to a cluster
+  via a bundled Snakemake profile. `metagx schedulers` lists the backends — **local** (fat node,
+  no scheduler), **slurm** and **lsf** (native Snakemake v8 plugins), **sge** (SGE/UGE/OGS),
+  **pbs** (PBS Pro/TORQUE), and **generic** (any other: HTCondor/Moab/OAR/Flux). slurm/lsf use
+  native plugins; sge/pbs/generic drive the `cluster-generic` executor with an explicit, **site-
+  editable `qsub`/`bsub` submit command**. Each bundled profile under `workflow/profiles/<name>/`
+  must be edited once for your site (partition/account/queue, parallel-environment, memory
+  resource) — they ship with `CHANGE_ME` placeholders and per-rule thread/memory sizing.
+  `--slurm` is a back-compat alias for `--executor slurm`; `--profile <dir>` points at a custom
+  external profile. The required plugin (`snakemake-executor-plugin-{slurm,lsf,cluster-generic}`)
+  must be in the env. `--executor` is exposed on every surface (CLI, MCP `run_pipeline`,
+  HTTP `build-and-run`), and the backends come from one registry (`metagx/schedulers.py`).
 - **Host removal** (`host_removal: {genome: <fasta>}`): a first-class pre-classification step
   — maps reads to the host and keeps the unmapped, so the *whole* pipeline runs host-depleted
   (accuracy + PHI). Single-end for now.
@@ -246,9 +258,9 @@ platforms are single-end. Subsampling is single-end only for now.
 
 ## Other clients
 - **MCP** (Claude Desktop, Cursor, any MCP client): `python mcp_server.py`. Tools:
-  `list_pipeline_tools`, `list_presets`, `get_preset`, `get_parameters`, `get_interview`,
-  `build_config`, `run_pipeline`, `get_results`, `generate_report`, `generate_paper`,
-  `compare_platforms`.
+  `list_pipeline_tools`, `list_presets`, `get_preset`, `list_schedulers`, `get_parameters`,
+  `get_interview`, `build_config`, `run_pipeline` (with `executor`), `get_results`,
+  `generate_report`, `generate_paper`, `compare_platforms`.
 - **Web agents** (ChatGPT Actions, Gemini, Perplexity): `uvicorn mcp_server:app` exposes
   `/api/v1/tools`, `/api/v1/interview/{tool}`, `/api/v1/build-and-run`.
 - **No tools at all** (plain chat, Ollama): paste `prompts/INTERVIEW.md`.

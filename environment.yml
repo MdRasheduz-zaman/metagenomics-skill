@@ -34,7 +34,10 @@ dependencies:
   - prodigal >=2.6
   # workflow + python libs
   - snakemake-minimal >=8.10
-  - snakemake-executor-plugin-slurm   # for `metagx run --slurm` on HPC
+  - snakemake-executor-plugin-slurm   # for `metagx run --executor slurm` on HPC
+  # Other HPC backends — install the one your cluster uses (see `metagx schedulers`):
+  #   - snakemake-executor-plugin-lsf              # --executor lsf
+  #   - snakemake-executor-plugin-cluster-generic  # --executor sge | pbs | generic
   - pandas >=2.2
   - matplotlib >=3.8
   - pyyaml >=6.0

@@ -1,0 +1,61 @@
+# metagx LSF profile — IBM Spectrum LSF / OpenLAVA clusters (bsub).
+#   metagx run --config config.yaml --executor lsf
+#
+# Native Snakemake v8 plugin. Install it in the env first:
+#   pip install snakemake-executor-plugin-lsf      (or conda install -c bioconda ...)
+#
+# EDIT the line marked <<< before first use (your queue; project if your site needs one).
+# Each rule becomes its own bsub job sized by the resources below.
+
+executor: lsf
+jobs: 64                      # max concurrent cluster jobs
+use-conda: true              # auto-provision per-rule conda envs (domain tools) on the node
+printshellcmds: true
+rerun-incomplete: true
+latency-wait: 60
+
+default-resources:
+  lsf_queue: "CHANGE_ME_QUEUE"     # <<< e.g. "normal" / "long"
+  # lsf_project: "CHANGE_ME_PROJ"  # uncomment if your site requires -P
+  mem_mb: 8000
+  runtime: 120                     # minutes (mapped to bsub -W)
+
+# Threads per rule (kraken2/assembly/mapping scale well).
+set-threads:
+  kraken2: 16
+  bracken: 4
+  fastp_pe: 8
+  fastp_se: 8
+  megahit: 16
+  metaspades: 16
+  flye: 16
+  map_to_contigs: 16
+  metabat2: 8
+  classify_contigs: 16
+  genomad: 16
+  gtdbtk: 16
+  checkm2: 16
+
+# Memory / walltime per rule — kraken2/GTDB-Tk track DB size; tune for yours.
+set-resources:
+  kraken2:
+    mem_mb: 64000
+    runtime: 240
+  classify_contigs:
+    mem_mb: 64000
+  bracken:
+    mem_mb: 32000
+  megahit:
+    mem_mb: 48000
+    runtime: 720
+  metaspades:
+    mem_mb: 64000
+    runtime: 720
+  flye:
+    mem_mb: 64000
+    runtime: 1440
+  gtdbtk:
+    mem_mb: 128000
+    runtime: 720
+  checkm2:
+    mem_mb: 32000
