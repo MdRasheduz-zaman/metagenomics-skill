@@ -33,6 +33,10 @@ caught real bugs that dry-run cannot:
   bundled `.conda/phylogenetics` env (real alignment + Newick tree + plot; A/B clades
   recovered). Fixed: `newick_stats` counted FastTree internal-node support values as leaves.
   Gated real-execution test added (skips in CI).
+- **Functional / AMR (ABRicate)** — ran `abricate --db card` (real tool + bundled CARD/NCBI/
+  ResFinder/VFDB DBs, installed osx-64) on the real ont_sim contigs (valid output, 0 hits =
+  correct for viral) AND on an ErmA positive-control fixture (correctly detected the resistance
+  gene). Gated real-run test added (`tests/test_functional_amr.py`, skips without ABRicate).
 - **Core profiling + cross-sample stats** — fastp → kraken2 → Bracken → `modules.stats` on
   the viral DB + 4 samples (`metagx-bio` env). The new diversity outputs (Chao1/ACE/Good's
   coverage, analytic rarefaction, Jaccard, core microbiome) and the diversity-aware advisor
