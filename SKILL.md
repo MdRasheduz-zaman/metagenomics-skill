@@ -44,6 +44,12 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    `kraken2`, `fastp`, `bracken`). Ask the returned questions in plain language, one
    cluster at a time, showing defaults. Use `metagx params <tool>` for the full advanced
    flag list. Offer the **confidence sweep** as the headline feature.
+   **Skip what the request already answers, but say so.** The interview is a funnel
+   (goal/preset → platform → data → per-module params); if the user's request already fixes
+   the goal, platform, or dataset, start at the first *unresolved* decision instead of
+   re-asking. When you skip steps, name them in one line ("goal, platform, and dataset are set
+   by your request — starting at the differential parameters") so the entry point is
+   transparent.
 4. **Write the config.** Assemble answers (plus any `preset`) into the `build_config`
    kwargs and either:
    - write an `answers.json` and run `metagx build-config answers.json`, or
@@ -194,6 +200,15 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   so it works for classify-only or assembly-only sets. See experiments 07–08 and
   `BENCHMARKING-DATASETS.md` for valid comparison design (match the abundance model + depth, or
   differences are confounded).
+- **Report scope = one project.** A `metagx report`/`paper` covers exactly one project (one
+  config = one sample set + the modules enabled on it). All enabled modules combine into that
+  single report — adding a module to the *same* data means re-running the *same* config/project,
+  and the report regenerates over everything (it grows; you don't get a second paper). Switching
+  the **data or the question** is a new project → a new report, and that is correct, not
+  fragmentation — stapling unrelated analyses into one paper would misrepresent them. The one
+  case where you legitimately combine *across* projects is a **comparison** (same community,
+  different platforms/params): that is a deliberate meta-analysis via `metagx compare`
+  (`scripts/compare_platforms.py`), not automatic concatenation of per-project reports.
 
 ## Input handling (auto-dispatched by `platform` + `layout`)
 | Platform | QC | Assembly | minimap2 preset |

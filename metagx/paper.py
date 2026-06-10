@@ -58,7 +58,7 @@ def _fig(path: str, outdir: str, caption: str, label: str, width: str = "0.8") -
     """A figure float referencing an image by path relative to the report dir."""
     rel = os.path.relpath(path, outdir)
     return (
-        "\\begin{figure}[ht]\n\\centering\n"
+        "\\begin{figure}[H]\n\\centering\n"
         f"\\includegraphics[width={width}\\linewidth]{{{rel}}}\n"
         f"\\caption{{{esc(caption)}}}\n\\label{{fig:{label}}}\n\\end{{figure}}\n"
     )
@@ -73,7 +73,7 @@ def _table(header: List[str], rows: List[List[Any]], caption: str, label: str,
     head = " & ".join(f"\\textbf{{{esc(h)}}}" for h in header) + " \\\\\n\\hline\n"
     body = "".join(" & ".join(esc(c) for c in r) + " \\\\\n" for r in rows)
     return (
-        "\\begin{table}[ht]\n\\centering\n\\small\n"
+        "\\begin{table}[H]\n\\centering\n\\small\n"
         f"\\caption{{{esc(caption)}}}\n\\label{{tab:{label}}}\n"
         f"\\begin{{tabular}}{{{cols}}}\n\\hline\n{head}{body}\\hline\n"
         "\\end{tabular}\n\\end{table}\n"
@@ -369,8 +369,10 @@ def build_tex(cfg: Dict[str, Any], manifest: Dict[str, Any]) -> str:
     )
     refs_block = ""
     if bib:
+        # \clearpage flushes any still-pending floats before References, so a table/figure can
+        # never land after the bibliography (tables/figures also use [H] to pin them in place).
         refs_block = (
-            "\\begin{thebibliography}{99}\n" + bib + "\n\\end{thebibliography}\n"
+            "\\clearpage\n\\begin{thebibliography}{99}\n" + bib + "\n\\end{thebibliography}\n"
         )
     return preamble + head + abstract + body + refs_block + "\\end{document}\n"
 
