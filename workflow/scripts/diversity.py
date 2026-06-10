@@ -25,7 +25,8 @@ def _write_tsv(path, header, rows):
 
 
 def main(bracken_combined, label, outdir, out_alpha, out_beta, out_pcoa, out_json,
-         out_barplot, out_pcoa_png, top_n=15):
+         out_barplot, out_pcoa_png, out_rarefaction, out_rarefaction_png,
+         out_core, out_jaccard, top_n=15, core_prevalence=0.8):
     os.makedirs(outdir, exist_ok=True)
     with open(bracken_combined) as fh:
         rows = [r for r in csv.DictReader(fh, delimiter="\t")
@@ -49,14 +50,30 @@ def main(bracken_combined, label, outdir, out_alpha, out_beta, out_pcoa, out_jso
                 for t in range(len(taxa))])
 
     alpha = dv.alpha_table(samples, mat)
-    _write_tsv(out_alpha, ["sample", "richness", "shannon", "simpson", "pielou_evenness"],
-               [[a["sample"], a["richness"], a["shannon"], a["simpson"], a["pielou_evenness"]]
-                for a in alpha])
+    alpha_cols = ["sample", "richness", "chao1", "ace", "goods_coverage",
+                  "shannon", "simpson", "pielou_evenness"]
+    _write_tsv(out_alpha, alpha_cols, [[a[c] for c in alpha_cols] for a in alpha])
 
     bc = dv.braycurtis(mat)
     _write_tsv(out_beta, ["sample"] + samples,
                [[samples[i]] + [round(bc[i, j], 4) for j in range(len(samples))]
                 for i in range(len(samples))])
+
+    # presence/absence beta (Jaccard) — complements abundance-based Bray-Curtis
+    jac = dv.jaccard(mat)
+    _write_tsv(out_jaccard, ["sample"] + samples,
+               [[samples[i]] + [round(jac[i, j], 4) for j in range(len(samples))]
+                for i in range(len(samples))])
+
+    # rarefaction (analytic Hurlbert) — did we sequence deeply enough?
+    rare_curves = {s: dv.rarefaction_curve(mat[i]) for i, s in enumerate(samples)}
+    _write_tsv(out_rarefaction, ["sample", "depth", "expected_richness"],
+               [[s, d, r] for s in samples for d, r in rare_curves[s]])
+
+    # core microbiome — taxa shared across >= core_prevalence of samples
+    core = dv.core_taxa(samples, taxa, mat, prevalence=core_prevalence)
+    _write_tsv(out_core, ["taxon", "prevalence", "mean_rel_abundance"],
+               [[c["taxon"], c["prevalence"], c["mean_rel_abundance"]] for c in core])
 
     coords, explained = dv.pcoa(bc, n_axes=2)
     _write_tsv(out_pcoa, ["sample", "PCo1", "PCo2"],
@@ -94,9 +111,28 @@ def main(bracken_combined, label, outdir, out_alpha, out_beta, out_pcoa, out_jso
     else:
         open(out_pcoa_png, "a").close()  # placeholder so the target exists
 
+    # --- rarefaction saturation curves (one line per sample) ---
+    if any(rare_curves.values()):
+        plt.figure(figsize=(7, 5))
+        for s in samples:
+            if rare_curves[s]:
+                xs, ys = zip(*rare_curves[s])
+                plt.plot(xs, ys, marker="o", markersize=3, label=s)
+        plt.xlabel("reads sampled")
+        plt.ylabel("expected taxa (richness)")
+        plt.title("Rarefaction curves (flat = sequenced deeply enough)")
+        plt.legend(fontsize=7)
+        plt.tight_layout()
+        plt.savefig(out_rarefaction_png, dpi=120)
+        plt.close()
+    else:
+        open(out_rarefaction_png, "a").close()
+
     with open(out_json, "w") as fh:
         json.dump({"n_samples": len(samples), "n_taxa": len(taxa), "label": label,
-                   "alpha": alpha, "pcoa_explained": [round(float(x), 4) for x in explained]},
+                   "alpha": alpha, "pcoa_explained": [round(float(x), 4) for x in explained],
+                   "core_taxa": core, "core_prevalence_threshold": core_prevalence,
+                   "rarefaction": {s: rare_curves[s] for s in samples}},
                   fh, indent=2)
 
 
@@ -104,4 +140,7 @@ if __name__ == "__main__":
     sm = snakemake  # noqa: F821
     main(sm.input.bracken, sm.params.label, sm.params.outdir,
          sm.output.alpha, sm.output.beta, sm.output.pcoa, sm.output.json,
-         sm.output.barplot, sm.output.pcoa_png)
+         sm.output.barplot, sm.output.pcoa_png,
+         sm.output.rarefaction, sm.output.rarefaction_png,
+         sm.output.core, sm.output.jaccard,
+         core_prevalence=float(getattr(sm.params, "core_prevalence", 0.8)))

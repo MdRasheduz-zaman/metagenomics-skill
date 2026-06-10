@@ -8,12 +8,17 @@ rule diversity:
     output:
         alpha=f"{OUT}/stats/alpha_diversity.tsv",
         beta=f"{OUT}/stats/beta_braycurtis.tsv",
+        jaccard=f"{OUT}/stats/beta_jaccard.tsv",
         pcoa=f"{OUT}/stats/pcoa.tsv",
         json=f"{OUT}/stats/diversity.json",
         barplot=f"{OUT}/stats/composition_barplot.png",
         pcoa_png=f"{OUT}/stats/pcoa.png",
+        rarefaction=f"{OUT}/stats/rarefaction.tsv",
+        rarefaction_png=f"{OUT}/stats/rarefaction.png",
+        core=f"{OUT}/stats/core_taxa.tsv",
     params:
         label=READ_LABEL,
         outdir=f"{OUT}/stats",
+        core_prevalence=config.get("stats", {}).get("core_prevalence", 0.8),
     script:
         "../scripts/diversity.py"

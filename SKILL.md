@@ -145,8 +145,14 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   (SILVA/GreenGenes/UNITE) + the OTU/Emu output. An all-amplicon run with assembly modules on
   is rejected with a clear error.
 - **Cross-sample stats** (`modules.stats`, needs `abundance` + ≥2 samples): α-diversity
-  (Shannon/Simpson/richness/Pielou), β-diversity (Bray–Curtis), PCoA ordination, TSS + CLR
-  matrices, composition barplot + PCoA plot under `results/<project>/stats/`. Pure-Python.
+  (Shannon/Simpson/richness/Pielou **+ Chao1 & ACE asymptotic richness estimators + Good's
+  coverage**), β-diversity (Bray–Curtis abundance **+ Jaccard presence/absence**), PCoA
+  ordination, TSS + CLR matrices, **analytic rarefaction curves** (`rarefaction.{tsv,png}` —
+  "did I sequence deeply enough?", Hurlbert's expected richness, no random subsampling), and the
+  **core microbiome** (`core_taxa.tsv` — taxa shared across ≥`stats.core_prevalence` of samples,
+  default 0.8), plus composition barplot + PCoA plot under `results/<project>/stats/`. Pure-Python
+  (numpy only), so it is fully unit-tested. Chao1/ACE/rarefaction are count-based (est. reads
+  rounded to integers); the curve flattening toward observed richness means the depth was enough.
 - **Differential abundance** (`modules.differential`, needs `abundance` + a `group` column):
   answers *which taxa differ between conditions?* Tests CLR-transformed Bracken counts between
   two groups (e.g. case/control) with a two-sided **permutation test** + Benjamini-Hochberg
