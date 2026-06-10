@@ -1,5 +1,0 @@
-#!/Users/md.rasheduzzaman/Downloads/metagenomics-skill/.conda/phylogenetics/bin/python3.11
-
-import pydoc
-if __name__ == '__main__':
-    pydoc.cli()
