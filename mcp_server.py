@@ -251,7 +251,7 @@ def get_results(config_path: str = "config.yaml") -> str:
 
 
 @mcp.tool()
-def compare_platforms(manifest: str = "", outdir: str = "") -> str:
+def compare_platforms(manifest: str = "", outdir: str = "", paper: bool = False) -> str:
     """Compare the SAME sample sequenced on multiple platforms (ONT/Illumina/PacBio/...).
 
     Reads a TSV manifest (columns: label, platform, platform_class, kreport, reads, contigs,
@@ -260,11 +260,12 @@ def compare_platforms(manifest: str = "", outdir: str = "") -> str:
     diversity, genome-length bias) and assembly (contigs, N50, reference breadth via minimap2,
     read concordance). Defaults to config/cross_platform.manifest.tsv ->
     results/experiments/cross_platform_comparison/. Needs minimap2/samtools on PATH for the
-    assembly-recovery metrics. Returns the output directory.
+    assembly-recovery metrics. Set paper=True to also write an IMRaD comparison manuscript
+    (comparison_paper.{tex,pdf}; needs pdflatex). Returns the output directory.
     """
     from metagx import compare
     try:
-        out = compare.run(manifest=manifest or None, outdir=outdir or None)
+        out = compare.run(manifest=manifest or None, outdir=outdir or None, paper=paper)
     except FileNotFoundError as e:
         return f"error: {e}"
     return json.dumps({"outdir": out}, indent=2)

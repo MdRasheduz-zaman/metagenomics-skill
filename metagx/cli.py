@@ -165,7 +165,7 @@ def cmd_results(args) -> int:
 
 def cmd_compare(args) -> int:
     from . import compare  # lazy: pulls matplotlib/pandas, only when actually comparing
-    compare.run(manifest=args.manifest, outdir=args.outdir)
+    compare.run(manifest=args.manifest, outdir=args.outdir, paper=args.paper)
     return 0
 
 
@@ -241,6 +241,8 @@ def build_parser() -> argparse.ArgumentParser:
                          "(default: config/cross_platform.manifest.tsv)")
     sp.add_argument("--outdir", default=None,
                     help="output dir (default: results/experiments/cross_platform_comparison)")
+    sp.add_argument("--paper", action="store_true",
+                    help="also write an IMRaD comparison manuscript (comparison_paper.{tex,pdf}; needs pdflatex)")
     sp.set_defaults(func=cmd_compare)
 
     sp = sub.add_parser("report", help="generate provenance manifest + Methods + report")

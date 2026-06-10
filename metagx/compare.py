@@ -466,9 +466,152 @@ def fig_read_length(results: List[Result], path: str) -> None:
     plt.close(fig)
 
 
+# --------------------------------------------------------------------------- paper
+def _fmt(v, dash="--"):
+    return dash if v is None or v == "" else v
+
+
+def build_paper_tex(results: List[Result], outdir: str, manifest: str) -> str:
+    """A LaTeX IMRaD comparison manuscript (pdflatex-compiled, like metagx paper).
+
+    Reuses metagx.paper's LaTeX helpers (esc/_table/_fig/_compile) so escaping, the float
+    package, [H] placement, and the pre-bibliography \\clearpage all match the per-project
+    papers. Every number is read back from the comparison results, not fabricated.
+    """
+    from . import __version__
+    from . import paper as P
+    import datetime as _dt
+
+    rows = [r.row for r in results]
+    n = len(rows)
+    has_class = any("classified_pct" in r for r in rows)
+    has_asm = any("asm_contigs" in r for r in rows)
+    ref = next((r.spec.reference for r in results if r.spec.reference), "")
+    n_ref = len(genome_lengths(_abs(ref))) if ref and os.path.exists(_abs(ref)) else 0
+    read_counts = [r["reads"] for r in rows if r.get("reads")]
+    depth_confound = bool(read_counts) and max(read_counts) >= 3 * min(read_counts)
+    names = ", ".join(r["platform"] for r in rows)
+
+    title = (f"Cross-platform comparison of {n} sequencing "
+             f"technolog{'y' if n == 1 else 'ies'}"
+             + (f" on a shared {n_ref}-genome reference" if n_ref else ""))
+
+    # ---- abstract ----
+    cl = [r["classified_pct"] for r in rows if r.get("classified_pct") is not None]
+    abstract_bits = [
+        f"We compared {n} sequencing platform(s) ({P.esc(names)}) processed through the same "
+        f"metagx pipeline" + (f" against a shared {n_ref}-genome reference" if n_ref else "") + "."]
+    if has_class and cl:
+        abstract_bits.append(
+            f"Read classification ranged from {min(cl)}\\% to {max(cl)}\\% of reads.")
+    if has_asm:
+        abstract_bits.append(
+            "De novo assembly contiguity, reference breadth, and read-to-contig concordance "
+            "were compared side by side.")
+    if depth_confound:
+        abstract_bits.append(
+            "Sequencing depth is NOT matched across platforms, so differences reflect the "
+            "joint effect of platform and depth; results are interpreted qualitatively.")
+    abstract = " ".join(abstract_bits)
+
+    # ---- methods ----
+    methods = (
+        f"Each platform was processed independently and the per-platform outputs were compared "
+        f"with \\texttt{{metagx compare}} over the manifest \\texttt{{{P.esc(os.path.basename(manifest))}}}. ")
+    if has_class:
+        methods += ("Classification metrics (classified fraction, species recovered, Shannon and "
+                    "Pielou diversity, and the genome-length bias defined as the Spearman correlation "
+                    "between reference genome length and assigned reads) were read from each kraken2 "
+                    "report. ")
+    if has_asm:
+        methods += ("Assembly metrics were computed from each platform's contigs; reference breadth "
+                    "(percent of reference bases covered, and genomes recovered at $\\geq$50\\% length) "
+                    "used minimap2 contig-to-reference alignment, and read concordance is the percent "
+                    "of reads mapping back to their own contigs. ")
+
+    # ---- results: tables + figures ----
+    results_tex = ""
+    if has_class:
+        hdr = ["Platform", "Reads", "Classified \\%", "Species", "Shannon", "Pielou", "Len-bias $\\rho$"]
+        trows = [[r["platform"], _fmt(r.get("reads")), _fmt(r.get("classified_pct")),
+                  f'{_fmt(r.get("species_recovered"))}/{_fmt(r.get("species_total"))}',
+                  _fmt(r.get("shannon")), _fmt(r.get("pielou")), _fmt(r.get("length_bias_spearman"))]
+                 for r in rows]
+        results_tex += P._table(hdr, trows, "Read classification across platforms.", "class", wrap_first=True)
+    if has_asm:
+        hdr = ["Platform", "Contigs", "N50", "Longest", "Breadth \\%", "Genomes", "Concord. \\%"]
+        trows = [[r["platform"], _fmt(r.get("asm_contigs")), _fmt(r.get("asm_n50")),
+                  _fmt(r.get("asm_longest")), _fmt(r.get("ref_breadth_pct")),
+                  _fmt(r.get("genomes_recovered")), _fmt(r.get("read_concordance_pct"))]
+                 for r in rows]
+        results_tex += P._table(hdr, trows, "De novo assembly across platforms.", "asm", wrap_first=True)
+    for fn, cap, lab in [
+        ("fig_read_length.png", "Read-length distribution by platform.", "rl"),
+        ("fig_assembly.png", "Assembly contiguity (N50) and fragmentation (contig count).", "asmfig"),
+        ("fig_recovery.png", "Reference breadth and read-to-contig concordance.", "rec"),
+    ]:
+        if os.path.exists(os.path.join(outdir, fn)):
+            results_tex += P._fig(os.path.join(outdir, fn), outdir, cap, lab)
+
+    # ---- discussion (data-driven caveats) ----
+    disc = ["This comparison should be read in light of the design caveats below."]
+    biased = [r["platform"] for r in rows if isinstance(r.get("length_bias_spearman"), (int, float))
+              and r["length_bias_spearman"] >= 0.5]
+    if biased:
+        disc.append(
+            f"A strong genome-length bias (Spearman $\\rho \\geq 0.5$) is present for "
+            f"{P.esc(', '.join(biased))}, where uniform-coverage simulation makes assigned reads "
+            f"scale with genome length; treat the abundance profile accordingly.")
+    if depth_confound:
+        disc.append(
+            "Because read depth differs across platforms, breadth/contiguity differences mix "
+            "platform and depth effects. A depth-matched re-simulation under one abundance model "
+            "(see the project BENCHMARKING-DATASETS note) isolates the platform effect.")
+    if has_asm and any(r.get("asm_contigs") == 0 for r in rows):
+        failed = [r["platform"] for r in rows if r.get("asm_contigs") == 0]
+        disc.append(
+            f"Assembly produced no contigs for {P.esc(', '.join(failed))}, a coverage-floor effect: "
+            f"classification can succeed at depths where assembly cannot.")
+    disc.append("All inputs and per-platform commands are recorded in their project manifests, so "
+                "the comparison is reproducible via \\texttt{metagx compare}.")
+
+    preamble = (
+        "\\documentclass[11pt]{article}\n\\usepackage[utf8]{inputenc}\n"
+        "\\usepackage[margin=1in]{geometry}\n\\usepackage{graphicx}\n\\usepackage{hyperref}\n"
+        "\\usepackage{float}\n\\setlength{\\parskip}{0.5em}\n\\setlength{\\parindent}{0pt}\n")
+    head = (f"\\title{{{P.esc(title)}}}\n\\author{{Generated by metagx {P.esc(__version__)}}}\n"
+            f"\\date{{{_dt.date.today().isoformat()}}}\n\\begin{{document}}\n\\maketitle\n")
+    # references relevant to what ran
+    refs = []
+    if has_class:
+        refs += ["Wood DE, Lu J, Langmead B. Improved metagenomic analysis with Kraken 2. Genome Biology. 2019;20:257.",
+                 "Lu J, et al. Bracken: estimating species abundance in metagenomics data. PeerJ Computer Science. 2017;3:e104."]
+    if has_asm:
+        refs += ["Kolmogorov M, et al. metaFlye: scalable long-read metagenome assembly using repeat graphs. Nature Methods. 2020;17:1103-1110.",
+                 "Li D, et al. MEGAHIT: an ultra-fast single-node solution for large and complex metagenomics assembly. Bioinformatics. 2015;31:1674-1676.",
+                 "Li H. Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics. 2018;34:3094-3100."]
+    bib = "\n".join(f"\\bibitem{{ref{i}}} {P.esc(c)}" for i, c in enumerate(refs, 1))
+    refs_block = ("\\clearpage\n\\begin{thebibliography}{99}\n" + bib + "\n\\end{thebibliography}\n") if bib else ""
+
+    return (preamble + head
+            + "\\begin{abstract}\n" + abstract + "\n\\end{abstract}\n"
+            + "\\section{Introduction}\n"
+            + (f"The same biological sample sequenced on multiple platforms isolates platform effects "
+               f"from biology. Here {n} platform(s) sharing one reference are compared on read "
+               f"classification" + (" and de novo assembly" if has_asm else "") + ".\n\n")
+            + "\\section{Methods}\n" + methods + "\n\n"
+            + "\\section{Results}\n" + results_tex + "\n\n"
+            + "\\section{Discussion}\n" + " ".join(disc) + "\n\n"
+            + refs_block + "\\end{document}\n")
+
+
 # --------------------------------------------------------------------------- main
-def run(manifest: Optional[str] = None, outdir: Optional[str] = None) -> str:
-    """Run the comparison; return the output directory. Engine used by CLI + script."""
+def run(manifest: Optional[str] = None, outdir: Optional[str] = None,
+        paper: bool = False) -> str:
+    """Run the comparison; return the output directory. Engine used by CLI + script.
+
+    When ``paper`` is set, also write paper.tex and compile paper.pdf (needs pdflatex).
+    """
     manifest = manifest or DEFAULT_MANIFEST
     outdir = outdir or DEFAULT_OUTDIR
     os.makedirs(outdir, exist_ok=True)
@@ -489,14 +632,27 @@ def run(manifest: Optional[str] = None, outdir: Optional[str] = None) -> str:
     with pd.option_context("display.max_columns", None, "display.width", 200):
         print(table.to_string(index=False))
     print(f"\nWrote {tsv} + comparison.json + fig_*.png to {outdir}")
+
+    if paper:
+        from . import paper as P
+        tex_path = os.path.join(outdir, "comparison_paper.tex")
+        with open(tex_path, "w") as fh:
+            fh.write(build_paper_tex(results, outdir, manifest))
+        pdf = P._compile(tex_path)
+        if pdf:
+            print(f"Wrote comparison paper: {pdf}")
+        else:
+            print(f"Wrote {tex_path} (pdflatex not found — install a LaTeX engine to compile the PDF)")
     return outdir
 
 
 def main(argv: Optional[List[str]] = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
+    argv = list(sys.argv[1:] if argv is None else argv)
+    paper = "--paper" in argv
+    argv = [a for a in argv if a != "--paper"]
     manifest = argv[0] if len(argv) > 0 else None
     outdir = argv[1] if len(argv) > 1 else None
-    run(manifest, outdir)
+    run(manifest, outdir, paper=paper)
     return 0
 
 

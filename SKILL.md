@@ -197,7 +197,9 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   It emits an integrated table + figures comparing **classification** (classified %, species
   recovered, diversity, genome-length bias) and **assembly** (contigs, N50, longest, reference
   breadth via minimap2, read-to-contig concordance). Any blank manifest cell skips that block,
-  so it works for classify-only or assembly-only sets. See experiments 07–08 and
+  so it works for classify-only or assembly-only sets. Add `--paper` to also emit an IMRaD
+  comparison manuscript (`comparison_paper.{tex,pdf}`, pdflatex — same layout as `metagx paper`).
+  See experiments 07–08 and
   `BENCHMARKING-DATASETS.md` for valid comparison design (match the abundance model + depth, or
   differences are confounded).
 - **Report scope = one project.** A `metagx report`/`paper` covers exactly one project (one
