@@ -90,7 +90,10 @@ def run_fasttree(aligned: str, output_tree: str, ft_cfg: dict) -> None:
 def newick_stats(tree_path: str) -> dict:
     with open(tree_path) as fh:
         text = fh.read().strip()
-    leaves = len(re.findall(r"[^(,:)\s]+:", text)) or text.count(",") + 1
+    # Leaves are names preceded by '(' or ',' — NOT internal-node support values,
+    # which follow ')'. (FastTree writes support like ")0.993:", which a naive
+    # "token before a colon" count would wrongly treat as tips.)
+    leaves = len(re.findall(r"[(,]\s*([^(),:;\s]+)\s*:", text)) or text.count(",") + 1
     branch_lengths = [float(x) for x in re.findall(r":([0-9.eE+-]+)", text)]
     return {
         "n_leaves": leaves,
