@@ -157,11 +157,16 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   (numpy only), so it is fully unit-tested. Chao1/ACE/rarefaction are count-based (est. reads
   rounded to integers); the curve flattening toward observed richness means the depth was enough.
 - **Differential abundance** (`modules.differential`, needs `abundance` + a `group` column):
-  answers *which taxa differ between conditions?* Tests CLR-transformed Bracken counts between
-  two groups (e.g. case/control) with a two-sided **permutation test** + Benjamini-Hochberg
-  FDR (an ALDEx2-lite; pure-Python, no scipy/R). Outputs `stats/differential_abundance.tsv`
-  (per-taxon group means, CLR diff, effect size, p, q, significant), a JSON summary, and a
-  volcano plot. Mark samples with a `group` label in the sheet; needs ≥2 groups and **≥2
+  answers *which taxa differ between conditions?* An **ALDEx2-style** test (pure-Python, no
+  scipy/R): each Bracken count vector is one multinomial draw, so the composition is modelled
+  with a **Dirichlet posterior** `Dir(counts+0.5)`; `differential.mc_samples` (default 128)
+  Monte-Carlo instances are drawn, CLR-transformed, and each run through a two-sided
+  **permutation test**, then the **expected** p-value across instances is Benjamini-Hochberg
+  FDR-controlled (this propagates sampling-depth uncertainty rather than trusting a single
+  point estimate). Set `mc_samples: 1` for the legacy single-CLR point estimate (faster, no
+  uncertainty propagation). Outputs `stats/differential_abundance.tsv` (per-taxon group means,
+  CLR diff, effect size, p, q, significant), a JSON summary (records `method` + `mc_samples`),
+  and a volcano plot. Mark samples with a `group` label in the sheet; needs ≥2 groups and **≥2
   samples per group to run** — but a 2-vs-2 permutation p-value floors at ~0.33, so use more
   replicates for real power. Optional `differential.reference_group` sets the contrast direction.
 - **BGC mining** (`modules.bgc`, needs `assembly`; WGS-only): runs **antiSMASH** on the
@@ -193,7 +198,11 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   same synthetic taxids as `build-db`, so the kraken2-vs-kaiju cross-check lines up). On
   long-read-only data prefer `kaiju` over `metaphlan` (markers are short-read-tuned).
 - **Aggregate report** (`modules.aggregate`, needs `classify`): run-level MultiQC report +
-  interactive Krona taxonomy chart under `results/<project>/report/`.
+  interactive Krona taxonomy chart under `results/<project>/report/`. Krona is built from
+  **kreport2krona text → `ktImportText`** (the kreport's own indented lineage), so it needs **no
+  Krona/NCBI taxonomy database** and works with custom kraken2 DBs whose synthetic taxids aren't
+  in NCBI (the old `ktImportTaxonomy -tax` path silently dropped them). Each sample is a labelled,
+  switchable dataset in the one chart.
 - **Ancient DNA** (`library: ancient` + `modules.damage`, needs `assembly`): short-read PE
   ancient samples are read-merged (fastp `--merge`, collapse overlapping fragments → single
   reads, treated as SE downstream), classified/assembled, then mapped back and run through
