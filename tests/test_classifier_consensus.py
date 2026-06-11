@@ -46,6 +46,28 @@ def test_parse_metaphlan(tmp_path):
     assert d == {"escherichia coli": 63.5}
 
 
+def test_parse_kaiju_table_drops_nonspecies_rows(tmp_path):
+    # Exact rows kaiju2table emits on a viral DB (verified by real run). Three are NOT species
+    # and must be dropped: "unclassified", the DB-dependent "cannot be assigned to a (non-viral)
+    # species", and the 0-read higher-rank catch-all "Viruses" (taxid 10239).
+    kj = tmp_path / "s.kaiju.species.tsv"
+    kj.write_text(
+        "file\tpercent\treads\ttaxon_id\ttaxon_name\n"
+        "s.kaiju\t4.235000\t847\t1008\tPowassan virus, complete genome\n"
+        "s.kaiju\t3.680000\t736\t1001\tDengue virus 1, complete genome\n"
+        "s.kaiju\t0.000000\t0\t10239\tViruses\n"
+        "s.kaiju\t0.445000\t89\tNA\tcannot be assigned to a (non-viral) species\n"
+        "s.kaiju\t51.670003\t10334\tNA\tunclassified\n"
+    )
+    d = cc.parse_kaiju_table(str(kj))
+    assert len(d) == 2                    # only the two real species survive
+    assert any("powassan" in k for k in d)
+    assert any("dengue" in k for k in d)
+    assert "cannot be" not in d           # prefix-matched and dropped
+    assert "viruses" not in d             # 0-read catch-all dropped
+    assert "unclassified" not in d
+
+
 def test_concordance_metrics():
     kraken = {"escherichia coli": 60.0, "klebsiella pneumoniae": 30.0, "ghost taxon": 1.0}
     other = {"escherichia coli": 55.0, "klebsiella pneumoniae": 33.0}

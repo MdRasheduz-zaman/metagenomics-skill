@@ -79,6 +79,19 @@ def parse_read_taxa(path):
     return out
 
 
+def bucket(rtax, ctax, parent):
+    """Categorize one read's call (rtax) against its contig's call (ctax). See _CATS."""
+    if ctax == 0:
+        return "contig_unclassified"
+    if rtax == 0:
+        return "read_unclassified"
+    if rtax == ctax:
+        return "concordant_exact"
+    if _related(rtax, ctax, parent):
+        return "concordant_lineage"
+    return "discordant"
+
+
 def main(bam, read_kraken, contig_kraken, nodes_path, sample, out_tsv, out_json):
     contig_tax = parse_contig_taxa(contig_kraken)
     read_tax = parse_read_taxa(read_kraken)
@@ -94,18 +107,7 @@ def main(bam, read_kraken, contig_kraken, nodes_path, sample, out_tsv, out_json)
         if len(f) < 3:
             continue
         qname, rname = f[0], f[2]
-        ctax = contig_tax.get(rname, 0)
-        rtax = read_tax.get(qname, 0)
-        if ctax == 0:
-            cat = "contig_unclassified"
-        elif rtax == 0:
-            cat = "read_unclassified"
-        elif rtax == ctax:
-            cat = "concordant_exact"
-        elif _related(rtax, ctax, parent):
-            cat = "concordant_lineage"
-        else:
-            cat = "discordant"
+        cat = bucket(read_tax.get(qname, 0), contig_tax.get(rname, 0), parent)
         per_contig[rname][cat] += 1
         overall[cat] += 1
     proc.wait()

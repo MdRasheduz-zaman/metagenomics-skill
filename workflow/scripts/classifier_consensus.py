@@ -70,12 +70,20 @@ def parse_kaiju_table(path: str) -> Dict[str, float]:
             if len(cols) <= pi:
                 continue
             name = cols[-1].strip()
-            if not name or name.lower() in {"unclassified", "cannot be assigned to a species"}:
+            low = name.lower()
+            # Drop kaiju's non-species rows. The "cannot be assigned" text is DB-dependent
+            # (e.g. "...to a species" vs "...to a (non-viral) species"), so prefix-match it.
+            if not name or low == "unclassified" or low.startswith("cannot be assigned"):
                 continue
             try:
-                out[_norm(name)] = out.get(_norm(name), 0.0) + float(cols[pi])
+                val = float(cols[pi])
             except ValueError:
                 continue
+            # zero-abundance rows are higher-rank catch-alls (e.g. taxid 10239 "Viruses" at
+            # species rank with 0 reads), not detected species.
+            if val <= 0:
+                continue
+            out[_norm(name)] = out.get(_norm(name), 0.0) + val
     return out
 
 
