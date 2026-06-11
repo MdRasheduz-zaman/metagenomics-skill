@@ -19,7 +19,7 @@ from metagx import differential as da  # noqa: E402
 
 
 def main(bracken_combined, label, groups, out_tsv, out_json, out_png,
-         n_perm=999, fdr=0.05, seed=42, reference_group=None):
+         n_perm=999, fdr=0.05, seed=42, reference_group=None, mc_samples=128):
     os.makedirs(os.path.dirname(out_tsv), exist_ok=True)
     with open(bracken_combined) as fh:
         rows = [r for r in csv.DictReader(fh, delimiter="\t")
@@ -31,7 +31,7 @@ def main(bracken_combined, label, groups, out_tsv, out_json, out_png,
     samples, taxa, mat = dv.build_matrix(rows)
     res_rows, summary = da.differential_abundance(
         samples, taxa, mat, groups, n_perm=n_perm, fdr=fdr, seed=seed,
-        reference_group=reference_group)
+        reference_group=reference_group, mc_samples=mc_samples)
 
     header = list(res_rows[0].keys()) if res_rows else [
         "taxon", "clr_diff", "effect_size", "p_value", "q_value", "significant"]
@@ -73,4 +73,5 @@ if __name__ == "__main__":
     main(sm.input.bracken, sm.params.label, sm.params.groups,
          sm.output.tsv, sm.output.json, sm.output.png,
          n_perm=d.get("n_permutations", 999), fdr=d.get("fdr", 0.05),
-         seed=d.get("seed", 42), reference_group=d.get("reference_group"))
+         seed=d.get("seed", 42), reference_group=d.get("reference_group"),
+         mc_samples=d.get("mc_samples", 128))

@@ -198,16 +198,20 @@ def _validate_differential(diff: Dict[str, Any] | None) -> Dict[str, Any]:
         n_perm = int(diff.get("n_permutations", 999))
         fdr = float(diff.get("fdr", 0.05))
         min_count = int(diff.get("min_count", 1))
+        mc_samples = int(diff.get("mc_samples", 128))
     except (TypeError, ValueError):
         raise registry.ValidationError(
-            "differential: n_permutations/min_count must be ints and fdr a number")
+            "differential: n_permutations/min_count/mc_samples must be ints and fdr a number")
     if n_perm < 99:
         raise registry.ValidationError("differential.n_permutations must be >= 99")
     if not (0 < fdr < 1):
         raise registry.ValidationError("differential.fdr must be in (0, 1)")
+    if mc_samples < 1:
+        raise registry.ValidationError(
+            "differential.mc_samples must be >= 1 (1 = single point estimate; ALDEx2 uses 128)")
     out = {"group_column": str(diff.get("group_column", "group")),
            "n_permutations": n_perm, "fdr": fdr, "min_count": min_count,
-           "seed": int(diff.get("seed", 42))}
+           "mc_samples": mc_samples, "seed": int(diff.get("seed", 42))}
     if diff.get("reference_group"):
         out["reference_group"] = str(diff["reference_group"])
     return out
