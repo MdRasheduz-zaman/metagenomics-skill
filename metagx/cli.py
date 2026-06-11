@@ -192,8 +192,12 @@ def _resolve_profile(args) -> str | None:
 
 def cmd_run(args) -> int:
     profile = _resolve_profile(args)
-    proc = runner.run(config=args.config, cores=args.cores, dry_run=args.dry_run,
-                      use_conda=args.use_conda, profile=profile)
+    try:
+        proc = runner.run(config=args.config, cores=args.cores, dry_run=args.dry_run,
+                          use_conda=args.use_conda, profile=profile)
+    except runner.CondaFrontendError as e:
+        sys.stderr.write(f"error: {e}\n")
+        return 1
     sys.stdout.write(proc.stdout)
     sys.stderr.write(proc.stderr)
     if proc.returncode == 0 and not args.dry_run and not args.no_history:
