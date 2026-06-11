@@ -22,18 +22,29 @@ rule multiqc:
         "multiqc {params.scandir} {params.args}"
 
 
+# Convert each kraken2 report to Krona text (lineage from the report's own indentation) — needs
+# no taxonomy DB, so it works with custom kraken2 DBs whose synthetic taxids aren't in NCBI.
+rule kreport2krona_text:
+    input:
+        kreport=f"{OUT}/kraken2/{{sample}}.{READ_LABEL}.kreport",
+    output:
+        txt=f"{OUT}/report/krona/{{sample}}.krona.txt",
+    script:
+        "../scripts/kreport2krona.py"
+
+
 rule krona:
     input:
-        reports=expand(f"{OUT}/kraken2/{{sample}}.{READ_LABEL}.kreport", sample=list(SAMPLES)),
+        texts=expand(f"{OUT}/report/krona/{{sample}}.krona.txt", sample=list(SAMPLES)),
     output:
         html=f"{OUT}/report/krona.html",
     conda:
         "../envs/aggregate.yaml"
     params:
-        # taxid in column 5, magnitude (reads) in column 3 of the kraken2 report
         args=lambda wc: " ".join(registry.render_args(
-            "krona", config.get("krona", {}),
-            managed={"tax_field": 5, "magnitude_field": 3,
-                     "output": f"{OUT}/report/krona.html", "taxonomy": DB.get("krona", "")})),
+            "krona", config.get("krona", {}), managed={"output": f"{OUT}/report/krona.html"})),
+        # "<file>,<sample>" makes each sample a labelled, switchable dataset in the chart
+        inputs=lambda wc, input: " ".join(
+            f"{t},{os.path.basename(t)[:-len('.krona.txt')]}" for t in input.texts),
     shell:
-        "ktImportTaxonomy {params.args} {input.reports}"
+        "ktImportText {params.args} {params.inputs}"
