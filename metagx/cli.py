@@ -34,6 +34,7 @@ from . import (
     history,
     paper,
     presets,
+    probe,
     registry,
     report,
     runner,
@@ -62,9 +63,21 @@ def cmd_params(args) -> int:
 
 def cmd_interview(args) -> int:
     context = json.loads(args.context) if args.context else {}
+    if args.probe:
+        with open(args.probe) as fh:
+            context.update((json.load(fh).get("context") or {}))
     if args.goal:
         context["goal"] = args.goal
     _print_json(registry.interview_spec(args.tool, max_tier=args.tier, context=context or None))
+    return 0
+
+
+def cmd_probe(args) -> int:
+    res = probe.run(args.samples, max_reads=args.max_reads, max_samples=args.max_samples,
+                    out=args.out, assume_yes=args.yes)
+    if not res.get("measured"):
+        print(res.get("reason", "probe did not run"), file=sys.stderr)
+    _print_json(res.get("context") if args.context_only else res)
     return 0
 
 
@@ -337,7 +350,21 @@ def build_parser() -> argparse.ArgumentParser:
                     help="experimental goal (e.g. strain_resolved); may promote quiet params")
     sp.add_argument("--context", default=None,
                     help='JSON of goal/data facts for promote_when, e.g. \'{"estimated_bases": 6e10}\'')
+    sp.add_argument("--probe", default=None,
+                    help="probe.json from `metagx probe`; loads MEASURED context for promotion")
     sp.set_defaults(func=cmd_interview)
+
+    sp = sub.add_parser("probe",
+                        help="measure read stats from your samples (local, consent-gated) -> context")
+    sp.add_argument("--samples", required=True, help="sample sheet TSV (or inline-validated path)")
+    sp.add_argument("--max-reads", type=int, default=100_000, help="reads sampled per file (cap)")
+    sp.add_argument("--max-samples", type=int, default=None, help="cap number of samples scanned")
+    sp.add_argument("--out", default=None, help="dir to write probe.json + probe.md")
+    sp.add_argument("--yes", action="store_true",
+                    help="grant + remember LOCAL probe consent (data never leaves the machine)")
+    sp.add_argument("--context-only", action="store_true",
+                    help="print just the context dict (for piping into `interview --probe`)")
+    sp.set_defaults(func=cmd_probe)
 
     sub.add_parser("presets", help="list workflow presets with descriptions").set_defaults(func=cmd_presets)
 
