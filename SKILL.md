@@ -40,10 +40,22 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    `amr-surveillance`, `ancient-dna`). A preset
    pre-fills modules + parameters; the user then only adjusts what they care about. This
    replaces most of the interview. Pass the name as `preset` to `build-config`.
+3. **Probe the data first (optional, recommended when reads are local).** Instead of *asking*
+   the user what their data is (they're often wrong about read length / quality / platform),
+   *measure* it: with the user's explicit permission, run
+   `metagx probe --samples <sheet.tsv> --yes` (or MCP `run_probe(..., consent=true)`). It reads
+   only a bounded subsample, **locally**, and emits aggregate stats — never sends data off the
+   machine. The result includes a `context` dict and sample-sheet **mismatch warnings** (e.g. a
+   sample labelled ONT whose reads look Illumina — surface these before running). **Consent
+   rule:** ask before probing; if the user declines or reads aren't accessible, skip it and stay
+   advisory — nothing breaks. Pass the saved `probe.json` to the interview with
+   `metagx interview <tool> --probe probe.json` so promotion fires on *measured* facts.
 3. **Interview / refine.** For each enabled module, run `metagx interview <tool>` (e.g.
-   `kraken2`, `fastp`, `bracken`). Ask the returned questions in plain language, one
-   cluster at a time, showing defaults. Use `metagx params <tool>` for the full advanced
-   flag list. Offer the **confidence sweep** as the headline feature.
+   `kraken2`, `fastp`, `bracken`; add `--probe probe.json` or `--goal <goal>` to surface the
+   params the data/goal make relevant). Ask the returned questions in plain language, one
+   cluster at a time, showing defaults. A `promoted` note on a question means the measured data
+   or stated goal raised it — relay that reason to the user. Use `metagx params <tool>` for the
+   full advanced flag list. Offer the **confidence sweep** as the headline feature.
    **Skip what the request already answers, but say so.** The interview is a funnel
    (goal/preset → platform → data → per-module params); if the user's request already fixes
    the goal, platform, or dataset, start at the first *unresolved* decision instead of

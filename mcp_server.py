@@ -36,6 +36,7 @@ from metagx import (
     history,
     paper,
     presets,
+    probe,
     registry,
     report,
     runner,
@@ -116,6 +117,26 @@ def get_interview(tool: str, max_tier: int = 2, context: dict | None = None) -> 
     params that the goal/data make relevant; promoted items carry a ``promoted`` note.
     """
     return json.dumps(registry.interview_spec(tool, max_tier=max_tier, context=context), indent=2)
+
+
+@mcp.tool()
+def run_probe(samples: str, consent: bool = False, max_reads: int = 100_000,
+              max_samples: int | None = None, out: str = "") -> str:
+    """Measure read stats from the user's samples to drive data-conditioned promotion.
+
+    LOCAL and consent-gated: profiles a bounded head subsample of EVERY sample (read length,
+    quality, GC, duplication, inferred platform), entirely on this machine, emitting only
+    non-reconstructive aggregates — never read sequences or IDs. Returns per-sample profiles,
+    a reconciled project view with sample-sheet mismatch warnings, and a ``context`` dict to
+    pass straight into get_interview(context=).
+
+    You MUST obtain the user's explicit permission before setting consent=True (it reads their
+    read files locally). Without consent this returns {"measured": false} and you should fall
+    back to a-priori suggestions. The probe never sends anything off the machine.
+    """
+    res = probe.run(samples, max_reads=max_reads, max_samples=max_samples,
+                    out=(out or None), assume_yes=consent)
+    return json.dumps(res, indent=2)
 
 
 # --------------------------------------------------------------------------- #
