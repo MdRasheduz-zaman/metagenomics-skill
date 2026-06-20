@@ -6,8 +6,10 @@ platform). The output `context` dict feeds ``registry.interview_spec(context=)``
 goal/data-conditional promotion fires on measured facts, not asserted ones.
 
 Constraints (see docs/spec-probe.md): consent-gated, local-only, never stores read sequences
-or IDs, pure-Python (no scipy, no bio tools on PATH). The one reference-dependent metric in the
-spec — host fraction — is out of scope for this MVP and reported as null.
+or IDs, pure-Python core (no scipy). The one reference-dependent metric — host fraction — is
+optional: when a host index and minimap2 are both available it maps the subsample to the host
+and reports the aligned fraction; otherwise it degrades to null. Mapping uses a transient,
+local temp file that is deleted immediately; the persisted output stays aggregate-only.
 """
 
 from __future__ import annotations
@@ -15,6 +17,9 @@ from __future__ import annotations
 import csv
 import gzip
 import os
+import shutil
+import subprocess
+import tempfile
 from typing import Any, Dict, List, Optional
 
 from . import consent
@@ -26,15 +31,18 @@ LONG_MIN_LEN = 400      # median length above this => long-read
 HIFI_MAX_ERR = 0.02     # long + estimated error below this => accurate long-read class
 LOW_Q20_FRAC = 0.90     # below this fraction of Q>=20 bases => flag low quality
 GZIP_RATIO = 4.0        # rough fastq compression ratio for size extrapolation
+HIGH_HOST_FRAC = 0.10   # host-aligned fraction above this => recommend host removal
 PREFIX_BP = 32          # duplication probe: hash of the first PREFIX_BP bases (never stored raw)
 
 _SHORT = {"illumina", "mgi", "bgi"}
+# minimap2 preset per inferred read class (matches the workflow's map_to_contigs presets).
+_MM2_PRESET = {"illumina": "sr", "ont": "map-ont", "pacbio_hifi": "map-hifi", "pacbio_clr": "map-pb"}
 
 
 def _load_thresholds() -> Dict[str, float]:
     """Inference cutoffs from evidence/platform_inference.yaml, falling back to the defaults."""
     out = {"long_min_len": LONG_MIN_LEN, "hifi_max_err": HIFI_MAX_ERR,
-           "low_q20": LOW_Q20_FRAC, "gzip_ratio": GZIP_RATIO}
+           "low_q20": LOW_Q20_FRAC, "gzip_ratio": GZIP_RATIO, "high_host": HIGH_HOST_FRAC}
     try:
         from . import evidence_pack
         ev = evidence_pack.load_evidence("platform_inference")
@@ -42,6 +50,7 @@ def _load_thresholds() -> Dict[str, float]:
         out["hifi_max_err"] = float(ev.get("accurate_max_est_error", out["hifi_max_err"]))
         out["low_q20"] = float(ev.get("low_q20_fraction", out["low_q20"]))
         out["gzip_ratio"] = float(ev.get("gzip_size_ratio", out["gzip_ratio"]))
+        out["high_host"] = float(ev.get("high_host_fraction", out["high_host"]))
     except Exception:
         pass
     return out
@@ -106,6 +115,87 @@ def _infer_class(median_len: float, est_error: Optional[float]) -> str:
     if est_error is None:
         return "ont"  # long but no quality (FASTA) -> generic long-noisy
     return "pacbio_hifi" if est_error < _TH["hifi_max_err"] else "ont"
+
+
+# --------------------------------------------------------------------------- #
+# Host fraction (optional, reference-dependent; degrades to None)              #
+# --------------------------------------------------------------------------- #
+def host_available(host_index: Optional[str]) -> bool:
+    return bool(host_index) and shutil.which("minimap2") is not None
+
+
+def _parse_host_fraction(sam_text: str) -> Optional[float]:
+    """Fraction of PRIMARY alignments that mapped, from minimap2 SAM (pure, testable)."""
+    total = mapped = 0
+    for line in sam_text.splitlines():
+        if not line or line.startswith("@"):
+            continue
+        cols = line.split("\t")
+        if len(cols) < 2:
+            continue
+        try:
+            flag = int(cols[1])
+        except ValueError:
+            continue
+        if flag & 0x100 or flag & 0x800:  # skip secondary / supplementary
+            continue
+        total += 1
+        if not flag & 0x4:                # 0x4 = unmapped
+            mapped += 1
+    return round(mapped / total, 3) if total else None
+
+
+def _write_head(path: str, max_reads: int, out) -> int:
+    """Write the first ``max_reads`` records (FASTA/FASTQ) to ``out``. Transient — for mapping."""
+    fmt = read_format(path)
+    n = 0
+    with _open(path) as fh:
+        if fmt == "fastq":
+            while n < max_reads:
+                h = fh.readline()
+                if not h:
+                    break
+                out.write(h + (fh.readline()) + fh.readline() + fh.readline())
+                n += 1
+        else:
+            for line in fh:
+                if line.startswith(">"):
+                    if n >= max_reads:
+                        break
+                    n += 1
+                out.write(line)
+    return n
+
+
+def measure_host_fraction(path: str, host_index: Optional[str], preset: str,
+                          max_reads: int = 100_000) -> Optional[float]:
+    """Map a bounded subsample to ``host_index`` with minimap2; return aligned fraction or None.
+
+    None whenever the capability is absent (no index / minimap2) or mapping fails — the metric
+    is strictly optional. The temp file holding sampled reads is deleted in ``finally``.
+    """
+    if not host_available(host_index):
+        return None
+    tmp = tempfile.NamedTemporaryFile("wt", suffix=".reads", delete=False)
+    try:
+        if _write_head(path, max_reads, tmp) == 0:
+            return None
+        tmp.flush()
+        tmp.close()
+        proc = subprocess.run(
+            ["minimap2", "-a", "-x", preset, "-t", "1", host_index, tmp.name],
+            capture_output=True, text=True, timeout=600,
+        )
+        if proc.returncode != 0:
+            return None
+        return _parse_host_fraction(proc.stdout)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass
 
 
 # --------------------------------------------------------------------------- #
@@ -242,6 +332,11 @@ def reconcile(samples: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
             )
         if p.get("q20_frac") is not None and p["q20_frac"] < _TH["low_q20"]:
             warnings.append(f"sample '{s}': low quality (Q20 fraction {p['q20_frac']}).")
+        if p.get("host_fraction") is not None and p["host_fraction"] >= _TH["high_host"]:
+            warnings.append(
+                f"sample '{s}': {int(p['host_fraction'] * 100)}% of reads map to the host "
+                "reference — consider enabling host_removal (surfaced, not auto-enabled)."
+            )
     return {
         "n_samples": len(samples),
         "read_length_median": {
@@ -259,12 +354,13 @@ def to_context(samples: Dict[str, Dict[str, Any]], project: Dict[str, Any]) -> D
     errs = [p["est_error"] for p in samples.values() if p.get("est_error") is not None]
     q20s = [p["q20_frac"] for p in samples.values() if p.get("q20_frac") is not None]
     bases = [p["estimated_bases"] for p in samples.values() if p.get("estimated_bases")]
+    hosts = [p["host_fraction"] for p in samples.values() if p.get("host_fraction") is not None]
     mismatch = any("mismatch" in w for w in project["warnings"])
     return {
         "estimated_bases": max(bases) if bases else None,   # ANY sample deep -> surface asm-coverage
         "platform_class": project["platform_consensus"] if project["platform_consensus"] != "mixed" else None,
         "max_est_error": max(errs) if errs else None,
-        "max_host_fraction": 0,                              # MVP: host not measured
+        "max_host_fraction": max(hosts) if hosts else None,  # None => host not measured
         "any_sample_low_q": any(q < _TH["low_q20"] for q in q20s),
         "platform_mismatch": mismatch,
         "measured": True,
@@ -275,12 +371,16 @@ def to_context(samples: Dict[str, Dict[str, Any]], project: Dict[str, Any]) -> D
 # Entry point                                                                  #
 # --------------------------------------------------------------------------- #
 def run(samples: Any, max_reads: int = 100_000, max_samples: Optional[int] = None,
-        out: Optional[str] = None, assume_yes: bool = False) -> Dict[str, Any]:
+        out: Optional[str] = None, assume_yes: bool = False,
+        host_index: Optional[str] = None) -> Dict[str, Any]:
     """Probe every sample (subject to consent) and return the report + context dict.
 
     Consent: ``assume_yes`` records local consent; otherwise the stored choice is used. With
     no consent (or 'off', or non-interactive with nothing stored) this reads nothing and
     returns an advisory stub so the caller falls back to a-priori suggestions.
+
+    ``host_index``: optional host reference (FASTA/minimap2 index). When given AND minimap2 is
+    on PATH, each sample's host-aligned fraction is measured; otherwise it stays null.
     """
     decision = consent.set("probe", "local") if assume_yes else consent.get("probe")
     if decision != "local":
@@ -300,6 +400,9 @@ def run(samples: Any, max_reads: int = 100_000, max_samples: Optional[int] = Non
             continue
         prof = profile_file(r1, max_reads=max_reads)
         prof["declared_platform"] = rec.get("platform", "illumina")
+        if host_index:
+            preset = _MM2_PRESET.get(prof["inferred_platform_class"], "sr")
+            prof["host_fraction"] = measure_host_fraction(r1, host_index, preset, max_reads=max_reads)
         profiles[name] = prof
 
     project = reconcile(profiles)
@@ -324,11 +427,14 @@ def _render_md(report: Dict[str, Any]) -> str:
              f"- read-length median across samples: {p['read_length_median']}", ""]
     if p["warnings"]:
         lines += ["## Warnings", ""] + [f"- {w}" for w in p["warnings"]] + [""]
-    lines += ["## Per-sample", "", "| sample | platform (declared→inferred) | median len | mean Q | est err | est bases |",
-              "|---|---|---|---|---|---|"]
+    lines += ["## Per-sample", "",
+              "| sample | platform (declared→inferred) | median len | mean Q | est err | host % | est bases |",
+              "|---|---|---|---|---|---|---|"]
     for s, pr in report["samples"].items():
+        host = "-" if pr.get("host_fraction") is None else f"{int(pr['host_fraction'] * 100)}%"
         lines.append(
             f"| {s} | {pr['declared_platform']}→{pr['inferred_platform_class']} | "
-            f"{pr['read_length']['median']} | {pr['mean_q']} | {pr['est_error']} | {pr['estimated_bases']} |"
+            f"{pr['read_length']['median']} | {pr['mean_q']} | {pr['est_error']} | {host} | "
+            f"{pr['estimated_bases']} |"
         )
     return "\n".join(lines) + "\n"

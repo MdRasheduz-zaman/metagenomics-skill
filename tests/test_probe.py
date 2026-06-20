@@ -113,3 +113,35 @@ def test_bounded_by_max_reads(tmp_path):
     _fastq(fq, ["ACGT" * 38] * 1000, "I")
     pr = probe.profile_file(str(fq), max_reads=100)
     assert pr["n_sampled"] == 100  # stopped at the cap, did not read all 1000
+
+
+# --- host fraction (phase 2) ---
+def test_parse_host_fraction_counts_primary_mapped():
+    sam = "\n".join([
+        "@SQ\tSN:host\tLN:100",
+        "r0\t0\thost\t1\t60\t10M\t*\t0\t0\tACGT\t*",     # mapped (flag 0)
+        "r1\t4\t*\t0\t0\t*\t*\t0\t0\tACGT\t*",           # unmapped (0x4)
+        "r2\t256\thost\t1\t0\t10M\t*\t0\t0\tACGT\t*",    # secondary (0x100) -> skipped
+        "r3\t0\thost\t5\t60\t10M\t*\t0\t0\tACGT\t*",     # mapped
+    ])
+    assert probe._parse_host_fraction(sam) == round(2 / 3, 3)  # 2 mapped of 3 primary
+
+
+def test_parse_host_fraction_empty():
+    assert probe._parse_host_fraction("@SQ\tSN:host\tLN:100\n") is None
+
+
+def test_host_degrades_without_minimap2(monkeypatch, short_clean):
+    monkeypatch.setattr(probe.shutil, "which", lambda _x: None)  # pretend minimap2 absent
+    assert probe.host_available("host.fa") is False
+    assert probe.measure_host_fraction(short_clean, "host.fa", "sr") is None
+
+
+def test_host_fraction_drives_warning_and_context():
+    # inject a high host fraction directly (no minimap2 needed) and check reconcile/context
+    samples = {"A": {"inferred_platform_class": "illumina", "declared_platform": "illumina",
+                     "read_length": {"median": 150}, "q20_frac": 1.0, "host_fraction": 0.8,
+                     "est_error": 0.001, "estimated_bases": 1e6}}
+    project = probe.reconcile(samples)
+    assert any("host" in w for w in project["warnings"])
+    assert probe.to_context(samples, project)["max_host_fraction"] == 0.8

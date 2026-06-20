@@ -17,6 +17,7 @@ long_min_median_len: 400        # median read length (bp) above this => long-rea
 accurate_max_est_error: 0.02    # long-read with estimated error below this => "accurate long" (HiFi/ONT-HQ)
 low_q20_fraction: 0.90          # fraction of Q>=20 bases below this => flag low quality
 gzip_size_ratio: 4.0            # fastq gzip compression ratio, for size-based base-count extrapolation
+high_host_fraction: 0.10        # host-aligned read fraction above this => recommend host_removal
 
 # Reference: typical median read length / error by platform (informational; not thresholds).
 platforms:

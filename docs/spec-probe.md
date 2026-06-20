@@ -1,7 +1,7 @@
 # Spec: `metagx probe` — measured pre-flight context
 
-**Status:** phase 1 (MVP) shipped · **Scope:** the "local probe" tier only (advisory and
-external/closed-loop tiers are out of scope here) · **Owner:** TBD
+**Status:** phases 1–4 shipped (local-probe tier complete) · only the external/closed-loop tier
+remains (separate consent, deliberately deferred) · **Owner:** TBD
 
 ## 1. Purpose
 
@@ -185,7 +185,10 @@ metagx probe
 1. ✅ **MVP (shipped)**: pure-Python metrics (everything except `host_fraction`), per-sample +
    reconciled, consent gate, `probe.json` + `probe.md` + context, CLI (`metagx probe`,
    `interview --probe`), 8 tests. Modules: `metagx/probe.py`, `metagx/consent.py`.
-2. **+host_fraction** when a host index + minimap2/mash are available (optional, degrades to null). *(TODO)*
+2. ✅ **+host_fraction (shipped)**: `metagx probe --host-index <ref>` maps the subsample with
+   minimap2 (platform-appropriate preset) and reports the aligned fraction; degrades to null
+   without an index / minimap2. High host fraction surfaces a `host_removal` recommendation in
+   the warnings (surfaced, never auto-enabled). Threshold in `platform_inference.yaml`.
 3. ✅ **+config_builder (shipped)**: `build_config(probe=...)` gap-fills MISSING per-sample
    platforms from inference (never overrides a declared one), and records measurement +
    warnings + backfills under `cfg["probe"]`. No silent parameter tuning — values still flow

@@ -121,7 +121,7 @@ def get_interview(tool: str, max_tier: int = 2, context: dict | None = None) -> 
 
 @mcp.tool()
 def run_probe(samples: str, consent: bool = False, max_reads: int = 100_000,
-              max_samples: int | None = None, out: str = "") -> str:
+              max_samples: int | None = None, out: str = "", host_index: str = "") -> str:
     """Measure read stats from the user's samples to drive data-conditioned promotion.
 
     LOCAL and consent-gated: profiles a bounded head subsample of EVERY sample (read length,
@@ -135,7 +135,7 @@ def run_probe(samples: str, consent: bool = False, max_reads: int = 100_000,
     back to a-priori suggestions. The probe never sends anything off the machine.
     """
     res = probe.run(samples, max_reads=max_reads, max_samples=max_samples,
-                    out=(out or None), assume_yes=consent)
+                    out=(out or None), assume_yes=consent, host_index=(host_index or None))
     return json.dumps(res, indent=2)
 
 

@@ -74,7 +74,7 @@ def cmd_interview(args) -> int:
 
 def cmd_probe(args) -> int:
     res = probe.run(args.samples, max_reads=args.max_reads, max_samples=args.max_samples,
-                    out=args.out, assume_yes=args.yes)
+                    out=args.out, assume_yes=args.yes, host_index=args.host_index)
     if not res.get("measured"):
         print(res.get("reason", "probe did not run"), file=sys.stderr)
     _print_json(res.get("context") if args.context_only else res)
@@ -359,6 +359,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--samples", required=True, help="sample sheet TSV (or inline-validated path)")
     sp.add_argument("--max-reads", type=int, default=100_000, help="reads sampled per file (cap)")
     sp.add_argument("--max-samples", type=int, default=None, help="cap number of samples scanned")
+    sp.add_argument("--host-index", default=None,
+                    help="host reference (FASTA/minimap2 index); measures host fraction if minimap2 on PATH")
     sp.add_argument("--out", default=None, help="dir to write probe.json + probe.md")
     sp.add_argument("--yes", action="store_true",
                     help="grant + remember LOCAL probe consent (data never leaves the machine)")
