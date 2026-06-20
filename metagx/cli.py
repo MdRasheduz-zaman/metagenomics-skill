@@ -37,6 +37,7 @@ from . import (
     registry,
     report,
     runner,
+    scaffold,
     schedulers,
     sync_help,
     tool_advisor,
@@ -60,7 +61,10 @@ def cmd_params(args) -> int:
 
 
 def cmd_interview(args) -> int:
-    _print_json(registry.interview_spec(args.tool, max_tier=args.tier))
+    context = json.loads(args.context) if args.context else {}
+    if args.goal:
+        context["goal"] = args.goal
+    _print_json(registry.interview_spec(args.tool, max_tier=args.tier, context=context or None))
     return 0
 
 
@@ -270,6 +274,26 @@ def cmd_sync_help(args) -> int:
     return 0
 
 
+def cmd_scaffold(args) -> int:
+    res = scaffold.scaffold(args.command, name=args.name)
+    if not res.get("ok"):
+        print(f"scaffold failed: {res.get('error')}", file=sys.stderr)
+        return 1
+    if res.get("registry_exists"):
+        print(f"note: a curated registry for '{res['tool']}' already exists — "
+              "this stub is for diffing/extending, do not blindly overwrite it.", file=sys.stderr)
+    if args.out:
+        if os.path.exists(args.out):
+            print(f"refusing to overwrite existing {args.out}", file=sys.stderr)
+            return 1
+        with open(args.out, "w") as fh:
+            fh.write(res["yaml"])
+        print(f"wrote {args.out} ({res['tool']}, version: {res.get('version')})", file=sys.stderr)
+    else:
+        sys.stdout.write(res["yaml"])
+    return 0
+
+
 def cmd_catalog(_args) -> int:
     _print_json(catalog.build_catalog())
     return 0
@@ -309,6 +333,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("interview", help="questions an LLM should ask for a tool")
     sp.add_argument("tool")
     sp.add_argument("--tier", type=int, default=2, help="max tier: 1 core, 2 common, 3 advanced")
+    sp.add_argument("--goal", default=None,
+                    help="experimental goal (e.g. strain_resolved); may promote quiet params")
+    sp.add_argument("--context", default=None,
+                    help='JSON of goal/data facts for promote_when, e.g. \'{"estimated_bases": 6e10}\'')
     sp.set_defaults(func=cmd_interview)
 
     sub.add_parser("presets", help="list workflow presets with descriptions").set_defaults(func=cmd_presets)
@@ -377,6 +405,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("sync-help", help="diff live tool --help against parameter registries")
     sp.add_argument("--tool", default=None, help="single tool; default: all registries")
     sp.set_defaults(func=cmd_sync_help)
+
+    sp = sub.add_parser("scaffold",
+                        help="generate a capability-complete registry stub from a tool's --help")
+    sp.add_argument("command", help="the executable to probe (e.g. flye)")
+    sp.add_argument("--name", default=None,
+                    help="registry tool name (default: the command's first token)")
+    sp.add_argument("--out", default=None,
+                    help="write YAML to this path (refuses to overwrite); default: stdout")
+    sp.set_defaults(func=cmd_scaffold)
 
     sub.add_parser("catalog", help="index of tools, evidence, and workflow scripts").set_defaults(
         func=cmd_catalog

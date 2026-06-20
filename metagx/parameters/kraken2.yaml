@@ -101,6 +101,10 @@ params:
     question: >
       Quick mode: stop classifying a read after the first database hit. Much faster,
       slightly less accurate. Useful for huge datasets.
+    promote_when:
+      - when: { goal: fast_screen }
+        to_tier: 2
+        reason: Fast-screen goal — surface --quick to trade a little accuracy for speed.
   use_names:
     flag: "--use-names"
     type: bool
@@ -124,6 +128,21 @@ params:
     question: >
       Add distinct-minimizer columns to the report (useful to spot false positives
       from low minimizer diversity). Note: changes report column layout.
+    promote_when:
+      - when: { goal: false_positive_audit }
+        to_tier: 2
+        reason: >
+          False-positive audit — distinct-minimizer columns expose low-diversity
+          (likely spurious) taxa.
+  use_mpa_style:
+    flag: "--use-mpa-style"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Emit the report in MetaPhlAn (mpa) style. Note: changes the report format and will
+      break the default kreport/Bracken parsing — only for standalone kraken2 output.
   memory_mapping:
     flag: "--memory-mapping"
     type: bool
@@ -133,7 +152,21 @@ params:
     question: >
       Memory-map the database instead of loading it into RAM. Use on machines with
       less RAM than the database size; slower but avoids OOM.
+  # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: >
+      Any additional raw kraken2 tokens, passed verbatim (escape hatch; not validated,
+      recorded in run provenance).
   # --- managed by the workflow: never interviewed, always rendered ---
+  bzip2_compressed:
+    flag: "--bzip2-compressed"
+    type: bool
+    managed: true
   db:
     flag: "--db"
     type: path

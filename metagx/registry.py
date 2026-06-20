@@ -7,6 +7,7 @@ both inside the Snakemake workflow and by the MCP server / CLI.
 from __future__ import annotations
 
 import functools
+import shlex
 from importlib import resources
 from typing import Any, Dict, List, Tuple
 
@@ -54,21 +55,79 @@ def _params(tool: str) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- #
 # Interview                                                                    #
 # --------------------------------------------------------------------------- #
-def interview_spec(tool: str, max_tier: int = 2) -> List[Dict[str, Any]]:
+_CMP = {
+    "_gte": lambda a, b: a >= b,
+    "_lte": lambda a, b: a <= b,
+    "_gt": lambda a, b: a > b,
+    "_lt": lambda a, b: a < b,
+}
+
+
+def when_matches(when: Dict[str, Any], context: Dict[str, Any]) -> bool:
+    """True when every clause in ``when`` holds against ``context`` (AND).
+
+    Key conventions: a bare key (``goal``) means equality (case-insensitive for
+    strings); a key with a ``_gte``/``_lte``/``_gt``/``_lt`` suffix (``estimated_bases_gte``)
+    compares the numeric context value for the base key. A missing or ``None`` context
+    value never matches — we don't promote on unknown facts.
+    """
+    if not when:
+        return False
+    for key, expected in when.items():
+        suffix = next((s for s in _CMP if key.endswith(s)), None)
+        if suffix:
+            base = key[: -len(suffix)]
+            actual = context.get(base)
+            if actual is None:
+                return False
+            try:
+                if not _CMP[suffix](float(actual), float(expected)):
+                    return False
+            except (TypeError, ValueError):
+                return False
+        else:
+            actual = context.get(key)
+            if actual is None:
+                return False
+            if isinstance(expected, str) and isinstance(actual, str):
+                if actual.strip().lower() != expected.strip().lower():
+                    return False
+            elif actual != expected:
+                return False
+    return True
+
+
+def _promotion(spec: Dict[str, Any], context: Dict[str, Any] | None) -> Dict[str, Any] | None:
+    """First matching ``promote_when`` rule for a param, or None."""
+    if not context:
+        return None
+    for rule in spec.get("promote_when") or []:
+        if when_matches(rule.get("when") or {}, context):
+            return {"to_tier": int(rule.get("to_tier", 1)), "reason": (rule.get("reason") or "").strip()}
+    return None
+
+
+def interview_spec(tool: str, max_tier: int = 2,
+                   context: Dict[str, Any] | None = None) -> List[Dict[str, Any]]:
     """User-facing parameters an LLM should consider asking about.
 
-    Returns only params with ``ask: true`` at or below ``max_tier`` (1=core,
-    2=common, 3=advanced). Managed params (db/threads/io) are never returned.
-    Each entry carries everything the LLM needs to phrase a good question and
-    validate the answer.
+    Returns params with ``ask: true`` at or below ``max_tier`` (1=core, 2=common,
+    3=advanced). When ``context`` is given (e.g. ``{"goal": "strain_resolved",
+    "estimated_bases": 6e10}``), a normally-quiet param whose ``promote_when`` matches
+    is pulled into the funnel at the rule's ``to_tier`` and carries a ``promoted`` note
+    explaining why. Managed params (db/threads/io) are never returned. Each entry carries
+    everything the LLM needs to phrase a good question and validate the answer.
     """
     out: List[Dict[str, Any]] = []
     for name, spec in _params(tool).items():
         if spec.get("managed"):
             continue
-        if not spec.get("ask", False):
+        promo = _promotion(spec, context)
+        ask = spec.get("ask", False) or promo is not None
+        if not ask:
             continue
-        if spec.get("tier", 3) > max_tier:
+        tier = promo["to_tier"] if promo else spec.get("tier", 3)
+        if tier > max_tier:
             continue
         entry: Dict[str, Any] = {
             "name": name,
@@ -77,7 +136,7 @@ def interview_spec(tool: str, max_tier: int = 2) -> List[Dict[str, Any]]:
             "min": spec.get("min"),
             "max": spec.get("max"),
             "choices": spec.get("choices"),
-            "tier": spec.get("tier", 3),
+            "tier": tier,
             "sweepable": bool(spec.get("sweepable", False)),
             "question": " ".join(str(spec.get("question", "")).split()),
         }
@@ -85,6 +144,8 @@ def interview_spec(tool: str, max_tier: int = 2) -> List[Dict[str, Any]]:
             entry["recommend"] = spec["recommend"]
         if spec.get("warn_if"):
             entry["warn_if"] = spec["warn_if"]
+        if promo:
+            entry["promoted"] = promo  # surfaced only because context matched; carries the reason
         out.append(entry)
     out.sort(key=lambda p: p["tier"])
     return out
@@ -169,6 +230,7 @@ def render_args(tool: str, values: Dict[str, Any], managed: Dict[str, Any] | Non
     merged.update(managed or {})
 
     args: List[str] = []
+    trailing: List[str] = []  # passthrough tokens, appended verbatim after all flags
     for name, value in merged.items():
         if name not in params:
             continue
@@ -177,12 +239,18 @@ def render_args(tool: str, values: Dict[str, Any], managed: Dict[str, Any] | Non
         # workflow script, not emitted as a CLI flag — never render them here.
         if spec.get("interpreted"):
             continue
-        flag = spec.get("flag")
         if value is None or value == "":
             continue
+        # `passthrough` params are the raw escape hatch: the value is a string of
+        # one or more whole CLI tokens, split shell-style and appended verbatim with
+        # no flag of their own. They cannot be bounds-checked — provenance logs them.
+        if spec.get("passthrough"):
+            trailing.extend(shlex.split(str(value)))
+            continue
+        flag = spec.get("flag")
         if spec["type"] == "bool":
             if bool(value) and flag:
                 args.append(flag)
         elif flag:
             args.extend([flag, str(value)])
-    return args
+    return args + trailing

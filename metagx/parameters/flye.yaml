@@ -1,12 +1,39 @@
-# Parameter registry for Flye / metaFlye (long-read assembly). See kraken2.yaml.
-# The read-type flag (--nano-hq / --nano-raw / --pacbio-hifi / --pacbio-raw) doubles as the
-# input flag and is chosen by sample platform in the workflow, so it is managed.
+# Parameter registry for Flye / metaFlye (long-read assembly). See kraken2.yaml for the
+# documented field schema.
+#
+# CAPABILITY-COMPLETE PILOT
+# -------------------------
+# This registry models Flye's *whole* assembly surface, split into three honest buckets so the
+# builder assumes as little as possible about what a user has or wants:
+#
+#   managed   the workflow owns it; a user setting it would break the pipeline contract
+#             (read-type input flags are mutually exclusive and chosen by sample platform;
+#              out-dir/threads are wired by the rule). Validated-rejected if a user sets them.
+#   user      modeled + validatable. A small `ask: true` core is the interview funnel; the rest
+#             are `ask: false` — reachable (an expert or a goal-conditional promotion can set
+#             them) but not pushed on the median user.
+#   passthrough  the raw escape hatch (`extra_args`) for the long tail we don't model
+#             (run-control: --resume/--stop-after/--debug; anything a future Flye adds).
+#
+# Deliberately NOT modeled: deprecated flags (--hifi-error, --trestle, --subassemblies,
+# --plasmids) and mode flags that change what the rule produces (--polish-target runs
+# polish-only, not assembly). Those remain reachable via `extra_args` if truly needed.
+#
+# `promote_when`: goal/data-conditional interview promotion. Consumed by
+# registry.interview_spec(..., context=...): when a clause matches the run context
+# (goal, estimated data size, ...) a normally-quiet param is pulled into the funnel at
+# `to_tier` with its `reason`. Clause semantics match `warn_if` (bare key = equality,
+# `_gte`/`_lte`/`_gt`/`_lt` = numeric compare).
 tool: flye
 command: flye
+source_repo: https://github.com/mikolmogorov/Flye
+docs_url: https://github.com/mikolmogorov/Flye/blob/flye/docs/USAGE.md
+version_probe: flye --version
 description: >
   De novo assembler for long reads (ONT / PacBio). With --meta it is metaFlye, tuned for
   uneven coverage in metagenomes.
 params:
+  # --- interview funnel (ask: true) ---
   meta:
     flag: "--meta"
     type: bool
@@ -14,14 +41,8 @@ params:
     tier: 1
     ask: true
     question: Metagenome mode (metaFlye) — handles uneven coverage. Recommended for metagenomes.
-  min_overlap:
-    flag: "--min-overlap"
-    type: int
-    default: 0
-    min: 0
-    tier: 3
-    ask: false
-    question: Minimum overlap between reads (bp). 0 / unset lets Flye choose automatically.
+
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
   genome_size:
     flag: "--genome-size"
     type: str
@@ -33,11 +54,129 @@ params:
     flag: "--iterations"
     type: int
     default: 1
-    min: 1
+    min: 0
+    max: 10
     tier: 3
     ask: false
     question: Number of polishing iterations.
-  # --- managed by the workflow ---
+  min_overlap:
+    flag: "--min-overlap"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: Minimum overlap between reads (bp). 0 / unset lets Flye choose automatically.
+  asm_coverage:
+    flag: "--asm-coverage"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: >
+      Reduced coverage to use for the initial disjointig assembly only (down-samples the
+      longest reads). The standard lever for making very deep / very large metagenomes
+      tractable. Unset = use all reads.
+    # goal/data-conditional promotion sketch (not yet consumed):
+    promote_when:
+      - when: { estimated_bases_gte: 50000000000 }   # ~50 Gbp+ input
+        to_tier: 1
+        reason: Very deep input — promote asm-coverage so the user can cap initial assembly cost.
+  keep_haplotypes:
+    flag: "--keep-haplotypes"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Do not collapse alternative haplotypes into the primary assembly. Keep them for
+      strain-resolved / within-species diversity work.
+    promote_when:
+      - when: { goal: strain_resolved }
+        to_tier: 1
+        reason: Strain-resolved goal — collapsing haplotypes would erase the signal of interest.
+  no_alt_contigs:
+    flag: "--no-alt-contigs"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Do not emit the separate alternative-contigs file (primary assembly only).
+  scaffold:
+    flag: "--scaffold"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Enable scaffolding using the assembly graph (off by default in recent Flye).
+  read_error:
+    flag: "--read-error"
+    type: float
+    default: 0.0
+    min: 0.0
+    max: 1.0
+    tier: 3
+    ask: false
+    question: >
+      Override the expected read error rate as a fraction (e.g. 0.03). Normally inferred
+      from the read-type flag; set only for unusual chemistries.
+  deterministic:
+    flag: "--deterministic"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Run disjointig assembly single-threaded for bit-for-bit reproducibility (slower).
+  extra_params:
+    flag: "--extra-params"
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    question: >
+      Flye's own low-level config overrides, as a comma-separated key_value list
+      (e.g. "min_read_cov_cutoff=3"). Advanced; see Flye docs.
+
+  # --- raw escape hatch: the long tail we don't model (run-control, future flags) ---
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: >
+      Any additional raw flye command-line tokens, passed verbatim (e.g. "--resume" or
+      "--stop-after consensus"). Not validated — use only if you know the flag; it is
+      recorded in the run provenance.
+
+  # --- managed by the workflow: never interviewed, rejected if a user sets them ---
+  # Read-type input flags are mutually exclusive and selected by sample platform
+  # (see flye_read_flag in workflow/rules/common.smk); the rule emits exactly one.
+  nano_raw:
+    flag: "--nano-raw"
+    type: path
+    managed: true
+  nano_hq:
+    flag: "--nano-hq"
+    type: path
+    managed: true
+  nano_corr:
+    flag: "--nano-corr"
+    type: path
+    managed: true
+  pacbio_raw:
+    flag: "--pacbio-raw"
+    type: path
+    managed: true
+  pacbio_hifi:
+    flag: "--pacbio-hifi"
+    type: path
+    managed: true
+  pacbio_corr:
+    flag: "--pacbio-corr"
+    type: path
+    managed: true
   threads:
     flag: "--threads"
     type: int

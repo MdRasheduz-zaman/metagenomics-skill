@@ -104,14 +104,18 @@ def list_schedulers() -> str:
 
 
 @mcp.tool()
-def get_interview(tool: str, max_tier: int = 2) -> str:
+def get_interview(tool: str, max_tier: int = 2, context: dict | None = None) -> str:
     """Return the questions to ask the user for a tool, with answer constraints.
 
     tier 1 = essential, 2 = common (default), 3 = advanced. Each item includes the
     type, default, min/max/choices, whether it is sweepable, and a ready-to-use
     natural-language question. Drive your interview from this — do not invent flags.
+
+    Pass ``context`` with what you already know about the run (e.g.
+    {"goal": "strain_resolved", "estimated_bases": 6e10}) to surface normally-quiet
+    params that the goal/data make relevant; promoted items carry a ``promoted`` note.
     """
-    return json.dumps(registry.interview_spec(tool, max_tier=max_tier), indent=2)
+    return json.dumps(registry.interview_spec(tool, max_tier=max_tier, context=context), indent=2)
 
 
 # --------------------------------------------------------------------------- #
