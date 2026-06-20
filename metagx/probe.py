@@ -20,7 +20,8 @@ from typing import Any, Dict, List, Optional
 from . import consent
 from .formats import is_gzipped, read_format
 
-# Inference thresholds (deliberately conservative; tune from evidence/*.yaml later).
+# Inference thresholds — defaults; overridden by evidence/platform_inference.yaml when present,
+# so the cutoffs are tunable as data accrues rather than buried as magic numbers in code.
 LONG_MIN_LEN = 400      # median length above this => long-read
 HIFI_MAX_ERR = 0.02     # long + estimated error below this => accurate long-read class
 LOW_Q20_FRAC = 0.90     # below this fraction of Q>=20 bases => flag low quality
@@ -28,6 +29,25 @@ GZIP_RATIO = 4.0        # rough fastq compression ratio for size extrapolation
 PREFIX_BP = 32          # duplication probe: hash of the first PREFIX_BP bases (never stored raw)
 
 _SHORT = {"illumina", "mgi", "bgi"}
+
+
+def _load_thresholds() -> Dict[str, float]:
+    """Inference cutoffs from evidence/platform_inference.yaml, falling back to the defaults."""
+    out = {"long_min_len": LONG_MIN_LEN, "hifi_max_err": HIFI_MAX_ERR,
+           "low_q20": LOW_Q20_FRAC, "gzip_ratio": GZIP_RATIO}
+    try:
+        from . import evidence_pack
+        ev = evidence_pack.load_evidence("platform_inference")
+        out["long_min_len"] = float(ev.get("long_min_median_len", out["long_min_len"]))
+        out["hifi_max_err"] = float(ev.get("accurate_max_est_error", out["hifi_max_err"]))
+        out["low_q20"] = float(ev.get("low_q20_fraction", out["low_q20"]))
+        out["gzip_ratio"] = float(ev.get("gzip_size_ratio", out["gzip_ratio"]))
+    except Exception:
+        pass
+    return out
+
+
+_TH = _load_thresholds()
 
 
 def _open(path: str):
@@ -81,11 +101,11 @@ def _is_long(cls: str) -> bool:
 
 
 def _infer_class(median_len: float, est_error: Optional[float]) -> str:
-    if median_len <= LONG_MIN_LEN:
+    if median_len <= _TH["long_min_len"]:
         return "illumina"
     if est_error is None:
         return "ont"  # long but no quality (FASTA) -> generic long-noisy
-    return "pacbio_hifi" if est_error < HIFI_MAX_ERR else "ont"
+    return "pacbio_hifi" if est_error < _TH["hifi_max_err"] else "ont"
 
 
 # --------------------------------------------------------------------------- #
@@ -199,7 +219,7 @@ def _estimate_bases(path: str, sampled_bytes: int, n: int, median_len: float,
         size = os.path.getsize(path)
     except OSError:
         return None
-    uncomp = size * GZIP_RATIO if is_gzipped(path) else size
+    uncomp = size * _TH["gzip_ratio"] if is_gzipped(path) else size
     mean_rec_bytes = sampled_bytes / n
     est_reads = uncomp / mean_rec_bytes if mean_rec_bytes else n
     return round(est_reads * median_len)
@@ -220,7 +240,7 @@ def reconcile(samples: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
                 f"sample '{s}': declared {decl} but reads look {p['inferred_platform_class']} "
                 "(short/long mismatch) — check the sample sheet."
             )
-        if p.get("q20_frac") is not None and p["q20_frac"] < LOW_Q20_FRAC:
+        if p.get("q20_frac") is not None and p["q20_frac"] < _TH["low_q20"]:
             warnings.append(f"sample '{s}': low quality (Q20 fraction {p['q20_frac']}).")
     return {
         "n_samples": len(samples),
@@ -245,7 +265,7 @@ def to_context(samples: Dict[str, Dict[str, Any]], project: Dict[str, Any]) -> D
         "platform_class": project["platform_consensus"] if project["platform_consensus"] != "mixed" else None,
         "max_est_error": max(errs) if errs else None,
         "max_host_fraction": 0,                              # MVP: host not measured
-        "any_sample_low_q": any(q < LOW_Q20_FRAC for q in q20s),
+        "any_sample_low_q": any(q < _TH["low_q20"] for q in q20s),
         "platform_mismatch": mismatch,
         "measured": True,
     }

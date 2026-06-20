@@ -269,3 +269,44 @@ def test_amr_preset_merges_new_tool_sections():
     assert cfg["abricate"]["db"] == "card"        # from preset
     assert cfg["abricate"]["minid"] == 95         # user override wins
     assert cfg["amrfinderplus"]["plus"] is True   # preset-only tool section preserved
+
+
+# --- probe-conditioned routing (#2) ---
+def _probe_report():
+    return {
+        "measured": True,
+        "samples": {
+            "A": {"inferred_platform_class": "ont"},
+            "B": {"inferred_platform_class": "illumina"},
+        },
+        "project": {"platform_consensus": "mixed",
+                    "warnings": ["sample 'B': declared illumina but reads look ont ..."]},
+    }
+
+
+def _cfg_with_probe(samples, probe):
+    from metagx import config_builder
+    return config_builder.build_config(
+        project="p", samples=samples, db={"kraken2": "DB"},
+        modules={"qc": True, "classify": True, "abundance": True}, probe=probe)
+
+
+def test_probe_backfills_missing_platform():
+    samples = [{"sample": "A", "r1": "a.fq"}]            # no platform declared
+    cfg = _cfg_with_probe(samples, _probe_report())
+    assert cfg["samples"][0]["platform"] == "ont"        # gap-filled from inference
+    assert cfg["probe"]["backfilled_platforms"] == {"A": "ont"}
+
+
+def test_probe_never_overrides_declared_platform():
+    samples = [{"sample": "B", "r1": "b.fq", "platform": "illumina"}]
+    cfg = _cfg_with_probe(samples, _probe_report())
+    assert cfg["samples"][0]["platform"] == "illumina"   # declared value kept
+    assert cfg["probe"]["backfilled_platforms"] == {}
+    assert cfg["probe"]["warnings"]                       # mismatch surfaced, not silently applied
+
+
+def test_probe_does_not_mutate_caller_samples():
+    samples = [{"sample": "A", "r1": "a.fq"}]
+    _cfg_with_probe(samples, _probe_report())
+    assert "platform" not in samples[0]                  # caller's list untouched

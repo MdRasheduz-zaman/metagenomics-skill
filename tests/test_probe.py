@@ -99,6 +99,15 @@ def test_output_is_non_reconstructive(tmp_path, monkeypatch):
     assert secret not in blob and "@r0" not in blob  # no sequence, no read ID
 
 
+def test_thresholds_come_from_evidence():
+    from metagx import evidence_pack
+    ev = evidence_pack.load_evidence("platform_inference")
+    th = probe._load_thresholds()
+    assert th["long_min_len"] == ev["long_min_median_len"]
+    assert th["hifi_max_err"] == ev["accurate_max_est_error"]
+    assert th["low_q20"] == ev["low_q20_fraction"]
+
+
 def test_bounded_by_max_reads(tmp_path):
     fq = tmp_path / "big.fastq"
     _fastq(fq, ["ACGT" * 38] * 1000, "I")

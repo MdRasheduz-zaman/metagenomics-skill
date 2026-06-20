@@ -185,10 +185,18 @@ metagx probe
 1. ✅ **MVP (shipped)**: pure-Python metrics (everything except `host_fraction`), per-sample +
    reconciled, consent gate, `probe.json` + `probe.md` + context, CLI (`metagx probe`,
    `interview --probe`), 8 tests. Modules: `metagx/probe.py`, `metagx/consent.py`.
-2. **+host_fraction** when a host index + minimap2/mash are available (optional, degrades to null).
-3. **+config_builder** per-sample routing defaults from the probe.
-4. **MCP `run_probe`** surface (CLI exists; agent tool still TODO).
-5. (Later, separate consent) external/closed-loop tier.
+2. **+host_fraction** when a host index + minimap2/mash are available (optional, degrades to null). *(TODO)*
+3. ✅ **+config_builder (shipped)**: `build_config(probe=...)` gap-fills MISSING per-sample
+   platforms from inference (never overrides a declared one), and records measurement +
+   warnings + backfills under `cfg["probe"]`. No silent parameter tuning — values still flow
+   through interview promotion.
+4. ✅ **MCP `run_probe` (shipped)** + `build_config(probe=...)` forwarding + SKILL.md flow.
+5. (Later, separate consent) external/closed-loop tier. *(TODO)*
+
+### Platform inference is evidence-backed
+Inference cutoffs live in `metagx/evidence/platform_inference.yaml` (loaded by `probe._load_thresholds`,
+with in-code fallbacks), so they are tunable as datasets are profiled. Known limit: ONT-HQ vs
+PacBio-HiFi are not separable from reads alone — the probe reports the family and the user confirms.
 
 ## 11. Open decisions
 

@@ -59,6 +59,32 @@ KNOWN_PLATFORMS = {"illumina", "mgi", "bgi", "ont", "nanopore",
 LONG_PLATFORMS = {"ont", "nanopore", "pacbio_hifi", "pacbio_clr", "pacbio"}
 
 
+def _load_probe(probe: Any) -> Dict[str, Any] | None:
+    """Accept a probe report dict or a path to probe.json (JSON is valid YAML)."""
+    if probe is None:
+        return None
+    if isinstance(probe, str):
+        with open(probe) as fh:
+            return yaml.safe_load(fh)
+    return probe
+
+
+def _backfill_platforms(samples: Any, probe_report: Dict[str, Any] | None) -> List[tuple]:
+    """Fill a MISSING per-sample platform from the probe's inferred class. Never overrides a
+    declared platform. Returns the (sample, inferred) pairs applied, for provenance."""
+    applied: List[tuple] = []
+    if not isinstance(samples, list) or not probe_report:
+        return applied
+    profiles = probe_report.get("samples", {})
+    for rec in samples:
+        name = rec.get("sample") or rec.get("name")
+        inferred = profiles.get(name, {}).get("inferred_platform_class")
+        if inferred and not str(rec.get("platform", "")).strip():
+            rec["platform"] = inferred
+            applied.append((name, inferred))
+    return applied
+
+
 def _validate_samples(samples: Any) -> Any:
     """Accept a path to a TSV sample sheet or an inline list of records.
 
@@ -271,6 +297,7 @@ def build_config(
     subsample: Dict[str, Any] | None = None,
     read_filter: Dict[str, Any] | None = None,
     host_removal: Dict[str, Any] | None = None,
+    probe: Any = None,
     fastp: Dict[str, Any] | None = None,
     kraken2: Dict[str, Any] | None = None,
     bracken: Dict[str, Any] | None = None,
@@ -335,6 +362,15 @@ def build_config(
         # so adding a new tool needs no special-casing here.
 
     mods = {**DEFAULT_MODULES, **(modules or {})}
+
+    # Probe-conditioned routing: backfill any MISSING per-sample platform from measured
+    # inference (a gap-fill — a declared platform is never overridden; mismatches surface as
+    # warnings in cfg["probe"]). Parameter values are not auto-set here; the probe context
+    # promotes interview questions instead (no silent tuning).
+    probe_report = _load_probe(probe)
+    if isinstance(samples, list):
+        samples = [dict(r) for r in samples]  # don't mutate the caller's records
+    backfilled = _backfill_platforms(samples, probe_report)
 
     if mods.get("classify") and not db.get("kraken2"):
         raise registry.ValidationError("classify is enabled but db.kraken2 is missing")
@@ -477,6 +513,14 @@ def build_config(
                   "metaphlan", "kaiju", "antismash"):
         if db.get(extra):
             cfg["db"][extra] = db[extra]
+    if probe_report:  # provenance: what the probe measured + any backfills/warnings it drove
+        proj = probe_report.get("project", {})
+        cfg["probe"] = {
+            "measured": probe_report.get("measured", False),
+            "platform_consensus": proj.get("platform_consensus"),
+            "warnings": proj.get("warnings", []),
+            "backfilled_platforms": dict(backfilled),
+        }
     if doms:
         cfg["domains"] = doms
     if amplicon:

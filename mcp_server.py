@@ -203,6 +203,7 @@ def build_config(
     antismash: Optional[Dict[str, Any]] = None,
     dada2: Optional[Dict[str, Any]] = None,
     differential: Optional[Dict[str, Any]] = None,
+    probe: Any = None,
     config_path: str = "config.yaml",
 ) -> str:
     """Validate interview answers and write config.yaml for the workflow.
@@ -226,7 +227,7 @@ def build_config(
         cfg = config_builder.build_config(
             project=project, outdir=outdir, threads=threads, samples=samples, db=db,
             preset=preset, modules=modules, sweep=sweep, subsample=subsample,
-            read_filter=read_filter,
+            read_filter=read_filter, probe=probe,
             fastp=fastp, kraken2=kraken2, bracken=bracken, megahit=megahit, metabat2=metabat2,
             porechop_abi=porechop_abi, chopper=chopper, flye=flye,
             domains=domains, genomad=genomad, checkv=checkv, checkm2=checkm2,

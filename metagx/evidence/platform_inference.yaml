@@ -1,0 +1,33 @@
+# Thresholds to infer the sequencing-platform CLASS from measured read stats.
+# Consumed by metagx/probe.py (`metagx probe`) — values here override the in-code defaults,
+# so the cutoffs are tunable as evidence accrues instead of being magic numbers in source.
+#
+# What can be inferred from reads ALONE:
+#   - short vs long           (median read length)               -> reliable
+#   - accurate vs noisy long  (estimated per-base error from Q)   -> reliable
+#   - ONT-HQ vs PacBio-HiFi   (both long + accurate)              -> NOT separable from reads.
+# So the probe reports the FAMILY (illumina / long-accurate / long-noisy) and labels
+# long-accurate as `pacbio_hifi` by default; the user confirms ONT-HQ vs HiFi. Tighten these
+# as real datasets are profiled (compare probe output against known-platform samples).
+tool: probe
+metric: platform_class_inference
+source: vendor read specs + metagx mock-community profiling
+
+long_min_median_len: 400        # median read length (bp) above this => long-read
+accurate_max_est_error: 0.02    # long-read with estimated error below this => "accurate long" (HiFi/ONT-HQ)
+low_q20_fraction: 0.90          # fraction of Q>=20 bases below this => flag low quality
+gzip_size_ratio: 4.0            # fastq gzip compression ratio, for size-based base-count extrapolation
+
+# Reference: typical median read length / error by platform (informational; not thresholds).
+platforms:
+  illumina:    { read_length: [50, 300],    typical_error: 0.005, class: short }
+  mgi:         { read_length: [50, 300],    typical_error: 0.005, class: short }
+  ont:         { read_length: [1000, 30000], typical_error: 0.05, class: long_noisy }
+  pacbio_hifi: { read_length: [10000, 25000], typical_error: 0.005, class: long_accurate }
+  pacbio_clr:  { read_length: [5000, 60000], typical_error: 0.10, class: long_noisy }
+
+notes: >
+  Conservative by design: a 400 bp cutoff cleanly separates Illumina/MGI (<=300) from any
+  long-read platform, and 2% error separates HiFi/ONT-Q20 from raw ONT/CLR. These are
+  family-level calls used to ROUTE and to flag sample-sheet mismatches, never to silently
+  override a user's declared platform.
