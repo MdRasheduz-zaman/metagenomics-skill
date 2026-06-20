@@ -68,6 +68,14 @@ def test_promote_when_numeric_threshold():
     assert "asm_coverage" not in shallow
 
 
+@pytest.mark.parametrize("tool", registry.list_tools())
+def test_every_tool_has_extra_args_valve(tool):
+    """Capability-completeness floor: every registry exposes a working passthrough."""
+    spec = registry.load_registry(tool)["params"].get("extra_args")
+    assert spec and spec.get("passthrough") and spec["type"] == "str"
+    assert registry.render_args(tool, {"extra_args": "--x 1"})[-2:] == ["--x", "1"]
+
+
 def test_kraken2_promote_and_passthrough():
     base = {p["name"] for p in registry.interview_spec("kraken2", max_tier=2)}
     assert "report_minimizer_data" not in base and "quick" not in base

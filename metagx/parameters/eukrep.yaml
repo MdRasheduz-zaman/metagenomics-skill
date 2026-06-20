@@ -23,3 +23,13 @@ params:
     tier: 2
     ask: false
     question: Minimum contig length (bp) to classify.
+  # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: >
+      Any additional raw eukrep command-line tokens, passed verbatim (escape hatch;
+      not validated, recorded in run provenance).

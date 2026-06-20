@@ -58,3 +58,13 @@ params:
     flag: "-t"
     type: int
     managed: true
+  # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: >
+      Any additional raw metaspades command-line tokens, passed verbatim (escape hatch;
+      not validated, recorded in run provenance).
