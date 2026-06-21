@@ -30,8 +30,24 @@ dependencies:
   - metabat2 >=2.15
   # contig taxonomy (CAT cross-check)
   - cat >=6.0
-  - diamond >=2.1
+  - diamond >=2.0.4     # CAT pins diamond to the 2.0.x line; >=2.1 is not co-installable here
   - prodigal >=2.6
+  # viral domain taxonomy/quality (applicable to viral targets; DBs downloaded on demand)
+  - genomad >=1.7
+  - checkv >=1.0
+  # ancient DNA (damage authentication). NOTE: mapdamage2 is unpinned on samtools and will
+  # otherwise drag in samtools 0.1.x — keep the `samtools >=1.18` pin above so it can't.
+  - mapdamage2 >=2.2
+  # second-classifier consensus + amplicon + phylogenetics (single env, no per-tool envs)
+  - kaiju >=1.9
+  - cutadapt >=4.0
+  - vsearch >=2.21
+  - seqkit >=2.5
+  - mafft >=7.5
+  - fasttree >=2.1
+  # NOTE: abricate (AMR) is deliberately NOT here — its perl-bio-samtools dependency hard-pins
+  # samtools 0.1.x, which conflicts with the modern samtools the rest of the pipeline needs.
+  # It is provisioned in its own isolated env (workflow/envs/amr.yaml) via `metagx run --use-conda`.
   # workflow + python libs
   - snakemake-minimal >=8.10
   - snakemake-executor-plugin-slurm   # for `metagx run --executor slurm` on HPC

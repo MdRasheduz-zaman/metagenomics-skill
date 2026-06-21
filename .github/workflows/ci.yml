@@ -3,6 +3,7 @@ name: ci
 on: [push, pull_request]
 
 jobs:
+  # Fast, tool-free job: unit suite + workflow DAG/render_args dry-run gate. Always runs.
   test:
     runs-on: ubuntu-latest
     steps:
@@ -14,7 +15,43 @@ jobs:
         run: pip install -e ".[test]"
       - name: Unit tests
         run: pytest -q
+      - name: Workflow dry-run gate
+        # Builds the full Snakemake DAG and resolves every params/render_args lambda
+        # for each platform path — catches broken includes, orphaned managed keys, and
+        # registry/rule drift without needing the bio tools or a database.
+        run: pytest -q tests/test_workflow_dryrun.py
       - name: Registry/config import smoke test
         run: |
           python -c "import metagx; print('tools:', metagx.list_tools())"
           python -c "from metagx import config_builder as c; c.build_config(samples=[{'sample':'s','r1':'s.fastq.gz'}], db={'kraken2':'k'}, modules={'assembly':False}); print('build_config OK')"
+
+  # Real-pipeline job: installs the bio tools (linux-64 has native bioconda builds — no
+  # Rosetta), then runs the actual workflow end to end. The viral kraken2+Bracken DB is
+  # BUILT from the committed 30-genome fixture (tests/fixtures/viral/genomes.fasta), and
+  # ONT reads come from the committed fixture too, so no gitignored data is needed. This is
+  # the answer to "why is CI dry?" — it no longer is.
+  e2e:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash -el {0}      # login shell so the conda env is active
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-name: metagx-ci
+          condarc: |
+            channels:
+              - conda-forge
+              - bioconda
+          create-args: >-
+            python=3.11
+            kraken2>=2.1 bracken>=2.9 fastp>=0.23
+            megahit>=1.2 flye>=2.9 minimap2>=2.26 samtools>=1.18 metabat2>=2.15
+            mapdamage2 mafft fasttree iqtree krona multiqc
+      - name: Install package (test extras)
+        run: pip install -e ".[test]"
+      - name: Tool-version floors (catch silent downgrades)
+        run: pytest -q tests/test_tool_versions.py
+      - name: Real end-to-end pipeline (mock DB from fixture; classify/assemble/reconcile/aDNA/phylo/aggregate)
+        run: pytest -q tests/test_pipeline_e2e.py tests/test_adna_e2e.py

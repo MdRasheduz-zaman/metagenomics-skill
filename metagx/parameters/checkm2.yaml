@@ -3,12 +3,62 @@ tool: checkm2
 command: checkm2
 description: >
   Machine-learning estimation of completeness and contamination for bacterial/archaeal
-  bins (MAGs). Run on MetaBAT2 bins.
+  bins/MAGs (checkm2 predict). Run on MetaBAT2 bins. The model + DIAMOND reference DB are
+  workflow-managed; the user-facing knobs are mostly about DIAMOND's memory footprint and
+  the nature of the input (contigs vs pre-called genes).
 params:
+  # --- workflow-managed (injected by rules/domains.smk) ---
   threads:
     flag: "--threads"
     type: int
     managed: true
+  database_path:
+    flag: "--database_path"
+    type: path
+    managed: true
+  extension:
+    flag: "-x"
+    type: str
+    managed: true          # bins are *.fa
+  force:
+    flag: "--force"
+    type: bool
+    managed: true          # overwrite output dir on re-run
+  # --- interview funnel (ask: true) ---
+  lowmem:
+    flag: "--lowmem"
+    type: bool
+    default: false
+    tier: 2
+    ask: true
+    question: >
+      Reduce DIAMOND's memory use by splitting the reference DB into chunks (slower, but
+      lets CheckM2 run on a laptop / small node). Enable if `predict` is OOM-killed.
+    recommend:
+      default: false
+    warn_if:
+      - when: { available_memory_gb_lt: 16 }
+        message: <16 GB RAM — enable lowmem so DIAMOND does not exhaust memory.
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
+  genes:
+    flag: "--genes"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Treat the input files as already-called protein genes (FAA) rather than nucleotide
+      contigs — skips gene prediction.
+  ttable:
+    flag: "--ttable"
+    type: int
+    default: 0
+    min: 0
+    max: 25
+    tier: 3
+    ask: false
+    question: >
+      Force a specific NCBI translation table for gene calling (0 = let Prodigal choose).
   # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
   extra_args:
     type: str

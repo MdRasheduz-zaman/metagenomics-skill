@@ -1,9 +1,13 @@
 # Parameter registry for MetaBAT2 (genome binning, optional). See kraken2.yaml.
 tool: metabat2
 command: metabat2
+version_probe: "metabat2 --help"   # prints 'version 2:2.18' (no --version flag)
 description: >
   Groups assembled contigs into draft genome bins (MAGs) using tetranucleotide
-  frequency and coverage.
+  frequency and coverage. Tuned for *bacterial/archaeal* MAGs: the defaults (min contig
+  2500 bp, min bin 200 kb) assume Mb-scale prokaryotic genomes. For viral targets the
+  genomes are small (often <50 kb; ≤144 kb here) and low-multiplicity, so binning rarely
+  helps — the viral domain path (geNomad + CheckV) is the right tool. See promote/warn below.
 params:
   min_contig:
     flag: "-m"
@@ -14,11 +18,30 @@ params:
     ask: true
     question: >
       Minimum contig length for binning (-m). Must be >= 1500; 2500 is the default.
-      Larger = fewer, higher-confidence bins.
+      Larger = fewer, higher-confidence bins. For small genomes (viral) drop to the
+      1500 floor so short contigs are not all discarded before binning.
     recommend:
       default: 2500
       soil: 2500
       quick: 1500
+      viral: 1500          # small viral contigs — use the metabat floor
+    warn_if:
+      - when: { target_domain: viral }
+        message: >
+          Target is viral, but MetaBAT2 bins by coverage + tetranucleotide signal for
+          Mb-scale bacterial MAGs. Viral genomes (≤144 kb here) seldom yield meaningful
+          bins — prefer the viral domain path (geNomad + CheckV). If binning anyway,
+          set min_contig=1500 (the floor) so short viral contigs survive the length filter.
+      - when: { largest_reference_kb_lt: 500 }
+        message: >
+          Largest reference is <500 kb — these look like viral/small genomes. MAG binning
+          (min bin 200 kb) is unlikely to produce bins; lower min_cls_size or skip binning.
+    promote_when:
+      - when: { target_domain: viral }
+        to_tier: 1
+        reason: >
+          Viral target — surface min_contig so the user drops it to the 1500 floor rather
+          than silently discarding short viral contigs at the 2500 default.
   min_cls_size:
     flag: "-s"
     type: int
@@ -26,7 +49,9 @@ params:
     min: 0
     tier: 3
     ask: false
-    question: Minimum size of an output bin (bp).
+    question: >
+      Minimum size of an output bin (bp). Default 200 kb suits bacterial MAGs; for viral
+      assemblies lower it (e.g. 5000) or binning will emit nothing.
   max_edges:
     flag: "--maxEdges"
     type: int

@@ -3,12 +3,35 @@ tool: eukcc
 command: eukcc
 description: >
   Estimates completeness and contamination of eukaryotic genomes/bins recovered from
-  metagenomes (the eukaryotic analogue of CheckM/CheckV).
+  metagenomes (eukcc single) — the eukaryotic analogue of CheckM/CheckV. The reference DB
+  and thread count are workflow-managed; EukCC's `single` mode is intentionally sparse, so
+  the only real user lever is the marker-placement stringency.
 params:
+  # --- workflow-managed (injected by rules/domains.smk) ---
+  db:
+    flag: "--db"
+    type: path
+    managed: true
   threads:
     flag: "--threads"
     type: int
     managed: true
+  out:
+    flag: "--out"
+    type: path
+    managed: true
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
+  min_genes:
+    flag: "--min_genes"
+    type: int
+    default: 0
+    min: 0
+    tier: 3
+    ask: false
+    question: >
+      Minimum number of marker genes a set must contain before EukCC estimates from it
+      (0 = the tool's default). Raising it avoids confident-looking estimates from very
+      few markers.
   # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
   extra_args:
     type: str

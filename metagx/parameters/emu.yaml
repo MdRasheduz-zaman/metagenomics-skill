@@ -6,6 +6,7 @@ description: >
   expectation-maximization against a marker-gene database — the long-read amplicon analogue
   of an OTU/abundance table.
 params:
+  # --- interview funnel (ask: true) ---
   min_abundance:
     flag: "--min-abundance"
     type: float
@@ -13,12 +14,44 @@ params:
     min: 0.0
     max: 1.0
     tier: 2
-    ask: false
-    question: Drop taxa below this estimated relative abundance.
+    ask: true
+    question: >
+      Drop taxa below this estimated relative abundance (EM threshold). Raise it to
+      suppress spurious low-level calls; lower it to keep rare taxa.
+    recommend:
+      default: 0.0001
+  # --- workflow-managed ---
   threads:
     flag: "--threads"
     type: int
     managed: true
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
+  keep_counts:
+    flag: "--keep-counts"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Also report raw EM read counts per taxon alongside relative abundances.
+  keep_read_assignments:
+    flag: "--keep-read-assignments"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Emit the per-read taxon assignment table (large; useful for auditing which reads
+      drove a call).
+  max_alignments:
+    flag: "--N"
+    type: int
+    default: 50
+    min: 1
+    tier: 3
+    ask: false
+    question: >
+      Max alignments per read kept for the EM step (minimap2 -N). Higher = more thorough
+      at species level, slower.
   # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
   extra_args:
     type: str

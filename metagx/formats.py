@@ -95,3 +95,31 @@ def estimate_read_length(path: str, sample: int = 5000) -> dict:
     median = lengths[n // 2] if n % 2 else (lengths[n // 2 - 1] + lengths[n // 2]) // 2
     return {"median": median, "mean": round(sum(lengths) / n, 1),
             "min": lengths[0], "max": lengths[-1], "n": n}
+
+
+def kreport_row(line: str):
+    """Parse one kraken2 report line, robust to ``--report-minimizer-data``.
+
+    A standard kraken2 report has 6 tab columns:
+        pct, clade_reads, taxon_reads, rank, taxid, name
+    ``--report-minimizer-data`` inserts two columns (distinct minimizers, distinct k-mers)
+    *between* ``taxon_reads`` and ``rank``, giving 8 columns. The leading three and the
+    trailing three (rank, taxid, name) are stable; only the middle grows — so we index the
+    rank/taxid/name from the END. Every kreport consumer should use this rather than fixed
+    indices, or it silently misreads the rank/name when minimizer reporting is on.
+
+    Returns a dict (``pct, clade_reads, taxon_reads, rank, taxid, name``) or ``None`` for
+    malformed / too-short lines. ``name`` keeps its leading indentation (2 spaces per rank)
+    because Krona derives lineage depth from it.
+    """
+    c = line.rstrip("\n").split("\t")
+    if len(c) < 6:
+        return None
+    return {
+        "pct": c[0],
+        "clade_reads": c[1],
+        "taxon_reads": c[2],
+        "rank": c[-3].strip(),
+        "taxid": c[-2].strip(),
+        "name": c[-1],
+    }

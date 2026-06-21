@@ -12,6 +12,23 @@ params:
     flag: "-o"
     type: path
     managed: true
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
+  name:
+    flag: "-n"
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    question: Label for the chart's root node (defaults to "all" / "Root").
+  combine:
+    flag: "-c"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Combine all input datasets into a single chart instead of one switchable dataset
+      per sample.
   # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
   extra_args:
     type: str

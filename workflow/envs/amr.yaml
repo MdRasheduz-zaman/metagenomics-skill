@@ -5,3 +5,5 @@ channels: [conda-forge, bioconda]
 dependencies:
   - ncbi-amrfinderplus >=4.0
   - abricate >=1.0
+  - blast >=2.12     # ABRicate shells out to blastn; declare it explicitly so the env is usable
+  - any2fasta        # ABRicate input handling (gz/gbk -> fasta); pulled in to be safe

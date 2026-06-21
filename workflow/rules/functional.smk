@@ -70,7 +70,8 @@ rule abricate:
         tsv=f"{OUT}/functional/{{sample}}/amr/abricate.tsv",
     threads: THREADS
     conda:
-        "../envs/amr.yaml"
+        # light env (ABRicate + BLAST) so resistance screening doesn't pull in AMRFinderPlus.
+        "../envs/abricate.yaml"
     params:
         args=lambda wc, threads: " ".join(registry.render_args(
             "abricate", config.get("abricate", {}), managed={"threads": threads})),

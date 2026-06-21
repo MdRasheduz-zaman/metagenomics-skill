@@ -19,6 +19,27 @@ params:
     tier: 3
     ask: false
     question: Compress the parsed-data directory MultiQC writes alongside the report.
+  title:
+    flag: "--title"
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    question: Custom report title shown in the MultiQC HTML header.
+  comment:
+    flag: "--comment"
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    question: Free-text comment embedded at the top of the report (e.g. run notes).
+  fullnames:
+    flag: "--fullnames"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Keep full sample names instead of MultiQC's cleaned/shortened versions.
   # --- managed by the workflow ---
   outdir:
     flag: "-o"

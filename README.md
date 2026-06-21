@@ -37,6 +37,17 @@ On top of the core profiling/assembly engine, optional modules add a **functiona
 **run-level aggregate report** (MultiQC + Krona) — see "Functional, consensus & refinement
 layers" below.
 
+**Already have a genome or assembly?** Give a sample a `contigs:` column (a FASTA) and the
+assembler is skipped — the contigs feed AMR screening, BGC mining, binning, domain taxonomy, and
+reconciliation directly. E.g. screen an isolate for resistance genes:
+`metagx run --config config/amr-genome.yaml --use-conda` (ABRicate ships CARD/ResFinder/NCBI DBs).
+
+**Heavy / version-conflicting tools come via `--use-conda`.** GTDB-Tk, CheckM2, ABRicate,
+AMRFinderPlus, antiSMASH, inStrain, DAS_Tool/dRep are not in the core env — `metagx run
+--use-conda` makes Snakemake build each rule's isolated `workflow/envs/*.yaml` on first use
+(needs `mamba`, or conda ≥ 24.7.1). The `functional` layer is sub-selectable
+(`functional.amr` / `.pathways` / `.annotation`).
+
 ## Layout
 
 ```

@@ -23,6 +23,8 @@ import csv
 import json
 import re
 
+from metagx import formats
+
 _TAXID_RE = re.compile(r"taxid\s+(\d+)")
 
 
@@ -110,15 +112,15 @@ def parse_read_report(path):
     reads = {}
     with open(path) as fh:
         for line in fh:
-            c = line.rstrip("\n").split("\t")
-            if len(c) < 6 or c[3].strip() != "S":
+            row = formats.kreport_row(line)   # robust to --report-minimizer-data columns
+            if row is None or row["rank"] != "S":
                 continue
             try:
-                taxid = int(c[4])
+                taxid = int(row["taxid"])
             except ValueError:
                 continue
-            reads[taxid] = {"name": c[5].strip(),
-                            "pct": float(c[0]), "reads": int(c[1])}
+            reads[taxid] = {"name": row["name"].strip(),
+                            "pct": float(row["pct"]), "reads": int(row["clade_reads"])}
     return reads
 
 

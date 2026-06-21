@@ -1,0 +1,10 @@
+# Isolated, lightweight env for ABRicate AMR/virulence screening on contigs.
+# Split out from amr.yaml so that simple resistance-gene screening (ABRicate ships its own
+# CARD/ResFinder/NCBI/etc. databases) provisions fast and does NOT drag in the much heavier
+# AMRFinderPlus + its dependency tree. Created on demand by `metagx run --use-conda`.
+name: metagx-abricate
+channels: [conda-forge, bioconda]
+dependencies:
+  - abricate >=1.0
+  - blast >=2.12     # ABRicate shells out to blastn; declare it so the env is actually usable
+  - any2fasta        # ABRicate input handling (gz/gbk -> fasta)

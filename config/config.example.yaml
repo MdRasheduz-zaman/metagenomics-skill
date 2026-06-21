@@ -7,7 +7,13 @@ project: demo
 outdir: results
 threads: 8
 
-# Either a TSV path (columns: sample, r1, r2) or an inline list of records.
+# Either a TSV path or an inline list of records. Columns:
+#   sample, r1, r2?, platform?, layout?, library?, group?, contigs?
+#   contigs: path to a pre-assembled FASTA (isolate genome, a previous assembly, or downloaded
+#            references). When set, the assembler is skipped and the contigs feed the
+#            contig-consuming modules directly — e.g. run AMR screening on a genome you already
+#            have with modules.functional + functional.amr (no reads or re-assembly needed).
+#            A sample needs either r1 (reads) or contigs.
 samples: samples.example.tsv
 
 db:
@@ -44,7 +50,7 @@ modules:
   stats: false            # cross-sample diversity (alpha/beta/PCoA, TSS+CLR); needs abundance + >=2 samples
   differential: false     # differential abundance between sample groups (CLR + permutation + BH FDR); needs abundance + a `group` column (>=2 labels, >=2 samples each)
   classify_consensus: false # cross-check kraken2 with a 2nd classifier (MetaPhlAn/Kaiju); needs classify
-  functional: false       # HUMAnN pathways + AMR (AMRFinderPlus/ABRicate) + MAG annotation (Bakta/eggNOG); WGS-only
+  functional: false       # functional layer; pick sub-steps under `functional:` below (WGS-only)
   bgc: false              # biosynthetic gene clusters on contigs (antiSMASH); needs assembly; WGS-only
   aggregate: false        # run-level MultiQC report + interactive Krona chart; needs classify
   strain: false           # inStrain strain-level SNV/microdiversity profiling; needs assembly
@@ -89,6 +95,14 @@ amplicon:
 #   reference_group: control   # optional: clr_diff = mean(other) - mean(reference)
 #   n_permutations: 999
 #   fdr: 0.05
+
+# Functional layer sub-steps (only if modules.functional is on). Each is independent so you can,
+# e.g., screen a genome for AMR without HUMAnN's large DB. ABRicate ships its own AMR DBs (CARD/
+# ResFinder/NCBI/...); AMRFinderPlus runs only if db.amrfinderplus is set.
+# functional:
+#   amr: true          # ABRicate (+ AMRFinderPlus if its db is set) on contigs  [default on]
+#   pathways: false    # HUMAnN pathway abundance on reads (needs db.humann_*)   [default off]
+#   annotation: false  # Bakta + eggNOG-mapper on bins (needs binning)           [default: binning]
 
 # BGC mining tuning (only if modules.bgc is on). antiSMASH on assembled contigs.
 # antismash: {taxon: bacteria, cb_general: true, cb_knownclusters: true}

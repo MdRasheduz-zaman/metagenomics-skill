@@ -147,3 +147,24 @@ def test_cutadapt_and_metaspades_evidence():
     assert cut["value_suggest"] == 100
     mem = evidence_pack.recommend("metaspades", "illumina", param="memory_gb")
     assert mem["value_suggest"] == 250
+
+
+def test_iqtree_binary_resolves_across_versions(monkeypatch):
+    """Version-robustness: resolve iqtree2 / iqtree3 / iqtree, never hardcode one.
+
+    Regression guard for the IQ-TREE 3 break (ships `iqtree3`, not `iqtree2`)."""
+    phylo = _load_phylo_script()
+    present = {"iqtree3"}
+    monkeypatch.setattr(phylo.shutil, "which", lambda c: c if c in present else None)
+    assert phylo._iqtree_binary() == "iqtree3"
+
+    present = {"iqtree2", "iqtree3", "iqtree"}   # prefer v2 (the registry's reference)
+    assert phylo._iqtree_binary() == "iqtree2"
+
+    present = {"iqtree"}
+    assert phylo._iqtree_binary() == "iqtree"
+
+    present = set()                              # none installed -> actionable error
+    monkeypatch.setattr(phylo.shutil, "which", lambda c: None)
+    with pytest.raises(FileNotFoundError):
+        phylo._iqtree_binary()

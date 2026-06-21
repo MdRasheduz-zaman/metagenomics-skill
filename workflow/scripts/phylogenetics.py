@@ -5,18 +5,39 @@ ETE3 is optional; basic Newick stats and a simple tree figure use matplotlib whe
 is not installed.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
+
+# NOTE: no `from __future__ import annotations` — Snakemake's `script:` directive prepends a
+# preamble to this file at runtime, which makes a __future__ import no longer the first
+# statement (SyntaxError). Plain annotations are fine on Python >=3.10.
 
 # Snakemake script: repo root on path for metagx.registries
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
 from metagx import registry  # noqa: E402
+
+
+def _iqtree_binary() -> str:
+    """Resolve the IQ-TREE executable across versions.
+
+    IQ-TREE 2 ships ``iqtree2``; IQ-TREE 3 ships ``iqtree3`` (and sometimes ``iqtree``);
+    older/distro builds use ``iqtree``. Hardcoding ``iqtree2`` silently breaks the default
+    phylogenetics path the moment the installed IQ-TREE is a different major version — exactly
+    the kind of tool-version drift this pipeline must not fall over on. Prefer v2 (the
+    registry's reference), then v3, then the generic name.
+    """
+    for cand in ("iqtree2", "iqtree3", "iqtree"):
+        if shutil.which(cand):
+            return cand
+    raise FileNotFoundError(
+        "no IQ-TREE executable found (looked for iqtree2 / iqtree3 / iqtree). "
+        "Install IQ-TREE or set phylogenetics.method=fasttree."
+    )
 
 MAFFT_METHODS = {
     "auto": ["--auto"],
@@ -54,7 +75,6 @@ def run_trimal(input_fasta: str, output_fasta: str, method: str = "automated1") 
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return True
     except (subprocess.CalledProcessError, FileNotFoundError):
-        import shutil
         shutil.copy(input_fasta, output_fasta)
         return False
 
@@ -67,7 +87,7 @@ def run_iqtree(aligned: str, prefix: str, iqtree_cfg: dict, threads: int) -> str
         "redo": True,
     }
     args = registry.render_args("iqtree", iqtree_cfg or {}, managed=managed)
-    subprocess.run(["iqtree2"] + args, check=True)
+    subprocess.run([_iqtree_binary()] + args, check=True)
     tree = f"{prefix}.treefile"
     if not os.path.isfile(tree):
         raise RuntimeError("IQ-TREE did not produce .treefile")
@@ -154,7 +174,6 @@ def main(
 
     if aligned_input and os.path.isfile(aligned_input):
         aligned = aligned_input
-        import shutil
         shutil.copy(aligned, aligned_out)
         aligned_step = "skipped (pre-aligned)"
     else:
@@ -168,7 +187,6 @@ def main(
         trimal_ok = run_trimal(aligned, trimmed, method=str(phylo_cfg.get("trimal_method", "automated1")))
         if trimal_ok:
             aligned = trimmed
-            import shutil
             shutil.copy(trimmed, aligned_out)
 
     use_fasttree = method == "fasttree" or (
@@ -186,9 +204,8 @@ def main(
         if seq_type == "aa" and iq_cfg.get("model") in (None, "TEST"):
             iq_cfg["model"] = "TEST"
         run_iqtree(aligned, prefix, iq_cfg, threads)
-        import shutil
         shutil.copy(f"{prefix}.treefile", tree_out)
-        tree_method = "iqtree2"
+        tree_method = _iqtree_binary()   # record the actual IQ-TREE used (iqtree2/3/iqtree)
 
     stats = newick_stats(tree_out)
     plotted = plot_tree(tree_out, plot_out)

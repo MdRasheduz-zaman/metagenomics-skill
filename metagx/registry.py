@@ -223,11 +223,24 @@ def render_args(tool: str, values: Dict[str, Any], managed: Dict[str, Any] | Non
     ``values``  : validated user parameters (no lists — pick one sweep value first).
     ``managed`` : workflow-supplied values for managed params (db, threads, io, paired...).
     bool flags are emitted only when truthy; empty strings are skipped.
+
+    A ``managed`` key that is not a registry param raises: this is the workflow-owned
+    contract between a rule and the registry, so a typo (``reprot``) or a renamed param
+    must fail loudly here rather than silently drop the flag and corrupt the command.
     """
     params = _params(tool)
+    managed = managed or {}
+    unknown = [k for k in managed if k not in params]
+    if unknown:
+        known = sorted(k for k, s in params.items() if s.get("managed"))
+        raise ValidationError(
+            f"render_args({tool!r}): managed key(s) {unknown} are not parameters of the "
+            f"{tool} registry (typo, or the registry renamed the param). "
+            f"Registry-declared managed params: {known}."
+        )
     merged: Dict[str, Any] = {}
     merged.update(values or {})
-    merged.update(managed or {})
+    merged.update(managed)
 
     args: List[str] = []
     trailing: List[str] = []  # passthrough tokens, appended verbatim after all flags

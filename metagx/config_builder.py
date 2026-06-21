@@ -284,6 +284,18 @@ def _sample_groups(samples: Any, group_column: str = "group") -> Dict[str, int]:
     return counts
 
 
+def _any_provided_contigs(samples: Any) -> bool:
+    """True if any sample supplies pre-assembled contigs (list records or a TSV path)."""
+    if isinstance(samples, list):
+        return any(str(r.get("contigs", "")).strip() for r in samples)
+    if isinstance(samples, str) and os.path.isfile(samples):
+        import csv
+        with open(samples) as fh:
+            return any(str(row.get("contigs", "")).strip()
+                       for row in csv.DictReader(fh, delimiter="\t"))
+    return False
+
+
 def build_config(
     *,
     project: str = "run",
@@ -372,19 +384,26 @@ def build_config(
         samples = [dict(r) for r in samples]  # don't mutate the caller's records
     backfilled = _backfill_platforms(samples, probe_report)
 
+    # Contig-consuming modules (binning/reconcile/bgc/strain/domain/functional-AMR) are
+    # satisfied either by running the assembler OR by a sample supplying pre-assembled
+    # contigs (an isolate genome, a prior assembly, or references) — see the `contigs` column.
+    have_contigs = _any_provided_contigs(samples)
+    assembly_ok = bool(mods.get("assembly") or have_contigs)
+
     if mods.get("classify") and not db.get("kraken2"):
         raise registry.ValidationError("classify is enabled but db.kraken2 is missing")
     if mods.get("abundance") and not db.get("bracken", db.get("kraken2")):
         raise registry.ValidationError("abundance is enabled but no Bracken db is set")
-    if mods.get("binning") and not mods.get("assembly"):
-        raise registry.ValidationError("binning requires assembly to be enabled too")
+    if mods.get("binning") and not assembly_ok:
+        raise registry.ValidationError(
+            "binning requires assembly to be enabled (or a sample with pre-assembled contigs)")
     if mods.get("bin_refinement") and not mods.get("binning"):
         raise registry.ValidationError(
             "bin_refinement (MaxBin2+CONCOCT→DAS_Tool→dRep) requires binning to be enabled"
         )
-    if mods.get("reconcile") and not (mods.get("assembly") and mods.get("classify")):
+    if mods.get("reconcile") and not (assembly_ok and mods.get("classify")):
         raise registry.ValidationError(
-            "reconcile requires both assembly (for contigs) and classify (for read calls)"
+            "reconcile requires contigs (assembly or provided) and classify (for read calls)"
         )
     if mods.get("filtered_assembly") and not (mods.get("assembly") and mods.get("classify")):
         raise registry.ValidationError(
@@ -408,9 +427,10 @@ def build_config(
                 raise registry.ValidationError(
                     f"differential needs >=2 samples per group for the permutation test; "
                     f"under-replicated group(s): {small}")
-    if mods.get("bgc") and not mods.get("assembly"):
+    if mods.get("bgc") and not assembly_ok:
         raise registry.ValidationError(
-            "bgc (antiSMASH biosynthetic gene clusters) requires assembly — it mines contigs")
+            "bgc (antiSMASH biosynthetic gene clusters) requires contigs "
+            "(enable assembly or provide pre-assembled contigs) — it mines contigs")
     if mods.get("classify_consensus") and not mods.get("classify"):
         raise registry.ValidationError(
             "classify_consensus needs classify (it cross-checks kraken2 against a 2nd classifier)"
@@ -429,9 +449,10 @@ def build_config(
             raise registry.ValidationError(
                 "damage needs at least one sample with library=ancient to authenticate"
             )
-    if mods.get("strain") and not mods.get("assembly"):
+    if mods.get("strain") and not assembly_ok:
         raise registry.ValidationError(
-            "strain (inStrain) requires assembly — it profiles SNVs over the contigs+mapping"
+            "strain (inStrain) requires contigs (assembly or provided) — it profiles SNVs "
+            "over the contigs+mapping"
         )
     if mods.get("decontam"):
         if not mods.get("abundance"):
@@ -455,8 +476,9 @@ def build_config(
     if mods.get("domain_taxonomy"):
         if not doms:
             raise registry.ValidationError("domain_taxonomy needs a non-empty `domains` list")
-        if ("viral" in doms or "eukaryote" in doms) and not mods.get("assembly"):
-            raise registry.ValidationError("viral/eukaryote domain taxonomy requires assembly")
+        if ("viral" in doms or "eukaryote" in doms) and not assembly_ok:
+            raise registry.ValidationError(
+                "viral/eukaryote domain taxonomy requires contigs (assembly or provided)")
         if "prokaryote" in doms and not mods.get("binning"):
             raise registry.ValidationError("prokaryote domain taxonomy requires binning (bins)")
 

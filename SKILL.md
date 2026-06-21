@@ -294,6 +294,19 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
 Layout: `se` / `pe` / `interleaved` (short only; split + classified as pairs). Long-read
 platforms are single-end. Subsampling is single-end only for now.
 
+**Pre-assembled contigs.** Add a `contigs:` column (path to a FASTA) to run the contig modules on
+a genome the user already has — an isolate genome, a prior assembly, or downloaded references —
+without re-assembling. The assembler is skipped and the contigs feed functional/AMR, BGC, binning,
+domain taxonomy, and reconcile. A sample needs either reads (`r1`) or `contigs`. Example — screen a
+genome for AMR: one sample row with `contigs: my_genome.fasta`, `modules.functional: true`,
+`functional.amr: true` (ABRicate ships CARD/ResFinder/NCBI DBs; no DB download).
+
+**Heavy/conflicting tools come via `--use-conda`.** GTDB-Tk, CheckM2, AMR (ABRicate/AMRFinderPlus),
+antiSMASH, inStrain, DAS_Tool/dRep etc. are **not** in the core env — `metagx run --use-conda`
+provisions each rule's isolated `workflow/envs/*.yaml` on first use. Needs `mamba` (recommended) or
+conda ≥ 24.7.1; metagx tells the user if neither is present. The `functional` layer is sub-selectable
+(`functional.amr` / `.pathways` / `.annotation`) so a user can run just AMR without HUMAnN's large DB.
+
 ## Other clients
 - **MCP** (Claude Desktop, Cursor, any MCP client): `python mcp_server.py`. Tools:
   `list_pipeline_tools`, `list_presets`, `get_preset`, `list_schedulers`, `get_parameters`,

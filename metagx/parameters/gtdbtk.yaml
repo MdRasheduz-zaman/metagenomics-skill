@@ -3,12 +3,80 @@ tool: gtdbtk
 command: gtdbtk
 description: >
   Genome-level taxonomic classification of bacterial/archaeal bins against the Genome
-  Taxonomy Database (GTDB) using marker genes. Run on MetaBAT2 bins.
+  Taxonomy Database (GTDB) using marker genes (classify_wf). Run on MetaBAT2 bins. The
+  reference DB is supplied via the GTDBTK_DATA_PATH env var by the workflow, not a flag.
+  GTDB-Tk's dominant practical concern is *memory*: its pplacer step is the bottleneck,
+  so the user-facing funnel is about trading speed/memory, not taxonomy accuracy.
 params:
+  # --- workflow-managed (injected by rules/domains.smk) ---
   cpus:
     flag: "--cpus"
     type: int
     managed: true
+  extension:
+    flag: "--extension"
+    type: str
+    managed: true          # bins are written as *.fa by MetaBAT2
+  skip_ani_screen:
+    flag: "--skip_ani_screen"
+    type: bool
+    managed: true          # no Mash DB by default; skip the ANI pre-screen
+  # --- interview funnel (ask: true) ---
+  pplacer_cpus:
+    flag: "--pplacer_cpus"
+    type: int
+    default: 0
+    min: 0
+    tier: 2
+    ask: true
+    question: >
+      Threads for the pplacer placement step (0 = same as --cpus). pplacer holds the
+      reference package in memory *per thread*, so this is the main lever for fitting
+      GTDB-Tk on a memory-limited machine — set it to 1 if classify_wf is OOM-killed.
+    recommend:
+      default: 0
+    warn_if:
+      - when: { available_memory_gb_lt: 64 }
+        message: <64 GB RAM — set pplacer_cpus=1 to avoid an out-of-memory failure.
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
+  full_tree:
+    flag: "--full_tree"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Use the full GTDB reference tree instead of the split per-domain trees. Far higher
+      memory (~hundreds of GB); only on a large-memory node.
+  min_perc_aa:
+    flag: "--min_perc_aa"
+    type: float
+    default: 10.0
+    min: 0.0
+    max: 100.0
+    tier: 3
+    ask: false
+    question: >
+      Minimum percentage of the aligned marker columns a bin must have to be classified
+      (lower = classify more fragmentary bins, at the cost of confidence).
+  scratch_dir:
+    flag: "--scratch_dir"
+    type: path
+    default: ""
+    tier: 3
+    ask: false
+    question: >
+      Write pplacer's reference package to this directory (disk) instead of RAM — trades
+      runtime for a large reduction in peak memory.
+  mash_db:
+    flag: "--mash_db"
+    type: path
+    default: ""
+    tier: 3
+    ask: false
+    question: >
+      Path to a Mash sketch DB to enable the ANI pre-screen (speeds classification by
+      short-circuiting obvious assignments). Requires un-setting skip_ani_screen.
   # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
   extra_args:
     type: str

@@ -41,9 +41,11 @@ rule checkv:
         "../envs/viral.yaml"
     params:
         outdir=lambda wc: f"{OUT}/viral/{wc.sample}/checkv",
-        db=DB.get("checkv", ""),
+        args=lambda wc, threads: " ".join(registry.render_args(
+            "checkv", config.get("checkv", {}),
+            managed={"threads": threads, "db": DB.get("checkv", "")})),
     shell:
-        "checkv end_to_end {input.contigs} {params.outdir} -t {threads} -d {params.db}"
+        "checkv end_to_end {input.contigs} {params.outdir} {params.args}"
 
 
 # ----------------------- prokaryote (needs bins) -----------------------
@@ -59,9 +61,12 @@ rule gtdbtk:
         bindir=lambda wc: f"{OUT}/binning/{wc.sample}/bins",
         outdir=lambda wc: f"{OUT}/prok/{wc.sample}/gtdbtk",
         db=DB.get("gtdbtk", ""),
+        args=lambda wc, threads: " ".join(registry.render_args(
+            "gtdbtk", config.get("gtdbtk", {}),
+            managed={"cpus": threads, "extension": "fa", "skip_ani_screen": True})),
     shell:
         "GTDBTK_DATA_PATH={params.db} gtdbtk classify_wf --genome_dir {params.bindir} "
-        "--out_dir {params.outdir} --cpus {threads} --extension fa --skip_ani_screen "
+        "--out_dir {params.outdir} {params.args} "
         "&& touch {output.done}"
 
 
@@ -76,10 +81,13 @@ rule checkm2:
     params:
         bindir=lambda wc: f"{OUT}/binning/{wc.sample}/bins",
         outdir=lambda wc: f"{OUT}/prok/{wc.sample}/checkm2",
-        db=DB.get("checkm2", ""),
+        args=lambda wc, threads: " ".join(registry.render_args(
+            "checkm2", config.get("checkm2", {}),
+            managed={"threads": threads, "database_path": DB.get("checkm2", ""),
+                     "extension": "fa", "force": True})),
     shell:
-        "checkm2 predict --threads {threads} --input {params.bindir} "
-        "--output-directory {params.outdir} -x fa --database_path {params.db} --force"
+        "checkm2 predict --input {params.bindir} "
+        "--output-directory {params.outdir} {params.args}"
 
 
 # ----------------------- eukaryote -----------------------
@@ -105,7 +113,9 @@ rule eukcc:
     conda:
         "../envs/euk.yaml"
     params:
-        outdir=lambda wc: f"{OUT}/euk/{wc.sample}/eukcc",
-        db=DB.get("eukcc", ""),
+        args=lambda wc, threads, output: " ".join(registry.render_args(
+            "eukcc", config.get("eukcc", {}),
+            managed={"out": os.path.dirname(output.csv), "threads": threads,
+                     "db": DB.get("eukcc", "")})),
     shell:
-        "eukcc single --out {params.outdir} --threads {threads} --db {params.db} {input.euk}"
+        "eukcc single {params.args} {input.euk}"

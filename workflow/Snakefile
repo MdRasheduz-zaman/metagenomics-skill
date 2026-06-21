@@ -33,7 +33,10 @@ if MODULES.get("classify_consensus", False):
     include: "rules/consensus.smk"
 if MODULES.get("abundance", True):
     include: "rules/abundance.smk"
-if MODULES.get("assembly", False) or MODULES.get("binning", False) or MODULES.get("reconcile", False):
+if (MODULES.get("assembly", False) or MODULES.get("binning", False)
+        or MODULES.get("reconcile", False) or PROVIDED_CONTIGS):
+    # PROVIDED_CONTIGS pulls in assembly.smk for the staging rule even if the user enabled only a
+    # contig-consuming module (functional/BGC/domain) on a genome they already have.
     include: "rules/assembly.smk"
 if MODULES.get("bin_refinement", False):
     include: "rules/binning_refine.smk"
@@ -127,16 +130,27 @@ def final_targets():
     # biosynthetic gene clusters on contigs (antiSMASH; WGS samples)
     if MODULES.get("bgc", False):
         targets += expand(f"{OUT}/bgc/{{sample}}/antismash.done", sample=WGS_SAMPLES)
-    # functional layer (WGS-only; sub-steps scale with assembly/binning availability)
+    # functional layer (WGS-only). Sub-steps are independently selectable via the `functional:`
+    # config block so a user can run, say, only AMR screening on a genome without HUMAnN's huge
+    # DB. Defaults: amr on (abricate ships its own DBs); pathways off (needs a big nucleotide/
+    # protein DB); annotation follows binning. AMRFinderPlus is added only when its DB is set;
+    # ABRicate always runs (bundled CARD/ResFinder/NCBI/etc.).
     if MODULES.get("functional", False):
-        targets += expand(f"{OUT}/functional/{{sample}}/humann/input_pathabundance.tsv",
-                          sample=WGS_SAMPLES)
-        if MODULES.get("assembly", False):
-            targets += expand(f"{OUT}/functional/{{sample}}/amr/amrfinder.tsv", sample=WGS_SAMPLES)
-            targets += expand(f"{OUT}/functional/{{sample}}/amr/abricate.tsv", sample=WGS_SAMPLES)
-        if MODULES.get("binning", False):
+        _func = config.get("functional", {})
+        _contig_samples = [s for s in WGS_SAMPLES
+                           if (s in PROVIDED_CONTIGS or MODULES.get("assembly", False))]
+        if _func.get("pathways", False):
+            targets += expand(f"{OUT}/functional/{{sample}}/humann/input_pathabundance.tsv",
+                              sample=[s for s in WGS_SAMPLES if has_reads(s)])
+        if _func.get("amr", True):
+            targets += expand(f"{OUT}/functional/{{sample}}/amr/abricate.tsv",
+                              sample=_contig_samples)
+            if DB.get("amrfinderplus"):
+                targets += expand(f"{OUT}/functional/{{sample}}/amr/amrfinder.tsv",
+                                  sample=_contig_samples)
+        if _func.get("annotation", MODULES.get("binning", False)):
             targets += expand(f"{OUT}/functional/{{sample}}/annotate/eggnog/bins.emapper.annotations",
-                              sample=WGS_SAMPLES)
+                              sample=_contig_samples)
     # amplicon branch (data-driven: runs whenever amplicon samples are present).
     # short reads -> VSEARCH OTUs (default) or DADA2 ASVs (amplicon.method: asv); long -> Emu.
     targets += expand(f"{OUT}/amplicon/{{sample}}/otu_table.txt", sample=SHORT_AMPLICON_OTU)

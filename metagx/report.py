@@ -20,6 +20,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 from typing import Any, Dict, List, Optional
@@ -229,32 +230,52 @@ def active_tools(cfg: Dict[str, Any]) -> List[str]:
     return out
 
 
+def _scan_for_version(text: str) -> str:
+    """First short, non-usage line carrying a dotted version, or 'unknown'."""
+    junk = ("usage", "unrecognized", "error", "command not found", "must specify", "recommend")
+    for line in (text or "").strip().splitlines():
+        line = line.strip()
+        if (line and len(line) < 160 and re.search(r"\d+\.\d+", line)
+                and not any(j in line.lower() for j in junk)):
+            return line
+    return "unknown"
+
+
 def tool_versions(tools: List[str]) -> Dict[str, str]:
-    """Best-effort version capture; records 'not found' if a tool isn't on PATH."""
+    """Best-effort version capture; records 'not found' if a tool isn't on PATH.
+
+    Prefers a registry's ``version_probe`` (the canonical command for that tool) when present —
+    several bioinformatics tools print their version only via an idiosyncratic command (e.g.
+    ``metabat2 --help`` carries ``version 2:2.18``), so the generic ``--version`` probe misreads
+    or misses them. Falls back to trying ``--version``/``version``/``-v``/``-V``.
+    """
     versions = {}
     for tool in tools:
-        cmd = registry.load_registry(tool)["command"] if tool in registry.list_tools() else tool
+        reg = registry.load_registry(tool) if tool in registry.list_tools() else {}
+        cmd = reg.get("command", tool)
         exe = shutil.which(cmd)
         if not exe:
             versions[tool] = "not found on PATH"
             continue
         ver = "unknown"
-        junk = ("usage", "unrecognized", "error", "command not found", "must specify")
-        for flag in ("--version", "version", "-v", "-V"):
+        # 1) registry-declared canonical probe, if any
+        probe = reg.get("version_probe")
+        if probe:
             try:
-                p = subprocess.run([cmd, flag], capture_output=True, text=True, timeout=15)
-                for line in (p.stdout or p.stderr).strip().splitlines():
-                    line = line.strip()
-                    # a real version line is short, carries a dotted version (X.Y), and
-                    # isn't usage/help text
-                    if (line and len(line) < 80 and re.search(r"\d+\.\d+", line)
-                            and not any(j in line.lower() for j in junk)):
-                        ver = line
-                        break
-                if ver != "unknown":
-                    break
+                p = subprocess.run(shlex.split(probe), capture_output=True, text=True, timeout=20)
+                ver = _scan_for_version((p.stdout or "") + "\n" + (p.stderr or ""))
             except (subprocess.SubprocessError, OSError):
-                continue
+                ver = "unknown"
+        # 2) generic fallbacks
+        if ver == "unknown":
+            for flag in ("--version", "version", "-v", "-V"):
+                try:
+                    p = subprocess.run([cmd, flag], capture_output=True, text=True, timeout=15)
+                    ver = _scan_for_version((p.stdout or "") + "\n" + (p.stderr or ""))
+                    if ver != "unknown":
+                        break
+                except (subprocess.SubprocessError, OSError):
+                    continue
         versions[tool] = ver
     return versions
 

@@ -100,6 +100,15 @@ def test_promotion_respects_max_tier_ceiling():
     assert "keep_haplotypes" in got
 
 
+def test_metabat2_viral_context_recommends_floor():
+    """Small viral genomes: min_contig must surface the 1500 floor + a binning-domain warning."""
+    spec = registry.interview_spec("metabat2", max_tier=1, context={"target_domain": "viral"})
+    mc = next(p for p in spec if p["name"] == "min_contig")
+    assert mc["recommend"].get("viral") == 1500
+    assert mc.get("promoted"), "min_contig should be promoted in viral context"
+    assert mc.get("warn_if"), "viral binning should carry a warning"
+
+
 VALID_TYPES = {"int", "float", "bool", "str", "path", "enum"}
 
 

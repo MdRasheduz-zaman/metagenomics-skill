@@ -3,12 +3,36 @@ tool: checkv
 command: checkv
 description: >
   Assesses quality, completeness, and contamination of metagenome-assembled viral genomes
-  (the viral analogue of CheckM). Run on viral contigs from geNomad.
+  (the viral analogue of CheckM). Run on viral contigs from geNomad. CheckV's `end_to_end`
+  workflow is deliberately low-knob — what matters is the reference DB (workflow-managed)
+  and thread count; the rest is operational.
 params:
+  # --- workflow-managed (injected by rules/domains.smk, never interviewed) ---
+  db:
+    flag: "-d"
+    type: path
+    managed: true
   threads:
     flag: "-t"
     type: int
     managed: true
+  # --- modeled but quiet (ask: false): reachable, not pushed ---
+  remove_tmp:
+    flag: "--remove_tmp"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Delete CheckV's intermediate files when finished (saves disk on large runs; keep
+      them to re-run downstream steps without recomputing).
+  restart:
+    flag: "--restart"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: Overwrite an existing output directory and start fresh rather than resuming.
   # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
   extra_args:
     type: str

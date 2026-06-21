@@ -9,11 +9,15 @@ Runs as a Snakemake `script:` (reads snakemake.input/output/params); the parsing
 are pure functions so they can be unit-tested directly.
 """
 
-from __future__ import annotations
+# NOTE: no `from __future__ import annotations` here — this file runs via Snakemake's `script:`
+# directive, which prepends a preamble, so a __future__ import would no longer be the first
+# statement (SyntaxError). Plain annotations are fine on Python >=3.10.
 
 import json
 import re
 from typing import Dict, Set
+
+from metagx import formats
 
 
 def _norm(name: str) -> str:
@@ -29,11 +33,11 @@ def parse_kraken_species(path: str) -> Dict[str, float]:
     out: Dict[str, float] = {}
     with open(path) as fh:
         for line in fh:
-            cols = line.rstrip("\n").split("\t")
-            if len(cols) >= 6 and cols[3].strip() == "S":
-                key = _norm(cols[5])
+            row = formats.kreport_row(line)   # robust to --report-minimizer-data columns
+            if row and row["rank"] == "S":
+                key = _norm(row["name"])
                 if key:
-                    out[key] = out.get(key, 0.0) + float(cols[0])
+                    out[key] = out.get(key, 0.0) + float(row["pct"])
     return out
 
 

@@ -24,6 +24,10 @@ DOMAINS = [d.lower() for d in config.get("domains", [])]
 # Samples: a TSV path (sample, r1, r2, platform, layout) or inline records.    #
 #   platform: illumina|mgi (short) | ont (long) | pacbio_hifi|pacbio_clr (long) #
 #   layout:   se | pe | interleaved  (default: pe if r2 present else se)        #
+#   contigs:  optional pre-assembled FASTA (isolate genome / prior assembly /   #
+#             references). When set, the assembler is skipped and these contigs #
+#             feed the contig modules (functional/AMR, BGC, binning, domain).   #
+#             A sample needs either reads (r1) or contigs.                       #
 # --------------------------------------------------------------------------- #
 SHORT_PLATFORMS = {"illumina", "mgi", "bgi"}
 ONT_PLATFORMS = {"ont", "nanopore"}
@@ -57,11 +61,16 @@ def _load_samples(spec):
         bracken_read_length = int(brl) if brl else None
         # optional: group label for differential abundance (e.g. case/control)
         group = (rec.get("group") or "").strip() or None
+        # optional: pre-assembled contigs/genome/MAGs (FASTA). When given, the assembler is
+        # skipped and these contigs feed the assembly-dependent modules (functional/AMR, BGC,
+        # binning, domain taxonomy, reconcile) directly — for users who already have an
+        # isolate genome, a previous assembly, or downloaded references.
+        contigs = (rec.get("contigs") or "").strip() or None
         samples[name] = {"r1": r1, "r2": r2, "platform": platform,
                          "layout": layout, "library": library,
                          "long_reads": long_reads, "long_platform": long_platform,
                          "control": control, "bracken_read_length": bracken_read_length,
-                         "group": group}
+                         "group": group, "contigs": contigs}
     if not samples:
         raise ValueError("No samples found.")
     return samples
@@ -82,7 +91,19 @@ def is_long(sample):
     return platform_of(sample) in LONG_PLATFORMS
 
 
+def provided_contigs(sample):
+    """User-supplied pre-assembled contigs/genome FASTA for this sample, or None."""
+    return SAMPLES[sample].get("contigs")
+
+
+def has_reads(sample):
+    return bool(SAMPLES[sample].get("r1"))
+
+
 def sample_format(sample):
+    # A contigs-only sample (genome/MAGs provided, no reads) is FASTA by definition.
+    if not has_reads(sample):
+        return "fasta"
     return formats.read_format(SAMPLES[sample]["r1"])
 
 
@@ -111,6 +132,8 @@ def group_of(sample):
 
 # --- validate the combinations up front so failures are clear, not cryptic ---
 for _s in SAMPLES:
+    if not has_reads(_s) and not provided_contigs(_s):
+        raise ValueError(f"sample '{_s}': needs either reads (r1) or pre-assembled contigs.")
     if library_of(_s) not in {"wgs", "amplicon", "ancient"}:
         raise ValueError(f"sample '{_s}': library must be 'wgs', 'amplicon', or 'ancient'")
     if is_ancient(_s) and platform_of(_s) not in SHORT_PLATFORMS:
@@ -373,10 +396,19 @@ def minimap2_preset(sample):
     return "sr"  # short reads
 
 
+# Samples that supply their own contigs skip the assembler entirely — the staging rule
+# (assembly.smk) puts their FASTA where the assembler's output would be.
+PROVIDED_CONTIGS = _grp(lambda s: provided_contigs(s))
+
 # Assembly is WGS-only (amplicon excluded — assembly does not apply to marker-gene data).
-SHORT_ASM = _grp(lambda s: assembler(s) == "megahit" and not is_amplicon(s))
-SPADES_ASM = _grp(lambda s: assembler(s) == "metaspades" and not is_amplicon(s))
-LONG_ASM = _grp(lambda s: assembler(s) == "flye" and not is_amplicon(s))
+# Samples with provided contigs are excluded from every assembler so they don't also try to
+# (re)assemble — the staged contigs satisfy the same output.
+SHORT_ASM = _grp(lambda s: assembler(s) == "megahit" and not is_amplicon(s)
+                 and s not in PROVIDED_CONTIGS)
+SPADES_ASM = _grp(lambda s: assembler(s) == "metaspades" and not is_amplicon(s)
+                  and s not in PROVIDED_CONTIGS)
+LONG_ASM = _grp(lambda s: assembler(s) == "flye" and not is_amplicon(s)
+                and s not in PROVIDED_CONTIGS)
 
 # metaSPAdes needs paired-end short reads (single-end is unsupported, even in hybrid mode).
 _spades_se = [s for s in SPADES_ASM if layout(s) == "se"]
