@@ -15,3 +15,5 @@ data/
 local_databases/
 tmp/
 .metagx/
+# Pasted CI logs (triage scratch)
+e2e_error.txt

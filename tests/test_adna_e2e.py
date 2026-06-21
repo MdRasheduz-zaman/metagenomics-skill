@@ -25,13 +25,18 @@ from pathlib import Path
 import pytest
 
 REPO = Path(__file__).resolve().parents[1]
-GENOMES = REPO / "data" / "genomes.fasta"
+# Prefer the gitignored full data/ set when present, else fall back to the committed
+# 30-genome viral fixture — so this aDNA test actually RUNS in CI (mapDamage is in
+# environment.yml) instead of silently skipping for want of gitignored state.
+_DATA_GENOMES = REPO / "data" / "genomes.fasta"
+_FIXTURE_GENOMES = REPO / "tests" / "fixtures" / "viral" / "genomes.fasta"
+GENOMES = _DATA_GENOMES if _DATA_GENOMES.is_file() else _FIXTURE_GENOMES
 
 _HAVE = bool(shutil.which("mapDamage") and shutil.which("minimap2") and shutil.which("samtools"))
 requires_mapdamage = pytest.mark.skipif(
     not (_HAVE and GENOMES.is_file()),
-    reason="mapDamage/minimap2/samtools not on PATH or genomes.fasta absent "
-    "(skips in CI; run with the metagx-bio env active)",
+    reason="mapDamage/minimap2/samtools not on PATH (skips without the bio stack); "
+    "the reference comes from data/ or the committed viral fixture",
 )
 
 
@@ -107,7 +112,7 @@ def _mapdamage(bam: Path, ref: Path, outdir: Path):
 def test_adna_damage_authentication(tmp_path, damaged, expect):
     da = _load_authenticate()
     genomes = _read_fasta(GENOMES)
-    ref = REPO / "data" / "genomes.fasta"
+    ref = GENOMES
 
     reads = _simulate(genomes, tmp_path / "reads.fastq", n_reads=4000, read_len=50,
                       damaged=damaged, seed=7)

@@ -37,21 +37,19 @@ jobs:
         shell: bash -el {0}      # login shell so the conda env is active
     steps:
       - uses: actions/checkout@v4
+      # Build the env straight from environment.yml so the CI tool stack can't drift from
+      # what we ship/document (the old hand-picked create-args silently omitted QC/CAT/kaiju/
+      # genomad/… so those modules were never exercised). The extra create-args are the tools
+      # the aggregate/phylogenetics rules normally pull via --use-conda (workflow/envs/), which
+      # this job runs without --use-conda, so they must be on PATH here.
       - uses: mamba-org/setup-micromamba@v2
         with:
-          environment-name: metagx-ci
-          condarc: |
-            channels:
-              - conda-forge
-              - bioconda
+          environment-file: environment.yml
           create-args: >-
-            python=3.11
-            kraken2>=2.1 bracken>=2.9 fastp>=0.23
-            megahit>=1.2 flye>=2.9 minimap2>=2.26 samtools>=1.18 metabat2>=2.15
-            mapdamage2 mafft fasttree iqtree krona multiqc
+            iqtree krona multiqc
       - name: Install package (test extras)
         run: pip install -e ".[test]"
       - name: Tool-version floors (catch silent downgrades)
         run: pytest -q tests/test_tool_versions.py
-      - name: Real end-to-end pipeline (mock DB from fixture; classify/assemble/reconcile/aDNA/phylo/aggregate)
+      - name: Real end-to-end pipeline (DB+Kaiju from fixtures; classify/assemble/reconcile/consensus/aDNA/phylo/aggregate)
         run: pytest -q tests/test_pipeline_e2e.py tests/test_adna_e2e.py

@@ -390,12 +390,30 @@ def test_differential_and_diversity_module(tmp_path, viral_db):
 # --------------------------------------------------------------------------- #
 PHYLO_FIXTURE = REPO / "tests" / "fixtures" / "phylo_demo.fasta"
 KAIJU_DB = REPO / "local_databases" / "kaiju_custom"
+# Kaiju's index can be built from the same committed genomes fixture, so the consensus
+# cross-check runs in CI too (no gitignored DB needed) — mirrors the viral_db approach.
+_CAN_BUILD_KAIJU = bool(shutil.which("prodigal") and shutil.which("kaiju-mkbwt")
+                        and shutil.which("kaiju-mkfmi") and FIXTURE_GENOMES.is_file())
+
+
+@pytest.fixture(scope="session")
+def kaiju_db(tmp_path_factory, viral_db):
+    """Path to a Kaiju protein DB: the prebuilt one if present, else built fresh from the
+    30-genome fixture, reusing viral_db's taxonomy/ so taxids line up for the cross-check."""
+    if (KAIJU_DB / "kaiju_db.fmi").is_file():
+        return KAIJU_DB
+    db_dir = tmp_path_factory.mktemp("kaiju_db")
+    res = dbbuild.build_kaiju_db(str(FIXTURE_GENOMES), str(db_dir),
+                                 taxonomy_dir=str(Path(viral_db) / "taxonomy"),
+                                 threads=4, run=True)
+    assert res.get("ok"), f"Kaiju DB build failed: {res}"
+    return db_dir
 
 _HAVE_PHYLO = bool(shutil.which("mafft") and (shutil.which("iqtree2")
                    or shutil.which("iqtree3") or shutil.which("iqtree")
                    or shutil.which("fasttree") or shutil.which("FastTree")))
 _HAVE_KAIJU = bool(shutil.which("kaiju") and shutil.which("kaiju2table")
-                   and (KAIJU_DB / "kaiju_db.fmi").is_file())
+                   and ((KAIJU_DB / "kaiju_db.fmi").is_file() or _CAN_BUILD_KAIJU))
 _HAVE_AGG = bool(shutil.which("ktImportText") and shutil.which("multiqc"))
 
 
@@ -440,7 +458,7 @@ def test_phylogenetics_module(tmp_path):
 @requires_stack
 @pytest.mark.skipif(not _HAVE_KAIJU,
                     reason="kaiju/kaiju2table or kaiju_custom DB absent (skips in CI)")
-def test_consensus_module_kaiju(tmp_path, viral_db):
+def test_consensus_module_kaiju(tmp_path, viral_db, kaiju_db):
     """classify_consensus module: kraken2 cross-checked against an independent protein
     classifier (Kaiju). On the viral set the two orthogonal methods should agree strongly."""
     ont = DATA / "simulated_metagenomic_reads.fasta"
@@ -453,7 +471,7 @@ def test_consensus_module_kaiju(tmp_path, viral_db):
     cfg = {
         "project": "cons", "outdir": str(tmp_path / "out"), "threads": 4,
         "samples": str(sheet),
-        "db": {"kraken2": str(viral_db), "bracken": str(viral_db), "kaiju": str(KAIJU_DB)},
+        "db": {"kraken2": str(viral_db), "bracken": str(viral_db), "kaiju": str(kaiju_db)},
         "modules": {"qc": False, "classify": True, "abundance": False,
                     "assembly": False, "classify_consensus": True},
         "consensus": {"classifier": "kaiju"}, "kraken2": {"minimum_hit_groups": 2},

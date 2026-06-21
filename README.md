@@ -112,7 +112,7 @@ per domain (set `domains: [viral, prokaryote, eukaryote]`):
 
 It also adds **horizontal coverage (breadth)** per contig to `reconcile` — at large reference
 scale, breadth is a better "is it really present?" signal than depth. See
-`DESIGN-multidomain-and-db-scaling.md` for the full rationale + references.
+`docs/DESIGN-multidomain-and-db-scaling.md` for the full rationale + references.
 
 ## Filtered assembly: deplete/target reads, then compare (`modules.filtered_assembly`)
 
@@ -150,7 +150,7 @@ marker-gene DB + OTU/Emu). An all-amplicon run with assembly modules enabled err
 Mixed WGS+amplicon runs are fine — each sample is routed by its `library`. A third value,
 `library: ancient`, routes degraded/ancient samples through read-merging + damage
 authentication (see "Ancient DNA, decontamination & strain-level" above). See
-`DESIGN-multidomain-and-db-scaling.md` for the rationale + references (DADA2/QIIME2, Emu, SILVA).
+`docs/DESIGN-multidomain-and-db-scaling.md` for the rationale + references (DADA2/QIIME2, Emu, SILVA).
 
 ## Cross-sample statistics & host removal
 
@@ -232,13 +232,59 @@ provision their own tools under `--use-conda` and appear in the Methods/citation
 
 `pip install -e ".[test]" && pytest` — unit tests for the registry, config builder,
 diversity, formats, subsampling, and read-filter logic. CI runs them on every push
-(`.github/workflows/ci.yml`). See `CRITIQUE.md` for the full gap analysis + roadmap.
+(`.github/workflows/ci.yml`): a tool-free `test` job (unit suite + the workflow dry-run DAG
+gate) and an `e2e` job that installs the bio stack **from `environment.yml`** (parity is
+enforced by `tests/test_ci_env_parity.py`) and runs the real pipeline. See `docs/history/`
+for past gap analyses and `ROADMAP.md` for what's next.
+
+### What's actually verified (honest coverage matrix)
+
+Verification levels, strongest first: **CI-real** (executes in CI on every push) ·
+**local-real** (executes via `tests/test_pipeline_e2e.py` when `data/` is present) ·
+**DAG** (command line built + resolved by the dry-run gate, not executed) ·
+**script/unit** (the module's Python logic unit-tested directly) · **config** (only
+registry/config validation). "~20 modules exist" ≠ "~20 modules run in CI" — this is the gap.
+
+| Module | CI-real | local-real | DAG | script/unit |
+| --- | :-: | :-: | :-: | :-: |
+| classify (kraken2) | ✅ | ✅ | ✅ | ✅ |
+| abundance (Bracken) | ✅ | ✅ | ✅ | |
+| qc (fastp/chopper) | | ✅ | ✅ | |
+| assembly (MEGAHIT/Flye) | ✅ | ✅ | ✅ | |
+| binning (MetaBAT2) | ✅ | ✅ | ✅ | |
+| reconcile (read↔contig) | ✅ | ✅ | ✅ | ✅ |
+| provided-contigs + AMR | ✅¹ | ✅ | ✅ | ✅ |
+| classify_consensus (Kaiju) | ✅ | ✅ | | ✅ |
+| phylogenetics (MAFFT/IQ-TREE) | ✅ | ✅ | | ✅ |
+| aggregate (Krona/MultiQC) | ✅ | ✅ | | ✅ |
+| damage / ancient-DNA (mapDamage) | ✅ | ✅ | | ✅ |
+| stats / diversity | | ✅ | | ✅ |
+| differential abundance | | ✅ | | ✅ |
+| decontam | | | | ✅ |
+| domain_taxonomy (geNomad/CheckV/GTDB-Tk/CheckM2/EukCC) | | | ✅ | |
+| amplicon (VSEARCH/DADA2/Emu) | | | | config |
+| strain (inStrain) | | | | config |
+| bgc (antiSMASH) | | | | config |
+| bin_refinement (DAS_Tool/dRep) | | | | config |
+| filtered_assembly | | | | ✅ |
+
+¹ AMR (ABRicate) runs in CI at the DAG level; its real execution needs `--use-conda`
+(samtools-pin isolation) and is exercised locally. Domain-taxonomy and amplicon need large
+external reference DBs, so they are DAG/config-verified rather than executed — building tiny
+fixtures for them is tracked in `ROADMAP.md`.
 
 ## Self-provisioning tools (conda)
 
 Core tools come from `environment.yml` (`conda env create -f environment.yml`). The heavy
 domain tools live in isolated envs under `workflow/envs/`; run `metagx run --use-conda` and
 Snakemake creates them per-rule on first use — so the pipeline installs what it needs.
+
+**Reproducibility.** `environment.yml` uses `>=` floors (good for "install a working stack",
+bad for "reproduce a published result", since bioconda drifts). For an exact, hash-pinned
+build there is a committed **`conda-lock.yml`** (linux-64): `conda-lock install --name metagx
+conda-lock.yml`, or just `docker build` — the Dockerfile installs from the lock when present
+and pins its base image by digest. Regenerate after editing `environment.yml` with
+`bash scripts/lock-env.sh`.
 
 ## Presets, provenance & reports (inspired by K-Dense BYOK)
 
@@ -259,16 +305,35 @@ Snakemake creates them per-rule on first use — so the pipeline installs what i
   read back from the output files — a publishable first draft to refine, not a fabricated one.
   `--no-pdf` writes only the `.tex`. (MCP: `generate_paper`.)
 
+## Installation
+
+metagx ships the Snakemake workflow + MCP server as package data, so a normal install carries
+everything. The two supported paths:
+
+```bash
+# 1. Repo checkout (recommended for skill use / development)
+git clone <repo> && cd metagenomics-skill
+bash setup.sh                 # uv venv + editable install + dirs
+
+# 2. Docker (the most reliable path on Apple Silicon — no Rosetta dance)
+docker build -t metagx .
+docker run --rm -v "$PWD:/data" metagx metagx run --config /data/config.yaml
+```
+
+The bioinformatics tools (kraken2, fastp, …) are installed separately via conda — see
+[Requirements](#requirements). After installing, **run `metagx doctor`** — it preflights your
+environment (arch/conda hazards, tool versions, the broken-Bracken / samtools-downgrade traps,
+and whether a database is present) and prints the exact remedy for anything wrong.
+
 ## Quick start
 
 ```bash
-bash setup.sh                 # uv venv + deps + dirs
-uv pip install -e .           # install the `metagx` CLI and package
-
+metagx doctor                 # preflight: arch/tool/DB hazards + remedies (run this first)
 metagx tools                  # list pipeline steps
 metagx presets                # list workflow presets (pick a starting point)
 metagx interview kraken2      # questions an LLM should ask (JSON)
-metagx build-db --genomes data/genomes.fasta --db local_databases/custom   # custom DB
+metagx fetch-db --list        # curated prebuilt kraken2/Bracken indices (sizes + URLs)
+metagx fetch-db standard-8 --dir local_databases/kraken2   # download a usable DB (~6 GB)
 metagx build-config answers.json   # validate answers (+preset) -> config.yaml
 metagx run --config config.yaml --dry-run
 metagx run --config config.yaml
@@ -276,8 +341,19 @@ metagx results --config config.yaml
 metagx report --config config.yaml # provenance manifest + Methods + report
 ```
 
-Don't have a database yet? `snakemake --snakefile workflow/Snakefile fetch_kraken_db`
-downloads a standard index (large — only run when you mean it).
+## Getting a database (the real first step)
+
+Classification needs a reference index, and that's the #1 thing that blocks a new user. Two routes:
+
+| Route | Command | When |
+| --- | --- | --- |
+| **Download a standard index** | `metagx fetch-db <name> --dir DIR` | You want broad bacterial/viral/etc. coverage. `metagx fetch-db --list` shows the curated set: `viral` (~0.6 GB, good smoke test), `standard-8` (~6 GB, best laptop/CI default), `standard-16` (~12 GB), full `standard` (~76 GB), `pluspf-8`/`pluspf` (adds protozoa+fungi). |
+| **Build a custom index** | `metagx build-db --genomes genomes.fasta --db DIR` | You have your own reference genomes (no multi-GB NCBI download — synthetic taxonomy). |
+
+`fetch-db` downloads, extracts, and **verifies** the index (and is idempotent — it reuses an
+already-built DB). It prints a `config_hint` you paste straight into your config's `db.kraken2`.
+The index must fit in RAM for fast classification, so size to your machine — start with
+`standard-8`. `metagx doctor --config config.yaml` confirms the DB is found and built.
 
 ## Driving it from each client
 
@@ -336,8 +412,10 @@ confidence 0.0 / 0.1 / 0.5), Bracken abundances, and a paste-ready Methods parag
 
 Python ≥3.10 and these bioinformatics tools on `PATH` for the steps you enable:
 `kraken2`, `bracken`, `fastp`, and (for assembly/binning) `megahit`, `minimap2`,
-`samtools`, `metabat2`. Install via conda/mamba, e.g.
-`mamba install -c bioconda kraken2 bracken fastp megahit minimap2 samtools metabat2`.
+`samtools`, `metabat2`. Install the whole core stack from the pinned spec:
+`conda env create -f environment.yml` (or `mamba env create -f environment.yml`), then
+`conda activate metagx`. `metagx doctor` verifies the tools are present **and** meet their
+version floors (it catches the silent samtools 0.1.x downgrade that breaks the pipeline).
 
 The heavier optional layers — `metaspades`; `humann`/`amrfinderplus`/`abricate`/`bakta`/
 `eggnog-mapper`; `maxbin2`/`concoct`/`das_tool`/`drep`; `metaphlan`/`kaiju`; `multiqc`/`krona` —

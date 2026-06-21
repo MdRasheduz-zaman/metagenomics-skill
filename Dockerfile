@@ -9,13 +9,21 @@
 # under workflow/envs/; run with `metagx run --use-conda` (mount a conda pkg cache to reuse
 # them) or build a fat image by adding `micromamba install -f workflow/envs/<env>.yaml`.
 #
-# Pin to a specific micromamba/base tag + a conda-lock file (see containers/README.md) for a
-# fully reproducible build.
-FROM mambaorg/micromamba:1.5.8
+# Base image pinned by digest (not just the :1.5.8 tag, which can be re-pushed) for a
+# reproducible build. This is the multi-arch manifest-list digest, so amd64/arm64 still
+# resolve correctly. Refresh with: docker buildx imagetools inspect mambaorg/micromamba:1.5.8
+FROM mambaorg/micromamba:1.5.8@sha256:475730daef12ff9c0733e70092aeeefdf4c373a584c952dac3f7bdb739601990
 
-# Solve the core environment into base.
+# Solve the environment into base. Prefer the committed conda-lock file (exact, hash-pinned,
+# reproducible) when present; otherwise solve environment.yml. Regenerate the lock with
+# `bash scripts/lock-env.sh` after editing environment.yml.
 COPY --chown=$MAMBA_USER:$MAMBA_USER environment.yml /tmp/environment.yml
-RUN micromamba install -y -n base -f /tmp/environment.yml && \
+COPY --chown=$MAMBA_USER:$MAMBA_USER conda-lock.ym[l] /tmp/
+RUN if [ -f /tmp/conda-lock.yml ]; then \
+        micromamba install -y -n base -f /tmp/conda-lock.yml ; \
+    else \
+        micromamba install -y -n base -f /tmp/environment.yml ; \
+    fi && \
     micromamba clean --all --yes
 
 # Install the metagx package itself.

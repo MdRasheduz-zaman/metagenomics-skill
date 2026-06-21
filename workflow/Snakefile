@@ -177,10 +177,14 @@ rule all:
 # Optional, explicit-only helper to fetch a standard kraken2/Bracken index.
 # Never runs automatically (not a dependency of `all`): call it directly with
 #   snakemake --snakefile workflow/Snakefile fetch_kraken_db
+# Prefer the first-class `metagx fetch-db` CLI (curated list, verification, idempotent).
+# The default URL is the capped Standard-8 index, resolved from metagx.dbfetch so the link
+# stays in one place (and can't rot like the old hard-coded one did).
+from metagx import dbfetch as _dbfetch
 rule fetch_kraken_db:
     output:
         directory(DB["kraken2"]),
     params:
-        url=config.get("db_url", "https://genome-idx.s3.amazonaws.com/kraken/k2_standard_08gb_20250714.tar.gz"),
+        url=config.get("db_url", _dbfetch.index_url("standard-8")),
     shell:
-        "mkdir -p {output} && curl -L {params.url} | tar -xzf - -C {output}"
+        "mkdir -p {output} && curl -fSL {params.url} | tar -xzf - -C {output}"

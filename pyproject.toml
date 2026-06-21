@@ -37,7 +37,14 @@ metagx = "metagx.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["metagx"]
 
+# Ship the data that lives outside the metagx/ package source so a real
+# (non-editable) `pip install metagx` works outside the repo. Without this the
+# Snakemake workflow + MCP server are missing from the wheel and runner.run()
+# raises FileNotFoundError. The workflow lands under metagx/workflow/ so
+# runner.workflow_path() resolves it inside the installed package.
+# parameters/, presets/, evidence/ live inside metagx/ and are carried by the
+# package automatically. Only the data outside the package needs force-include.
 [tool.hatch.build.targets.wheel.force-include]
-"metagx/parameters" = "metagx/parameters"
-"metagx/presets" = "metagx/presets"
-"metagx/evidence" = "metagx/evidence"
+"workflow" = "metagx/workflow"
+"mcp_server.py" = "metagx/mcp_server.py"
+"environment.yml" = "metagx/environment.yml"

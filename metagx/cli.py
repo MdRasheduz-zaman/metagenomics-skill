@@ -29,6 +29,8 @@ from . import (
     catalog,
     config_builder,
     dbbuild,
+    dbfetch,
+    doctor,
     evidence_pack,
     formats,
     history,
@@ -106,6 +108,22 @@ def cmd_build_db(args) -> int:
     return 0 if result.get("ok", not result.get("ran", False)) else 1
 
 
+def cmd_fetch_db(args) -> int:
+    if args.list:
+        _print_json(dbfetch.describe())
+        return 0
+    if args.name not in dbfetch.INDICES and not args.url:
+        print(f"unknown index '{args.name}'. Run `metagx fetch-db --list` to see options, "
+              f"or pass --url for a custom prebuilt index.", file=sys.stderr)
+        return 2
+    result = dbfetch.fetch(name=args.name, db_dir=args.dir, url=args.url,
+                           run=not args.dry_run, force=args.force)
+    _print_json(result)
+    if not args.dry_run and result.get("ran") and not result.get("ok"):
+        return 1
+    return 0
+
+
 def cmd_readlen(args) -> int:
     _print_json({f: formats.estimate_read_length(f) for f in args.files})
     return 0
@@ -175,6 +193,25 @@ def cmd_validate(args) -> int:
         print(f"invalid: {e}", file=sys.stderr)
         return 2
     print("config is valid")
+    return 0
+
+
+def cmd_doctor(args) -> int:
+    """Environment preflight: detect arch/env hazards and missing tools/DB, print remedies."""
+    db_paths = None
+    if args.config and os.path.isfile(args.config):
+        with open(args.config) as fh:
+            cfg = yaml.safe_load(fh) or {}
+        db_paths = cfg.get("db") or None
+    checks = doctor.run(db_paths=db_paths)
+    if args.json:
+        _print_json([c.as_dict() for c in checks])
+    else:
+        print(doctor.format_report(checks))
+    n_fail = sum(1 for c in checks if c.status == "fail")
+    n_warn = sum(1 for c in checks if c.status == "warn")
+    if n_fail or (args.strict and n_warn):
+        return 1
     return 0
 
 
@@ -451,6 +488,14 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("schedulers", help="list HPC scheduler backends for `run --executor`"
                    ).set_defaults(func=cmd_schedulers)
 
+    sp = sub.add_parser("doctor",
+                        help="preflight: detect arch/env/tool/DB hazards and print remedies")
+    sp.add_argument("--config", default=None,
+                    help="also check the kraken2 DB referenced by this config.yaml")
+    sp.add_argument("--json", action="store_true", help="emit checks as JSON")
+    sp.add_argument("--strict", action="store_true", help="exit non-zero on warnings too")
+    sp.set_defaults(func=cmd_doctor)
+
     sp = sub.add_parser("results", help="print result summary JSON files")
     sp.add_argument("--config", default="config.yaml")
     sp.set_defaults(func=cmd_results)
@@ -463,6 +508,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--threads", type=int, default=4)
     sp.add_argument("--dry-run", action="store_true", help="write taxonomy/library, print commands, don't build")
     sp.set_defaults(func=cmd_build_db)
+
+    sp = sub.add_parser("fetch-db",
+                        help="download a prebuilt standard kraken2+Bracken index (onboarding)")
+    sp.add_argument("name", nargs="?", default=dbfetch.DEFAULT,
+                    help=f"index name (default: {dbfetch.DEFAULT}; see --list)")
+    sp.add_argument("--list", action="store_true", help="list curated indices with sizes + URLs")
+    sp.add_argument("--dir", default="local_databases/kraken2", help="output database directory")
+    sp.add_argument("--url", default=None, help="custom prebuilt-index tarball URL (overrides name)")
+    sp.add_argument("--force", action="store_true", help="re-download even if a built index exists")
+    sp.add_argument("--dry-run", action="store_true", help="print the plan/command, don't download")
+    sp.set_defaults(func=cmd_fetch_db)
 
     sp = sub.add_parser("readlen", help="estimate read-length stats (to pick Bracken length)")
     sp.add_argument("files", nargs="+", help="FASTA/FASTQ (±gz) read files")

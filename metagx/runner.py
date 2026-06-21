@@ -62,17 +62,30 @@ def conda_preflight(frontend: str, version_str: Optional[str] = None) -> Optiona
 def workflow_path() -> str:
     """Absolute path to the bundled Snakefile.
 
-    Resolves whether running from the source tree or an installed package.
+    Resolves in priority order so the tool works from a git clone (editable
+    install), from a real wheel install (``workflow/`` shipped as package data
+    under ``metagx/workflow/``), or when invoked inside the repo:
+
+      1. sibling of the package — ``<repo>/workflow/Snakefile`` (clone / editable)
+      2. inside the installed package — ``<site-packages>/metagx/workflow/Snakefile``
+      3. the current working directory — ``./workflow/Snakefile``
     """
-    here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    candidate = os.path.join(here, "workflow", "Snakefile")
-    if os.path.isfile(candidate):
-        return candidate
-    # fallback: cwd
-    candidate = os.path.join(os.getcwd(), "workflow", "Snakefile")
-    if os.path.isfile(candidate):
-        return candidate
-    raise FileNotFoundError("Could not locate workflow/Snakefile")
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))           # .../metagx
+    for candidate in (
+        os.path.join(os.path.dirname(pkg_dir), "workflow", "Snakefile"),  # (1) repo sibling
+        os.path.join(pkg_dir, "workflow", "Snakefile"),                   # (2) packaged data
+        os.path.join(os.getcwd(), "workflow", "Snakefile"),              # (3) cwd
+    ):
+        if os.path.isfile(candidate):
+            return candidate
+    raise FileNotFoundError(
+        "Could not locate workflow/Snakefile. metagx ships the Snakemake workflow "
+        "as package data, so a normal install should find it. If you installed from "
+        "a source checkout with `pip install -e .`, run metagx from inside the repo "
+        "(the workflow/ directory must sit next to the metagx/ package), or reinstall "
+        "with a build that includes package data (`pip install .`). "
+        "See the README 'Installation' section."
+    )
 
 
 def run(

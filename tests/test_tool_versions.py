@@ -15,26 +15,12 @@ import re
 import pytest
 
 from metagx import report
+from metagx.doctor import VERSION_FLOORS
 
-# Minimum acceptable (major, minor) per tool — mirror environment.yml. A tool below its floor
-# is a hard failure, not a warning: it would have caught the samtools 0.1.19 regression.
-MIN_VERSIONS = {
-    "kraken2": (2, 1),
-    "bracken": (2, 9),
-    "fastp": (0, 23),
-    "megahit": (1, 2),
-    "flye": (2, 9),
-    "minimap2": (2, 26),
-    "samtools": (1, 18),     # <-- the regression guard (0.1.19 must fail)
-    "metabat2": (2, 15),
-    "diamond": (2, 0),       # CAT/bioconda pins diamond to the 2.0.x line on this platform
-    "mafft": (7, 4),
-    "checkv": (1, 0),
-    "genomad": (1, 7),
-    "kaiju": (1, 9),
-    "multiqc": (1, 0),
-    "mapDamage": (2, 2),
-}
+# Single source of truth for the floors lives in metagx.doctor (so `metagx doctor` and this
+# test can't drift). A tool below its floor is a hard failure, not a warning: it would have
+# caught the samtools 0.1.19 regression.
+MIN_VERSIONS = VERSION_FLOORS
 
 
 def _parse_xy(version_str: str):

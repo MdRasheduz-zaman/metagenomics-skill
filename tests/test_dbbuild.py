@@ -6,6 +6,7 @@ consensus module's db.kaiju consumes.
 """
 import os
 import shutil
+import subprocess
 
 import pytest
 
@@ -39,6 +40,54 @@ def test_build_kaiju_db_reports_missing_tools(tmp_path, monkeypatch):
     res = dbbuild.build_kaiju_db(g, str(tmp_path / "kdb"),
                                  taxonomy_dir=str(tmp_path / "tax"), run=True)
     assert res["ran"] is False and "not on PATH" in res["note"]
+
+
+def test_build_db_recovers_from_kraken2_build_sigpipe(tmp_path, monkeypatch):
+    """kraken2-build exits 64 via a SIGPIPE in its internal `cat | build_db` pipe on small
+    DBs, yet writes a valid database. build_db must trust the artifacts over the exit code.
+
+    This is the exact failure that broke the CI e2e job (the build step returned 64 with
+    "xargs: cat: terminated by signal 13") while the same DB built fine on macOS where the
+    prebuilt DB meant the build never ran. Regression guard for that false negative.
+    """
+    g = _write_genomes(tmp_path / "g.fasta")
+    db_dir = tmp_path / "db"
+    monkeypatch.setattr(dbbuild, "_have", lambda t: True)
+
+    def fake_run(cmd, *a, **k):
+        db = cmd[cmd.index("--db") + 1] if "--db" in cmd else cmd[cmd.index("-d") + 1]
+        if "--build" in cmd:
+            # emulate the real DB artifacts being written, then a non-zero SIGPIPE exit
+            for f in ("hash.k2d", "opts.k2d", "taxo.k2d"):
+                (tmp_path / "db" / f).write_text("x")
+            return subprocess.CompletedProcess(cmd, 64, "Building database files (step 3)...",
+                                               "xargs: cat: terminated by signal 13")
+        if "bracken-build" in cmd[0]:
+            length = cmd[cmd.index("-l") + 1]
+            (tmp_path / "db" / f"database{length}mers.kmer_distrib").write_text("x")
+            return subprocess.CompletedProcess(cmd, 0, "ok", "")
+        return subprocess.CompletedProcess(cmd, 0, "ok", "")  # add-to-library
+
+    monkeypatch.setattr(dbbuild.subprocess, "run", fake_run)
+    res = dbbuild.build_db(g, str(db_dir), read_length=[150, 1000], run=True)
+    assert res["ok"] is True, res
+    assert "build" in res.get("recovered", [])
+    assert "SIGPIPE" in res.get("note", "")
+
+
+def test_build_db_real_failure_still_fails(tmp_path, monkeypatch):
+    """A non-zero exit with *no* artifacts is a genuine failure — must not be swallowed."""
+    g = _write_genomes(tmp_path / "g.fasta")
+    monkeypatch.setattr(dbbuild, "_have", lambda t: True)
+
+    def fake_run(cmd, *a, **k):
+        if "--build" in cmd:  # exits non-zero and writes nothing
+            return subprocess.CompletedProcess(cmd, 1, "", "boom: out of memory")
+        return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+    monkeypatch.setattr(dbbuild.subprocess, "run", fake_run)
+    res = dbbuild.build_db(g, str(tmp_path / "db"), run=True)
+    assert res["ok"] is False and res["failed_step"] == "build"
 
 
 @pytest.mark.skipif(

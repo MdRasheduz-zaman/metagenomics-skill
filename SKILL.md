@@ -31,10 +31,18 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
 
 1. **One-time setup** (if not done): `bash setup.sh`, then `uv pip install -e .`. The bio
    tools install via conda/mamba (on Apple-Silicon macOS use
-   `bash scripts/install_bio_macos_arm64.sh`).
-2. **Custom database (optional).** If the user has reference genomes rather than a prebuilt
-   index: `metagx build-db --genomes <genomes.fasta> --db <dir> --read-length <len>` builds
-   a kraken2 + Bracken db with a synthetic taxonomy (no NCBI download).
+   `bash scripts/install_bio_macos_arm64.sh`). **Then run `metagx doctor`** — it preflights
+   arch/conda/tool/DB hazards and prints the exact remedy for anything wrong. If `doctor`
+   reports failures (missing/old core tools, broken Bracken, samtools downgrade), fix those
+   before continuing; relay the remedies to the user.
+2. **Get a database** (the #1 real blocker — don't skip). Check with `metagx doctor --config
+   config.yaml` once a config exists. Two routes:
+   - **Prebuilt standard index:** `metagx fetch-db --list` shows curated indices with sizes;
+     `metagx fetch-db standard-8 --dir <dir>` downloads + verifies one (start with
+     `standard-8`, ~6 GB; it must fit in RAM). Paste the printed `config_hint` into `db.kraken2`.
+   - **Custom index from the user's genomes:** `metagx build-db --genomes <genomes.fasta>
+     --db <dir> --read-length <len>` builds a kraken2 + Bracken db with a synthetic taxonomy
+     (no NCBI download).
 3. **Offer a preset.** Run `metagx presets` and let the user pick a starting point
    (`pathogen-detection`, `gut-profiling`, `soil-deep-assembly`, `quick-screen`,
    `amr-surveillance`, `ancient-dna`). A preset
@@ -68,8 +76,8 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    - construct `config.yaml` directly following `config/config.example.yaml`,
    then verify with `metagx validate config.yaml`.
 5. **Dry run, then run:** `metagx run --config config.yaml --dry-run`, then drop
-   `--dry-run`. (Database not present? `snakemake --snakefile workflow/Snakefile
-   fetch_kraken_db` — only when the user agrees, the index is large.)
+   `--dry-run`. (Database not present? `metagx fetch-db <name> --dir <dir>` — see step 2;
+   only download when the user agrees, the index is large.)
    After a successful run, metagx auto-writes `results/<project>/advisor/` and appends
    to `.metagx/history.jsonl` (use `--no-advisor` / `--no-history` to skip).
 6. **Recommend before sweeping:** `metagx recommend --platform pacbio_clr` (or

@@ -83,6 +83,27 @@ def _have(tool: str) -> bool:
     return shutil.which(tool) is not None
 
 
+def _step_artifacts(name: str, db_dir: str) -> List[str]:
+    """The output files a build step must produce to count as successful.
+
+    Used to distinguish a *real* failure from kraken2-build's well-known SIGPIPE quirk:
+    on small databases ``build_db`` finishes reading the library and closes the pipe before
+    the wrapper's ``cat`` is done, so ``cat`` dies with signal 13, ``xargs`` reports failure,
+    and ``kraken2-build`` exits non-zero (64) — even though hash.k2d/opts.k2d/taxo.k2d were
+    written correctly. Verifying the artifacts exist is the standard, robust workaround.
+    """
+    if name == "build":
+        return [os.path.join(db_dir, f) for f in ("hash.k2d", "opts.k2d", "taxo.k2d")]
+    if name.startswith("bracken-build-"):
+        length = name.rsplit("-", 1)[1]
+        return [os.path.join(db_dir, f"database{length}mers.kmer_distrib")]
+    return []
+
+
+def _artifacts_present(paths: List[str]) -> bool:
+    return bool(paths) and all(os.path.isfile(p) and os.path.getsize(p) > 0 for p in paths)
+
+
 def build_cat_db(genomes: str, db_dir: str, taxonomy_dir: str, run: bool = True) -> Dict:
     """Build a custom CAT (Contig Annotation Tool) database from reference genomes.
 
@@ -283,7 +304,7 @@ def build_db(
             result["note"] = "kraken2-build not on PATH — commands not executed"
         return result
 
-    logs, skipped = {}, []
+    logs, skipped, recovered = {}, [], []
     for name, cmd in steps:
         tool = cmd[0]
         if not _have(tool):
@@ -296,13 +317,33 @@ def build_db(
             "tail": ((proc.stdout or "") + (proc.stderr or ""))[-1500:],
         }
         if proc.returncode != 0:
+            # A non-zero exit is only a real failure if the step's artifacts are missing.
+            # kraken2-build emits a SIGPIPE-driven exit 64 on small DBs while still writing a
+            # valid database; trust the artifacts over the exit code.
+            artifacts = _step_artifacts(name, db_dir)
+            if _artifacts_present(artifacts):
+                logs[name]["recovered"] = (
+                    f"{tool} exited {proc.returncode}, but {', '.join(os.path.basename(a) for a in artifacts)} "
+                    "were produced — treating as success (known SIGPIPE quirk of the build wrapper)."
+                )
+                recovered.append(name)
+                continue
             result.update(ran=True, ok=False, failed_step=name, logs=logs)
             return result
     result.update(ran=True, ok=True, logs=logs)
+    notes = []
+    if recovered:
+        result["recovered"] = recovered
+        notes.append(
+            f"{', '.join(recovered)} exited non-zero but produced valid artifacts "
+            "(kraken2-build SIGPIPE quirk on small DBs) — recovered."
+        )
     if skipped:
         result["skipped"] = skipped
-        result["note"] = (
+        notes.append(
             f"skipped {', '.join(skipped)} (tool missing); "
             "the kraken2 db is usable but abundance (Bracken) won't run until bracken-build is available"
         )
+    if notes:
+        result["note"] = " ".join(notes)
     return result

@@ -32,6 +32,8 @@ from metagx import (
     catalog,
     config_builder,
     dbbuild,
+    dbfetch,
+    doctor,
     evidence_pack,
     history,
     paper,
@@ -251,6 +253,42 @@ def build_config(
 # --------------------------------------------------------------------------- #
 # Execution / results                                                         #
 # --------------------------------------------------------------------------- #
+@mcp.tool()
+def check_environment(config_path: str = "") -> str:
+    """Preflight the environment: detect arch/conda/tool/DB hazards and return remedies.
+
+    Run this BEFORE a real pipeline run to catch the macOS/arm64 + bioconda landmines (broken
+    Bracken build, samtools 0.1.x downgrade, CONDA_SUBDIR leakage, missing core tools, a
+    missing kraken2 DB). Pass a config_path to also verify that config's kraken2 database.
+    Returns a JSON list of checks with status (ok/info/warn/fail) and a remedy for each problem.
+    """
+    import yaml
+    db_paths = None
+    if config_path and os.path.isfile(config_path):
+        with open(config_path) as fh:
+            cfg = yaml.safe_load(fh) or {}
+        db_paths = cfg.get("db") or None
+    checks = doctor.run(db_paths=db_paths)
+    return json.dumps([c.as_dict() for c in checks], indent=2)
+
+
+@mcp.tool()
+def fetch_database(name: str = "", db_dir: str = "local_databases/kraken2",
+                   dry_run: bool = False, force: bool = False) -> str:
+    """Download a prebuilt standard kraken2 + Bracken index (the new-user onboarding path).
+
+    Call with no name to list the curated indices (viral / standard-8 / standard-16 / standard
+    / pluspf-8 / pluspf) with sizes and URLs. Pass a name to download + extract + verify it
+    into db_dir; the result includes a config_hint (db.kraken2) to paste into build_config.
+    Idempotent — reuses an already-built index unless force. For a custom DB from your own
+    genomes, use build_database instead. dry_run returns the plan/command without downloading.
+    """
+    if not name:
+        return json.dumps(dbfetch.describe(), indent=2)
+    result = dbfetch.fetch(name=name, db_dir=db_dir, run=not dry_run, force=force)
+    return json.dumps(result, indent=2)
+
+
 @mcp.tool()
 def build_database(genomes: str, db_dir: str, read_length: int = 150, threads: int = 4,
                    dry_run: bool = False) -> str:

@@ -93,6 +93,35 @@ SCENARIOS = {
                                                    "annotation": False}},
         "expect_rules": {"stage_provided_contigs", "abricate"},
     },
+    # Amplicon (marker-gene) branch — was registry/config-only, never DAG-tested. A sample
+    # with library=amplicon routes through cutadapt primer trim -> VSEARCH OTUs (the default).
+    "amplicon_otu": {
+        "reads": {"r1": ("amp.fastq.gz", "fastq_gz")},
+        "platform": "illumina", "layout": "se",
+        "modules": {"qc": False, "classify": False, "abundance": False, "assembly": False},
+        "extra": {"library": "amplicon"},
+        "expect_rules": {"vsearch_otus"},
+    },
+    # Strain (inStrain) + BGC (antiSMASH) on an assembled WGS sample — both were config-only.
+    # Exercises their render_args wiring through the real DAG.
+    "strain_bgc": {
+        "reads": {"r1": ("wgs.fastq.gz", "fastq_gz")},
+        "platform": "illumina", "layout": "se",
+        "modules": {"qc": False, "classify": False, "abundance": False,
+                    "assembly": True, "binning": True, "strain": True, "bgc": True},
+        "extra": {},
+        "expect_rules": {"instrain", "antismash"},
+    },
+    # Cross-sample statistics (α/β diversity) over the combined Bracken table — was script-unit
+    # tested but its rule was never resolved through the workflow.
+    "stats_diversity": {
+        "reads": {"r1": ("s.fastq.gz", "fastq_gz")},
+        "platform": "illumina", "layout": "se",
+        "modules": {"qc": False, "classify": True, "abundance": True,
+                    "assembly": False, "stats": True},
+        "extra": {"bracken": {"read_length": 150}},
+        "expect_rules": {"diversity"},
+    },
 }
 
 
@@ -107,6 +136,8 @@ def _materialise(sc: dict, tmp_path: Path) -> Path:
             _write_fastq(fp, gz=kind.endswith("gz"))
         row[key] = str(fp)
     row.setdefault("r2", "")
+    if sc["extra"].get("library"):
+        row["library"] = sc["extra"]["library"]
 
     # optional pre-assembled contigs input
     if sc["extra"].get("contigs"):
@@ -135,7 +166,7 @@ def _materialise(sc: dict, tmp_path: Path) -> Path:
         "modules": sc["modules"],
     }
     for k, v in sc["extra"].items():
-        if k not in ("db_cat",):
+        if k not in ("db_cat", "contigs", "library"):  # sample-sheet/marker keys, not config
             cfg[k] = v
     cfg_path = tmp_path / "config.yaml"
     cfg_path.write_text(yaml.safe_dump(cfg))
