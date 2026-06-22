@@ -641,6 +641,21 @@ def build_config(
             cfg["db"][extra] = db[extra]
     if db_build:
         cfg["db"]["build"] = db_build
+    # db.provision: module DBs to auto-fetch at run time (idempotent; skip if present).
+    provision = db.get("provision")
+    if provision:
+        from . import dbprovision
+        if not isinstance(provision, list):
+            raise registry.ValidationError("db.provision must be a list of tool names")
+        bad = [t for t in provision if t not in dbprovision.SPECS]
+        if bad:
+            raise registry.ValidationError(
+                f"db.provision: no provisioner for {bad}; known: {sorted(dbprovision.SPECS)}")
+        missing = [t for t in provision if not cfg["db"].get(t)]
+        if missing:
+            raise registry.ValidationError(
+                f"db.provision lists {missing} but their db.<tool> output path(s) are unset")
+        cfg["db"]["provision"] = list(provision)
     if probe_report:  # provenance: what the probe measured + any backfills/warnings it drove
         proj = probe_report.get("project", {})
         cfg["probe"] = {

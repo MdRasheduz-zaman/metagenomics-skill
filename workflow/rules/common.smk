@@ -30,6 +30,16 @@ def db_ready_input():
     return [DB_MANIFEST] if (DB_BUILD and DB_MANIFEST and auto) else []
 
 
+# Per-tool module DBs (genomad/checkv/checkm2/gtdbtk/bakta/...) to auto-provision before use.
+DB_PROVISION = list(DB.get("provision", []))
+
+
+def provision_ready(tool):
+    """A provision sentinel as a rule input — only when this tool is in db.provision (else [])
+    so the domain/functional rule waits for its reference DB to be fetched (idempotently)."""
+    return [os.path.join(OUT, "dbprovision", f"{tool}.done")] if tool in DB_PROVISION else []
+
+
 # Target domains for the (optional) domain-taxonomy layer: viral / prokaryote / eukaryote.
 DOMAINS = [d.lower() for d in config.get("domains", [])]
 

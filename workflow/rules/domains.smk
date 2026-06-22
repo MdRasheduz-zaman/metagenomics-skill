@@ -15,6 +15,7 @@ def contigs_of(wc):
 rule genomad:
     input:
         contigs=lambda wc: contigs_of(wc),
+        db_ready=provision_ready("genomad"),
     output:
         done=f"{OUT}/viral/{{sample}}/genomad.done",
     threads: THREADS
@@ -34,6 +35,7 @@ rule genomad:
 rule checkv:
     input:
         contigs=lambda wc: contigs_of(wc),
+        db_ready=provision_ready("checkv"),
     output:
         summary=f"{OUT}/viral/{{sample}}/checkv/quality_summary.tsv",
     threads: THREADS
@@ -52,6 +54,7 @@ rule checkv:
 rule gtdbtk:
     input:
         bins=f"{OUT}/binning/{{sample}}/bins.done",
+        db_ready=provision_ready("gtdbtk"),
     output:
         done=f"{OUT}/prok/{{sample}}/gtdbtk.done",
     threads: THREADS
@@ -73,6 +76,7 @@ rule gtdbtk:
 rule checkm2:
     input:
         bins=f"{OUT}/binning/{{sample}}/bins.done",
+        db_ready=provision_ready("checkm2"),
     output:
         report=f"{OUT}/prok/{{sample}}/checkm2/quality_report.tsv",
     threads: THREADS

@@ -52,6 +52,13 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
      = hours). Use `db.build` for `viral`/custom/spike-in; for a big standard DB prefer the
      **prebuilt index** (`fetch-db`) instead. `metagx doctor` warns when a slow build is
      configured and flags the air-gapped-cluster download caveat.
+   - **Module reference DBs (genomad/checkv/checkm2/gtdbtk/bakta/amrfinderplus):** each ships
+     its own downloader — `metagx fetch-db --tool <name> --dir <dir>` runs it (idempotent;
+     skipped if present). Add the tool to `db.provision: [...]` to auto-fetch at run time, or
+     just set `db.<tool>` to an existing path. `metagx doctor --config` fails fast if an
+     enabled module's DB is missing, printing the exact fetch command — so a run never crashes
+     mid-pipeline on an absent reference DB. (Other module DBs — humann/eggnog/metaphlan/
+     antismash/emu/eukcc — remain set-the-path-yourself for now.)
 3. **Offer a preset.** Run `metagx presets` and let the user pick a starting point
    (`pathogen-detection`, `gut-profiling`, `soil-deep-assembly`, `quick-screen`,
    `amr-surveillance`, `ancient-dna`). A preset

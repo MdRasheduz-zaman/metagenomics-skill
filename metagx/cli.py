@@ -127,6 +127,15 @@ def cmd_build_db(args) -> int:
 
 
 def cmd_fetch_db(args) -> int:
+    if args.tool:  # provision a per-tool module DB (genomad/checkv/checkm2/gtdbtk/bakta/...)
+        from metagx import dbprovision
+        if args.tool not in dbprovision.SPECS:
+            print(f"unknown tool '{args.tool}'. Provisioners: {sorted(dbprovision.SPECS)}",
+                  file=sys.stderr)
+            return 2
+        result = dbprovision.provision(args.tool, args.dir, run=not args.dry_run, force=args.force)
+        _print_json(result)
+        return 0 if result.get("ok", not result.get("ran", False)) else 1
     if args.list:
         _print_json(dbfetch.describe())
         return 0
@@ -217,11 +226,12 @@ def cmd_validate(args) -> int:
 def cmd_doctor(args) -> int:
     """Environment preflight: detect arch/env hazards and missing tools/DB, print remedies."""
     db_paths = None
+    cfg = None
     if args.config and os.path.isfile(args.config):
         with open(args.config) as fh:
             cfg = yaml.safe_load(fh) or {}
         db_paths = cfg.get("db") or None
-    checks = doctor.run(db_paths=db_paths)
+    checks = doctor.run(db_paths=db_paths, cfg=cfg)
     if args.json:
         _print_json([c.as_dict() for c in checks])
     else:
@@ -540,6 +550,8 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("name", nargs="?", default=dbfetch.DEFAULT,
                     help=f"index name (default: {dbfetch.DEFAULT}; see --list)")
     sp.add_argument("--list", action="store_true", help="list curated indices with sizes + URLs")
+    sp.add_argument("--tool", help="provision a module DB instead of a kraken2 index "
+                    "(genomad|checkv|checkm2|gtdbtk|bakta|amrfinderplus)")
     sp.add_argument("--dir", default="local_databases/kraken2", help="output database directory")
     sp.add_argument("--url", default=None, help="custom prebuilt-index tarball URL (overrides name)")
     sp.add_argument("--force", action="store_true", help="re-download even if a built index exists")

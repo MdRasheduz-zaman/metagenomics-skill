@@ -47,6 +47,7 @@ rule amrfinder:
         sample=_alt(WGS_SAMPLES),
     input:
         contigs=f"{OUT}/assembly/{{sample}}/final.contigs.fa",
+        db_ready=provision_ready("amrfinderplus"),
     output:
         tsv=f"{OUT}/functional/{{sample}}/amr/amrfinder.tsv",
     threads: THREADS
@@ -86,6 +87,7 @@ rule bakta_bins:
         sample=_alt(WGS_SAMPLES),
     input:
         bins=f"{OUT}/binning/{{sample}}/bins.done",
+        db_ready=provision_ready("bakta"),
     output:
         faa=f"{OUT}/functional/{{sample}}/annotate/bakta/bins.faa",
     threads: THREADS

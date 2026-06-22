@@ -25,6 +25,8 @@ include: "rules/common.smk"
 
 if DB_BUILD:
     include: "rules/dbbuild.smk"
+if DB_PROVISION:
+    include: "rules/dbprovision.smk"
 if config.get("subsample"):
     include: "rules/subsample.smk"
 if MODULES.get("qc", True) or config.get("host_removal", {}).get("genome") or AMPLICON_SAMPLES:

@@ -317,7 +317,37 @@ def check_db_build(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
     return out
 
 
-def run(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
+def check_module_dbs(cfg: Optional[Dict] = None) -> List[Check]:
+    """Fail-fast when an enabled module needs a reference DB that's unset or empty — with the
+    exact `metagx fetch-db --tool` command — so a run doesn't crash mid-pipeline on a missing
+    domain/functional DB (genomad/checkv/checkm2/gtdbtk/bakta/...)."""
+    out: List[Check] = []
+    if not cfg:
+        return out
+    from . import dbprovision
+    db = cfg.get("db", {}) or {}
+    for tool, key in dbprovision.needed_dbs(cfg).items():
+        spec = dbprovision.SPECS.get(tool, {})
+        self_gates = bool(spec.get("self_gates"))
+        path = db.get(key)
+        if not path:
+            status = _INFO if self_gates else _FAIL
+            msg = (f"{tool} DB not set (db.{key}); its step will be skipped." if self_gates
+                   else f"module needs {tool} ({spec.get('needed_by')}) but db.{key} is unset.")
+            out.append(Check(f"moduledb:{tool}", status, msg,
+                             remedy=f"`metagx fetch-db --tool {tool} --dir <dir>` "
+                                    f"({spec.get('size')}), then set db.{key}."))
+        elif not dbprovision.is_provisioned(tool, path):
+            out.append(Check(f"moduledb:{tool}", _FAIL,
+                             f"db.{key}={path} has no recognizable {tool} DB files.",
+                             remedy=f"`metagx fetch-db --tool {tool} --dir {path}` "
+                                    f"(or set --use-conda to provision the tool first)."))
+        else:
+            out.append(Check(f"moduledb:{tool}", _OK, f"{tool} DB present: {path}."))
+    return out
+
+
+def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -> List[Check]:
     """Run every preflight check and return the results in display order."""
     checks: List[Check] = []
     checks += check_platform()
@@ -330,6 +360,7 @@ def run(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
     checks.append(check_conda_frontend())
     checks.append(check_database(db_paths))
     checks += check_db_build(db_paths)
+    checks += check_module_dbs(cfg)
     return checks
 
 
