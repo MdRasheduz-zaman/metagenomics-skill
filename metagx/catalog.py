@@ -30,6 +30,6 @@ def build_catalog() -> Dict[str, Any]:
         "workflow_scripts": workflow_scripts(),
         "schedulers": schedulers.list_schedulers(),
         "planned_modules": [],
-        "advisor_commands": ["recommend", "advise", "history", "sync-help",
+        "advisor_commands": ["plan", "recommend", "advise", "history", "sync-help",
                              "scaffold", "catalog", "schedulers"],
     }

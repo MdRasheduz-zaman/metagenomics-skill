@@ -35,6 +35,7 @@ from . import (
     formats,
     history,
     paper,
+    plan,
     presets,
     probe,
     registry,
@@ -85,6 +86,23 @@ def cmd_probe(args) -> int:
 
 def cmd_presets(args) -> int:
     _print_json(presets.describe_presets())
+    return 0
+
+
+def cmd_plan(args) -> int:
+    """Intent-first: resolve a goal (preset/modules) into modules + a DB checklist to ask."""
+    modules = None
+    if args.modules:
+        modules = {m.strip(): True for m in args.modules.split(",") if m.strip()}
+    domains = [d.strip() for d in args.domains.split(",")] if args.domains else None
+    functional = [f.strip() for f in args.functional.split(",")] if args.functional else None
+    have = [h.strip() for h in args.have.split(",")] if args.have else None
+    try:
+        _print_json(plan.plan(preset=args.preset, modules=modules, domains=domains,
+                              functional=functional, have=have))
+    except KeyError as e:
+        print(str(e), file=sys.stderr)
+        return 1
     return 0
 
 
@@ -434,6 +452,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_probe)
 
     sub.add_parser("presets", help="list workflow presets with descriptions").set_defaults(func=cmd_presets)
+
+    sp = sub.add_parser("plan",
+                        help="intent-first: a goal/preset -> modules + the DB checklist to ask up front")
+    sp.add_argument("--preset", default=None, help="preset name (its modules/domains are the base)")
+    sp.add_argument("--modules", default=None,
+                    help="comma-separated module toggles to enable, e.g. classify,domain_taxonomy,functional")
+    sp.add_argument("--domains", default=None,
+                    help="comma-separated domains for domain_taxonomy, e.g. viral,prokaryote,eukaryote")
+    sp.add_argument("--functional", default=None,
+                    help="comma-separated functional sub-steps, e.g. annotation,amr,pathways")
+    sp.add_argument("--have", default=None,
+                    help="comma-separated tools you already have a DB for (marked resolved, not asked)")
+    sp.set_defaults(func=cmd_plan)
 
     sp = sub.add_parser("preset", help="dump a preset's template config as JSON")
     sp.add_argument("name")

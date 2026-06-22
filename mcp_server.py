@@ -37,6 +37,7 @@ from metagx import (
     evidence_pack,
     history,
     paper,
+    plan,
     presets,
     probe,
     registry,
@@ -87,6 +88,27 @@ def list_presets() -> str:
     `preset` to build_config.
     """
     return json.dumps(presets.describe_presets(), indent=2)
+
+
+@mcp.tool()
+def plan_run(preset: str | None = None, modules: list | None = None,
+             domains: list | None = None, functional: list | None = None,
+             have: list | None = None) -> str:
+    """Intent-first funnel opener: turn the user's research goal into modules + a DB checklist.
+
+    Call this FIRST, after the user says what they're trying to do. Classify their free text
+    into a preset (see list_presets) and/or an explicit module set, then pass it here. Returns
+    the effective `modules`/`domains` plus a `databases` checklist — every reference DB those
+    modules need, with its size and how to satisfy it — and ready-to-ask `questions`. Ask those
+    questions up front: a path answer goes to build_config's `db.<tool>`; "fetch it" adds the
+    tool to `db.provision` (module DBs) or configures `db.build` (the kraken2 classifier). Pass
+    `have` with tools the user already has a DB for so they're marked resolved and not re-asked.
+    """
+    try:
+        return json.dumps(plan.plan(preset=preset, modules={m: True for m in (modules or [])} or None,
+                                    domains=domains, functional=functional, have=have), indent=2)
+    except KeyError as e:
+        return f"error: {e}"
 
 
 @mcp.tool()

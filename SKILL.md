@@ -29,6 +29,24 @@ their platform — it changes the tools (see below).
 ## How to run it (Claude Code / CLI available)
 Do **not** guess kraken2 flags. Drive the interview from the registries.
 
+0. **Open with the research question (intent-first funnel).** Before anything else, ask the
+   user in plain words: *"What are you trying to do?"* Their answer (e.g. "profile what's in my
+   gut samples", "detect a pathogen in a clinical swab", "authenticate ancient DNA", "survey
+   AMR genes", "recover MAGs from soil") is what routes the rest of the interview — classify it
+   into a **preset** (`metagx presets` lists each with `when_to_use`) and/or an explicit module
+   set. Then call **`metagx plan --preset <name>`** (add `--modules a,b,c`, `--domains
+   viral,prokaryote,…`, `--functional annotation,amr,pathways` to refine). `plan` returns the
+   effective modules **and a `databases` checklist** — every reference DB those modules need,
+   with its size and how to satisfy it — plus ready-to-ask `questions`. **Ask those DB
+   questions up front**, in the same breath as the goal: for each DB, "do you already have it?
+   (give a path) or should I fetch/build it?". Route each answer straight into the config:
+   - **has a path** → set `db.<tool>` to it (e.g. `db.kraken2`, `db.checkv`).
+   - **fetch it (module DB)** → add the tool to `db.provision: [...]` (auto-fetched at run time).
+   - **fetch/build it (kraken2 classifier)** → a prebuilt `fetch-db`, or a `db.build` block.
+   Pass `--have tool1,tool2` for DBs the user already has so they're marked resolved and not
+   re-asked. This is the whole point: DB needs fall out of the goal conversation, not a separate
+   manual step. `metagx doctor --config` is still the fail-fast backstop once a config exists.
+
 1. **One-time setup** (if not done): `bash setup.sh`, then `uv pip install -e .`. The bio
    tools install via conda/mamba (on Apple-Silicon macOS use
    `bash scripts/install_bio_macos_arm64.sh`). **Then run `metagx doctor`** — it preflights
@@ -81,7 +99,8 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    or stated goal raised it — relay that reason to the user. Use `metagx params <tool>` for the
    full advanced flag list. Offer the **confidence sweep** as the headline feature.
    **Skip what the request already answers, but say so.** The interview is a funnel
-   (goal/preset → platform → data → per-module params); if the user's request already fixes
+   (research question/intent + DB checklist → goal/preset → platform → data → per-module
+   params); if the user's request already fixes
    the goal, platform, or dataset, start at the first *unresolved* decision instead of
    re-asking. When you skip steps, name them in one line ("goal, platform, and dataset are set
    by your request — starting at the differential parameters") so the entry point is
