@@ -158,6 +158,20 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   FastTree on `phylogenetics.input` (or skip alignment with `aligned_input`). Registries:
   `mafft`, `iqtree`, `fasttree`. Outputs: `results/<project>/phylogenetics/` (aligned FASTA,
   Newick, JSON stats, tree figure). Use `method: auto` to pick FastTree when >500 sequences.
+- **Validate (BLAST cross-check):** `modules.validate` answers "is this classifier call
+  real?" — a kraken2/Bracken assignment is a k-mer call, not proof. For each WGS sample it
+  takes the top taxa from the read kraken2 report, pulls a **seeded subsample** of the reads
+  assigned to each (`validate.reads_per_taxon`, default 50; `validate.top_n` taxa, default 10),
+  BLASTs them with `blastn`, and checks whether the best alignment's organism agrees with the
+  classifier — reporting a per-taxon **agreement rate** and an overall **verdict**
+  (`corroborated` / `partial` / `discordant` / `inconclusive`). Needs a reference: set
+  `db.blast` to a local BLAST+ nucleotide DB (NCBI nt, or a small custom one built with
+  `makeblastdb -dbtype nucl -in refs.fasta -out <dir>/db`), **or** `validate: {remote: true}`
+  to search NCBI remotely (only practical for a few sequences; nt is ~200 GB and is **never**
+  auto-fetched — like GTDB-Tk). Agreement level via `validate.level` (genus|species); BLAST
+  strictness via the `blastn` registry (`evalue`, `perc_identity`, `qcov_hsp_perc`). Outputs
+  `results/<project>/validation/<sample>.blast_validation.{json,tsv}`. `metagx doctor --config`
+  fails fast if `validate` is on with neither `db.blast` nor `remote`.
 - **Confidence sweep ("k-dense" matrix):** `sweep: {param: confidence, values: [...]}`
   runs kraken2 at each value and produces a per-sample matrix + line plot showing how
   each organism's read count changes with threshold. Never also pin the swept param in
@@ -166,7 +180,7 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   (Bracken); optional `assembly` (MEGAHIT/metaSPAdes/Flye), `binning` (MetaBAT2),
   `bin_refinement`, `reconcile`, `domain_taxonomy`, `filtered_assembly`, `stats`,
   `differential`, `classify_consensus`, `functional`, `bgc`, `aggregate`, `strain`,
-  `damage`, `decontam`, and `phylogenetics`. Toggle in `modules:`.
+  `damage`, `decontam`, `phylogenetics`, and `validate`. Toggle in `modules:`.
 - **Reconcile** (`modules.reconcile`, needs `assembly`+`classify`): classifies the
   assembled contigs with kraken2 and joins them to per-contig coverage and the read-level
   calls. Outputs under `results/<project>/reconcile/`: a per-contig taxonomy table, a

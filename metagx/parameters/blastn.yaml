@@ -1,0 +1,127 @@
+# Parameter registry for NCBI BLAST+ blastn (taxonomic validation of classifier calls).
+# Single source of truth: drives the interview, config validation, MCP schemas, and the
+# command line built in workflow/rules/validate.smk. See kraken2.yaml for the field schema.
+#
+# Why this tool: kraken2/Bracken give a k-mer-based *assignment*, not proof. The `validate`
+# module pulls a subsample of reads (or the assembled contigs) for the top taxa and BLASTs
+# them against a reference (a local nt/custom DB, or NCBI -remote), then checks whether the
+# best alignment's organism agrees with the classifier's call. blastn is run via subprocess
+# (argv list) so multi-token managed values like -outfmt stay intact (no shell quoting).
+tool: blastn
+command: blastn
+source_repo: https://github.com/ncbi/blast_plus_docs
+docs_url: https://www.ncbi.nlm.nih.gov/books/NBK279690/
+version_probe: blastn -version
+description: >
+  NCBI BLAST+ nucleotide aligner. Used here to validate taxonomic classifications: align a
+  representative set of sequences against a reference and confirm the top hit's organism.
+params:
+  evalue:
+    flag: "-evalue"
+    type: float
+    default: 1.0e-10
+    min: 0.0
+    tier: 1
+    ask: true
+    question: >
+      Maximum E-value for a hit to count as evidence. Lower = stricter (fewer chance
+      alignments). 1e-10 is a sensible default for validation.
+  perc_identity:
+    flag: "-perc_identity"
+    type: float
+    default: 0.0
+    min: 0.0
+    max: 100.0
+    tier: 2
+    ask: true
+    question: >
+      Minimum percent identity (0-100) for an alignment to be reported. Raise it (e.g. 90)
+      to demand near-exact matches when validating species-level calls.
+  qcov_hsp_perc:
+    flag: "-qcov_hsp_perc"
+    type: float
+    default: 0.0
+    min: 0.0
+    max: 100.0
+    tier: 2
+    ask: true
+    question: >
+      Minimum query coverage per HSP (0-100). Filters short partial hits that can match
+      the wrong organism; 50-70 is a reasonable floor for read-level validation.
+  max_target_seqs:
+    flag: "-max_target_seqs"
+    type: int
+    default: 5
+    min: 1
+    tier: 2
+    ask: true
+    question: >
+      How many top database hits to keep per query. We use the single best by bitscore for
+      the agreement check; 5 leaves headroom to inspect near-ties.
+  task:
+    flag: "-task"
+    type: enum
+    default: megablast
+    choices: [megablast, dc-megablast, blastn, blastn-short]
+    tier: 2
+    ask: false
+    question: >
+      blastn algorithm. megablast (default) is fast for highly-similar sequences;
+      dc-megablast/blastn are more sensitive for divergent ones; blastn-short for <50 bp.
+  word_size:
+    flag: "-word_size"
+    type: int
+    default: 0
+    min: 4
+    tier: 3
+    ask: false
+    question: Seed word length. Leave unset for the task default; lower = more sensitive, slower.
+  culling_limit:
+    flag: "-culling_limit"
+    type: int
+    default: 0
+    min: 1
+    tier: 3
+    ask: false
+    question: Drop a hit if this many higher-scoring hits already span its query range.
+  remote:
+    flag: "-remote"
+    type: bool
+    default: false
+    tier: 3
+    ask: false
+    question: >
+      Run the search on NCBI's servers instead of a local DB (no local nt download needed,
+      but rate-limited — only for a handful of sequences). Set via the `validate.remote`
+      orchestration flag, which also tells the module not to require a local db.blast.
+  # --- raw escape hatch: the long tail we don't model (passed verbatim, logged) ---
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: >
+      Any additional raw blastn tokens, passed verbatim (escape hatch; not validated,
+      recorded in run provenance).
+  # --- managed by the workflow: never interviewed, always rendered ---
+  query:
+    flag: "-query"
+    type: path
+    managed: true
+  db:
+    flag: "-db"
+    type: path
+    managed: true
+  out:
+    flag: "-out"
+    type: path
+    managed: true
+  num_threads:
+    flag: "-num_threads"
+    type: int
+    managed: true
+  outfmt:
+    flag: "-outfmt"
+    type: str
+    managed: true

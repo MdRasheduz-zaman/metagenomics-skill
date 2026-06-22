@@ -60,6 +60,8 @@ if MODULES.get("decontam", False):
     include: "rules/decontam.smk"
 if MODULES.get("phylogenetics", False):
     include: "rules/phylogenetics.smk"
+if MODULES.get("validate", False):
+    include: "rules/validate.smk"
 if MODULES.get("bgc", False):
     include: "rules/bgc.smk"
 if MODULES.get("aggregate", False):
@@ -101,6 +103,12 @@ def final_targets():
                     f"{OUT}/phylogenetics/tree.nwk",
                     f"{OUT}/phylogenetics/phylogenetics.json",
                     f"{OUT}/phylogenetics/tree.png"]
+    # BLAST validation of classifier calls (WGS samples; reads-based)
+    if MODULES.get("validate", False):
+        targets += expand(f"{OUT}/validation/{{sample}}.blast_validation.json",
+                          sample=WGS_SAMPLES)
+        targets += expand(f"{OUT}/validation/{{sample}}.blast_validation.tsv",
+                          sample=WGS_SAMPLES)
     # assembly-based steps apply to WGS samples only (not amplicon).
     if MODULES.get("assembly", False):
         targets += expand(f"{OUT}/assembly/{{sample}}/final.contigs.fa", sample=WGS_SAMPLES)

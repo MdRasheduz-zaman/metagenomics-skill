@@ -49,6 +49,7 @@ DEFAULT_MODULES = {
     "decontam": False,
     "strain": False,
     "phylogenetics": False,
+    "validate": False,
 }
 
 KNOWN_DOMAINS = {"viral", "prokaryote", "eukaryote"}
@@ -240,6 +241,40 @@ def _validate_differential(diff: Dict[str, Any] | None) -> Dict[str, Any]:
            "mc_samples": mc_samples, "seed": int(diff.get("seed", 42))}
     if diff.get("reference_group"):
         out["reference_group"] = str(diff["reference_group"])
+    return out
+
+
+def _validate_validate(val: Dict[str, Any] | None, db: Dict[str, Any]) -> Dict[str, Any]:
+    """Settings for the BLAST validation module (cross-check classifier calls vs alignment).
+
+    Needs either a local BLAST DB (db.blast) or remote NCBI search (validate.remote). The
+    nt DB is ~200 GB, so remote is the dev-box / few-sequences escape hatch.
+    """
+    val = val or {}
+    target = str(val.get("target", "reads")).lower()
+    if target not in {"reads"}:
+        raise registry.ValidationError(
+            "validate.target must be 'reads' (contig-level BLAST validation is not yet wired)")
+    level = str(val.get("level", "genus")).lower()
+    if level not in {"genus", "species"}:
+        raise registry.ValidationError("validate.level must be genus or species")
+    try:
+        top_n = int(val.get("top_n", 10))
+        reads_per_taxon = int(val.get("reads_per_taxon", 50))
+    except (TypeError, ValueError):
+        raise registry.ValidationError("validate.top_n and reads_per_taxon must be ints")
+    if top_n < 1 or reads_per_taxon < 1:
+        raise registry.ValidationError("validate.top_n and reads_per_taxon must be >= 1")
+    remote = bool(val.get("remote", False))
+    if not remote and not db.get("blast"):
+        raise registry.ValidationError(
+            "validate needs a BLAST database: set db.blast to a local BLAST+ db (e.g. nt, or "
+            "one built with makeblastdb), or set validate.remote: true to search NCBI remotely "
+            "(only practical for a few sequences). nt is ~200 GB — never auto-fetched.")
+    out: Dict[str, Any] = {"target": target, "level": level, "top_n": top_n,
+                           "reads_per_taxon": reads_per_taxon, "remote": remote,
+                           "rank": "S" if level == "species" else "G",
+                           "seed": int(val.get("seed", 42))}
     return out
 
 
@@ -451,6 +486,8 @@ def build_config(
     mafft: Dict[str, Any] | None = None,
     iqtree: Dict[str, Any] | None = None,
     fasttree: Dict[str, Any] | None = None,
+    validate: Dict[str, Any] | None = None,
+    blastn: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
     """Validate every section and return a clean config dict.
 
@@ -614,6 +651,7 @@ def build_config(
         "multiqc": multiqc, "krona": krona, "mapdamage": mapdamage, "instrain": instrain,
         "antismash": antismash, "dada2": dada2,
         "mafft": mafft, "iqtree": iqtree, "fasttree": fasttree,
+        "blastn": blastn,
     }
     # Merge any preset-provided tool params under the user's overrides (user wins),
     # for every registry tool — so presets can tune new tools with no code changes here.
@@ -636,7 +674,7 @@ def build_config(
     }
     for extra in ("cat", "genomad", "checkv", "gtdbtk", "checkm2", "eukcc", "emu",
                   "humann_nucleotide", "humann_protein", "amrfinderplus", "bakta", "eggnog",
-                  "metaphlan", "kaiju", "antismash"):
+                  "metaphlan", "kaiju", "antismash", "blast"):
         if db.get(extra):
             cfg["db"][extra] = db[extra]
     if db_build:
@@ -738,6 +776,11 @@ def build_config(
         cfg["differential"] = _validate_differential(differential)
     if mods.get("phylogenetics"):
         cfg["phylogenetics"] = _validate_phylogenetics(phylogenetics or {})
+    if mods.get("validate"):
+        if not mods.get("classify"):
+            raise registry.ValidationError(
+                "validate cross-checks classifier calls, so it needs classify enabled")
+        cfg["validate"] = _validate_validate(validate, db)
     cfg.update(cleaned_sections)
     return cfg
 

@@ -125,6 +125,22 @@ SPECS: Dict[str, DBSpec] = {
         "size": "~0.7 GB",
         "needed_by": "amplicon (long-read 16S)",
     },
+    "blast": {
+        # NCBI nt is ~200 GB (like GTDB-Tk: never auto-fetch on a dev box). No clean
+        # per-dir CLI downloader (update_blastdb.pl writes to cwd), so this is gate-only;
+        # for validation, a small custom DB from makeblastdb or `validate.remote` is the
+        # laptop-friendly path. db.blast may be a directory OR a DB-name prefix (e.g. .../nt).
+        "tool": None,
+        "manual": True,
+        "docs": ("get a BLAST+ nucleotide DB: `update_blastdb.pl --decompress nt` (~200 GB, "
+                 "needs BLASTDB set) or build a custom one with `makeblastdb -dbtype nucl -in "
+                 "refs.fasta -out <dir>/mydb`; or set validate.remote: true to search NCBI"),
+        "markers": ["*.nin", "*.nal", "*.ndb", "**/*.nin", "**/*.nal"],
+        "prefix": True,
+        "prefix_suffixes": ["*.nin", "*.nal", "*.ndb"],
+        "size": "~200 GB (nt) / tiny (custom makeblastdb)",
+        "needed_by": "validate (BLAST cross-check of classifier calls)",
+    },
 }
 
 
@@ -133,15 +149,26 @@ def _have(tool: str) -> bool:
 
 
 def is_provisioned(tool: str, db_dir: Optional[str]) -> bool:
-    """True if the tool's DB already exists at db_dir (any presence marker matches)."""
-    if not db_dir or not os.path.isdir(db_dir):
+    """True if the tool's DB already exists at db_dir (any presence marker matches).
+
+    Most tools store their DB in a directory. Some (BLAST) take a DB-name *prefix* (e.g.
+    ``.../nt`` for files ``nt.nin``, ``nt.nal``); for those, ``spec['prefix']`` enables a
+    sibling-glob check so a valid prefix path isn't reported as missing.
+    """
+    if not db_dir:
         return False
     spec = SPECS.get(tool)
-    if not spec:
-        return bool(os.listdir(db_dir))  # unknown tool: any non-empty dir counts
-    for pat in spec["markers"]:           # type: ignore[index]
-        if glob.glob(os.path.join(db_dir, pat), recursive=True):
-            return True
+    if os.path.isdir(db_dir):
+        if not spec:
+            return bool(os.listdir(db_dir))  # unknown tool: any non-empty dir counts
+        for pat in spec["markers"]:           # type: ignore[index]
+            if glob.glob(os.path.join(db_dir, pat), recursive=True):
+                return True
+    # prefix case: db_dir names a DB, not a directory (e.g. BLAST's /path/nt)
+    if spec and spec.get("prefix"):
+        for suf in spec.get("prefix_suffixes", []):   # type: ignore[union-attr]
+            if glob.glob(db_dir + suf):
+                return True
     return False
 
 
@@ -220,6 +247,9 @@ def needed_dbs(cfg: Dict) -> Dict[str, str]:
             need.update(humann_nucleotide="humann_nucleotide", humann_protein="humann_protein")
     if mods.get("bgc"):
         need["antismash"] = "antismash"
+    # validate BLASTs classifier calls — needs a local BLAST DB unless searching NCBI remotely.
+    if mods.get("validate") and not (cfg.get("validate", {}) or {}).get("remote"):
+        need["blast"] = "blast"
     # emu (long-read amplicon only) and metaphlan (an *optional* consensus tool) have
     # platform/sub-tool nuances, so they're fetchable (SPECS) but not auto-required here to
     # avoid false-positive doctor failures — leave them to the explicit path / db.provision.

@@ -122,6 +122,19 @@ SCENARIOS = {
         "extra": {"bracken": {"read_length": 150}},
         "expect_rules": {"diversity"},
     },
+    # BLAST validation of classifier calls (reads-based). remote:true so no local db.blast is
+    # needed for the dry-run; exercises the validate rule's include + input wiring.
+    "validate_blast": {
+        "reads": {"r1": ("v.fastq.gz", "fastq_gz")},
+        "platform": "illumina", "layout": "se",
+        "modules": {"qc": False, "classify": True, "abundance": True,
+                    "assembly": False, "validate": True},
+        "extra": {"bracken": {"read_length": 150},
+                  "validate": {"target": "reads", "level": "genus", "rank": "G",
+                               "top_n": 10, "reads_per_taxon": 50, "remote": True, "seed": 42},
+                  "blastn": {"evalue": 1e-10}},
+        "expect_rules": {"blast_validate"},
+    },
 }
 
 

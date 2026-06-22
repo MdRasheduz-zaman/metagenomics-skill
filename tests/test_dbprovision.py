@@ -13,7 +13,7 @@ def test_specs_cover_all_module_dbs():
     assert set(p.SPECS) == {
         "genomad", "checkv", "checkm2", "gtdbtk", "bakta", "amrfinderplus",
         "antismash", "humann_nucleotide", "humann_protein", "eggnog", "metaphlan",
-        "eukcc", "emu"}
+        "eukcc", "emu", "blast"}
 
 
 def test_manual_tools_have_no_auto_downloader():
