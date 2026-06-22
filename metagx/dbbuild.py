@@ -83,6 +83,20 @@ def _have(tool: str) -> bool:
     return shutil.which(tool) is not None
 
 
+def _usable_cpus() -> int:
+    """Number of processors actually available to this process.
+
+    Bracken's ``kmer2read_distr`` hard-fails with "thread count exceeds number of processors"
+    when ``-t`` exceeds the online CPU count (kraken2 only warns and reduces). On a 2-core CI
+    runner that aborts the whole DB build. Prefer the affinity-aware count (respects cgroup/
+    taskset limits) and fall back to ``os.cpu_count()``.
+    """
+    try:
+        return max(1, len(os.sched_getaffinity(0)))  # Linux; honors cgroup/taskset pinning
+    except AttributeError:
+        return max(1, os.cpu_count() or 1)
+
+
 def _step_artifacts(name: str, db_dir: str) -> List[str]:
     """The output files a build step must produce to count as successful.
 
@@ -274,6 +288,13 @@ def build_db(
     mapping = write_library_and_taxonomy(genomes, db_dir)
     library = os.path.join(db_dir, "custom_library.fasta")
 
+    # Never request more threads than there are online CPUs: bracken-build's kmer2read_distr
+    # aborts (rc 1, "thread count exceeds number of processors") rather than reducing, which
+    # killed the build on the 2-core CI runner. Clamping also keeps kraken2-build from the
+    # thread>core mismatch behind its SIGPIPE race.
+    requested_threads = threads
+    threads = max(1, min(int(threads), _usable_cpus()))
+
     # Bracken's k-mer distribution is read-length specific; build one per requested length
     # so short- and long-read samples can each use a matching distribution.
     lengths = read_length if isinstance(read_length, (list, tuple)) else [read_length]
@@ -294,8 +315,14 @@ def build_db(
         "db": os.path.abspath(db_dir),
         "n_sequences": len(mapping),
         "taxids": {acc: m["taxid"] for acc, m in mapping.items()},
+        "threads": threads,
         "commands": plan,
     }
+    if threads != requested_threads:
+        result["note_threads"] = (
+            f"requested {requested_threads} threads but only {threads} CPU(s) are available; "
+            "clamped (bracken-build/kmer2read_distr aborts when threads exceed online CPUs)."
+        )
 
     # kraken2-build is required to build anything; bracken-build is skippable.
     if not run or not _have("kraken2-build"):

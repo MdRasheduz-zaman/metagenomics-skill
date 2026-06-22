@@ -342,6 +342,34 @@ purpose is to make the failure legible. **Do not attempt a fourth blind fix — 
 first.** If the retry ran and still produced no DB, escalate straight to §6.4 (bypass the
 `kraken2-build` wrapper; call `build_db` directly) rather than adding a fourth heuristic.
 
+### 6.8 ROUND 4 — real root cause found (the observability paid off)
+The round-3 diagnostic dump immediately earned its keep. The next CI log showed the kraken2
+build step **passing** and the failure moving to a *new* step with a *clear* message:
+
+```
+failed_step : bracken-build-150
+returncode  : 1
+kmer2read_distr:   thread count exceeds number of processors
+```
+
+So the SIGPIPE saga was real but secondary. The actual blocker on the 2-core runner is
+**Bracken**: its `kmer2read_distr` is called with `-t 4` and **hard-aborts** when the thread
+count exceeds online CPUs (kraken2 only warns and reduces — which is why kraken2 looked like
+the culprit for three rounds). Same environmental constraint (2 cores), stricter tool.
+
+**Fix (`metagx/dbbuild.py`): clamp `threads` to the online CPU count** (`_usable_cpus()`,
+affinity-aware) before building any command. This deterministically fixes bracken **and**
+removes the kraken2 thread>core mismatch that fed the SIGPIPE race in the first place — one
+root cause, one fix, no heuristic. `result["threads"]`/`note_threads` record any clamp.
+
+**Verified against the real constraint (not reasoned):** forcing `_usable_cpus()→2` and running
+the **real** kraken2-build + bracken-build end-to-end builds the DB cleanly (`ok:True`,
+threads=2, no failed step). Regression: `test_build_db_clamps_threads_to_cpu_count`. Suite 7/7.
+
+**Residual follow-up:** the same thread>core hard-fail can bite an end-user with a small
+machine anywhere Bracken/kmer2read_distr runs in the *workflow* (not just `dbbuild`). Audit the
+bracken rule's thread param (`render_args`) and apply the same clamp at the workflow level.
+
 ### 6.6 Tracked checklist (round 2)
 - [ ] **P0** Get CI e2e **actually green** — the only acceptance criterion. (round-2 retry +
       round-3 observability/`OMP_NUM_THREADS=1` applied; still awaiting a green run. **Next step

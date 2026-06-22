@@ -112,6 +112,35 @@ def test_build_db_recovers_via_single_threaded_retry(tmp_path, monkeypatch):
     assert res["logs"]["build"].get("retry_threads1", {}).get("returncode") == 0
 
 
+def test_build_db_clamps_threads_to_cpu_count(tmp_path, monkeypatch):
+    """threads must never exceed online CPUs — bracken-build's kmer2read_distr aborts (rc 1,
+    "thread count exceeds number of processors") instead of reducing. This was the real CI
+    e2e failure on the 2-core runner once the kraken2 build step started passing.
+    """
+    g = _write_genomes(tmp_path / "g.fasta")
+    monkeypatch.setattr(dbbuild, "_have", lambda t: True)
+    monkeypatch.setattr(dbbuild, "_usable_cpus", lambda: 2)  # emulate a 2-core runner
+    seen = {}
+
+    def fake_run(cmd, *a, **k):
+        if "bracken-build" in cmd[0]:
+            seen["bracken_t"] = cmd[cmd.index("-t") + 1]
+            length = cmd[cmd.index("-l") + 1]
+            (tmp_path / "db" / f"database{length}mers.kmer_distrib").write_text("x")
+        elif "--build" in cmd:
+            seen["kraken_threads"] = cmd[cmd.index("--threads") + 1]
+            for f in ("hash.k2d", "opts.k2d", "taxo.k2d"):
+                (tmp_path / "db" / f).write_text("x")
+        return subprocess.CompletedProcess(cmd, 0, "ok", "")
+
+    monkeypatch.setattr(dbbuild.subprocess, "run", fake_run)
+    res = dbbuild.build_db(g, str(tmp_path / "db"), read_length=[150], threads=4, run=True)
+    assert res["ok"] is True
+    assert res["threads"] == 2
+    assert seen["bracken_t"] == "2" and seen["kraken_threads"] == "2"
+    assert "clamped" in res.get("note_threads", "")
+
+
 def test_build_db_real_failure_still_fails(tmp_path, monkeypatch):
     """A non-zero exit with *no* artifacts is a genuine failure — must not be swallowed."""
     g = _write_genomes(tmp_path / "g.fasta")
