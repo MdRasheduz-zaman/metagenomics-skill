@@ -1,8 +1,16 @@
 # Plan: first-class database building as a pipeline step
 
-Status: draft for review. Turns DB construction from a detached CLI pre-step
+Status: **implemented** (2026-06-22). Turns DB construction from a detached CLI pre-step
 (`metagx build-db` / `fetch-db`) into a registry-driven, interview-asked, Snakemake-wired
 **`db.build`** step — while reusing the existing `dbbuild.py` synthetic path.
+
+Done: registries (kraken2-build/bracken-build), `db.build` config schema + invariants,
+`dbbuild.build_database` (4 strategies), `rules/dbbuild.smk` + `scripts/build_db.py` (idempotent
+manifest), Bracken read-length coupling, `--use-ftp` default (NCBI rsync is dead) + prefer-prebuilt
+doctor warning, air-gap advisory, `metagx build-db --strategy` CLI, `db.build.auto:false` escape
+hatch, high-mem `build_kraken2_db` SLURM resources, report DB-provenance manifest, real-taxonomy
+header→taxid precheck, and a network-gated viral fetch+classify e2e. Validated end-to-end: a real
+`metagx run` built a viral DB and classified noisy ONT reads (29/30 species, real ICTV names).
 
 ## Goal
 

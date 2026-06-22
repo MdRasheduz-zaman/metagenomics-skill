@@ -226,6 +226,35 @@ def check_database(db_paths: Optional[Dict[str, str]] = None) -> Check:
     return Check("database", _OK, f"kraken2 db OK: {kdb} ({size_gb:.1f} GB).")
 
 
+def _source_has_taxid_headers(source: str):
+    """Scan a db.build source (FASTA file or folder of FASTAs) and report whether its headers
+    carry `kraken:taxid|` tags. Returns True/False, or None if the source can't be read yet
+    (e.g. a path that doesn't exist at preflight time) so we don't false-alarm."""
+    import glob
+    import gzip
+
+    files = []
+    if os.path.isdir(source):
+        for ext in ("*.fa", "*.fna", "*.fasta", "*.fa.gz", "*.fna.gz", "*.fasta.gz"):
+            files += glob.glob(os.path.join(source, ext))
+    elif os.path.isfile(source):
+        files = [source]
+    if not files:
+        return None
+    for fp in files[:5]:                      # sample a few files; headers are uniform per build
+        opener = gzip.open if fp.endswith(".gz") else open
+        try:
+            with opener(fp, "rt") as fh:
+                for line in fh:
+                    if line.startswith(">"):
+                        if "kraken:taxid|" in line or "taxid|" in line:
+                            return True
+                        break                 # first header per file is representative enough
+        except OSError:
+            return None
+    return False
+
+
 def check_db_build(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
     """When db.build is configured, surface the build tooling, the masking dependency, and
     the air-gapped-HPC download caveat — so a user catches a no-internet compute node before
@@ -243,6 +272,20 @@ def check_db_build(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
             out.append(Check(f"db-build:{t}", _FAIL, f"{t} not on PATH (needed to build the DB).",
                              remedy="Install the core stack (kraken2 + bracken ship these): "
                                     "`conda env create -f environment.yml`."))
+
+    # Real-taxonomy custom/spike-in builds need each sequence to carry a real NCBI taxid in its
+    # header (kraken:taxid|<id>); otherwise the build "succeeds" but those sequences map nowhere.
+    # Catch it here, before a long build, rather than discovering a useless DB afterward.
+    src = build.get("source")
+    if strategy in {"custom-fasta", "custom-folder", "spike-in"} and taxonomy == "real" and src:
+        tagged = _source_has_taxid_headers(src)
+        if tagged is False:
+            out.append(Check(
+                "db-build:taxids", _WARN,
+                f"taxonomy: real but the headers in {src} carry no `kraken:taxid|<id>` tag — "
+                "those sequences won't map into the NCBI taxonomy.",
+                remedy="Tag headers as `>acc|kraken:taxid|<ncbi_taxid> ...`, or use "
+                       "taxonomy: synthetic if you only need to detect/quantify these genomes."))
     if needs_download and not build.get("no_masking", False) and shutil.which("dustmasker") is None:
         out.append(Check("db-build:masking", _WARN,
                          "dustmasker (BLAST+) not on PATH — low-complexity masking will fail.",

@@ -22,6 +22,7 @@ default-resources:
 
 # Threads per rule (kraken2/assembly/mapping scale well).
 set-threads:
+  build_kraken2_db: 8
   kraken2: 16
   bracken: 4
   fastp_pe: 8
@@ -44,6 +45,12 @@ set-threads:
 # Memory / walltime per rule. kraken2/Bracken memory tracks the DB size — tune for yours
 # (a viral DB needs a few GB; PlusPF/standard ~64 GB; GTDB-Tk ~128 GB).
 set-resources:
+  # Building a DB (db.build) is RAM- and time-heavy and runs once: a viral build is small,
+  # but a standard library needs the index resident in memory while building. Size for the
+  # largest library you build; it only fires when db.build is configured.
+  build_kraken2_db:
+    mem_mb: 64000
+    runtime: 1440
   kraken2:
     mem_mb: 64000
     runtime: 240

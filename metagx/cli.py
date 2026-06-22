@@ -99,11 +99,29 @@ def cmd_preset(args) -> int:
 
 def cmd_build_db(args) -> int:
     lengths = [int(x) for x in str(args.read_length).split(",") if x.strip()]
-    result = dbbuild.build_db(
-        genomes=args.genomes, db_dir=args.db,
-        read_length=lengths if len(lengths) > 1 else lengths[0],
-        threads=args.threads, run=not args.dry_run,
-    )
+    if args.strategy:  # multi-strategy builder (standard / custom-* / spike-in)
+        source = args.source or args.genomes
+        if args.strategy in ("custom-fasta", "custom-folder", "spike-in") and not source:
+            sys.stderr.write(f"build-db --strategy {args.strategy} needs --source (or --genomes)\n")
+            return 2
+        if args.strategy in ("standard", "spike-in") and not args.libraries:
+            sys.stderr.write(f"build-db --strategy {args.strategy} needs --libraries\n")
+            return 2
+        result = dbbuild.build_database(
+            db_dir=args.db, strategy=args.strategy, taxonomy=args.taxonomy,
+            libraries=args.libraries, source=source,
+            read_lengths=lengths, threads=args.threads,
+            use_ftp=args.use_ftp, run=not args.dry_run,
+        )
+    else:  # legacy custom-fasta synthetic path
+        if not args.genomes:
+            sys.stderr.write("build-db needs --genomes (or --strategy with --source/--libraries)\n")
+            return 2
+        result = dbbuild.build_db(
+            genomes=args.genomes, db_dir=args.db,
+            read_length=lengths if len(lengths) > 1 else lengths[0],
+            threads=args.threads, run=not args.dry_run,
+        )
     _print_json(result)
     return 0 if result.get("ok", not result.get("ran", False)) else 1
 
@@ -500,14 +518,22 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--config", default="config.yaml")
     sp.set_defaults(func=cmd_results)
 
-    sp = sub.add_parser("build-db", help="build a custom kraken2+Bracken db from a genomes FASTA")
-    sp.add_argument("--genomes", required=True, help="FASTA of reference genomes")
+    sp = sub.add_parser("build-db", help="build a kraken2+Bracken db (custom genomes, NCBI libraries, or spike-in)")
+    sp.add_argument("--genomes", help="FASTA of reference genomes (custom-fasta; legacy synthetic path)")
     sp.add_argument("--db", required=True, help="output database directory")
     sp.add_argument("--read-length", default="150",
                     help="Bracken build length(s); comma-separated for multiple (e.g. 150,1000)")
     sp.add_argument("--threads", type=int, default=4)
+    sp.add_argument("--strategy", choices=["standard", "custom-fasta", "custom-folder", "spike-in"],
+                    help="db.build strategy; given => use the multi-strategy builder")
+    sp.add_argument("--taxonomy", choices=["real", "synthetic"], default="real",
+                    help="taxonomy for custom/spike-in (real=NCBI, synthetic=flat); default real")
+    sp.add_argument("--libraries", help="NCBI libraries for standard/spike-in (e.g. 'viral' or 'bacteria,viral')")
+    sp.add_argument("--source", help="FASTA file or folder of FASTAs for custom-*/spike-in")
+    sp.add_argument("--no-use-ftp", dest="use_ftp", action="store_false",
+                    help="use rsync instead of FTP for NCBI downloads (rsync is deprecated; default FTP)")
     sp.add_argument("--dry-run", action="store_true", help="write taxonomy/library, print commands, don't build")
-    sp.set_defaults(func=cmd_build_db)
+    sp.set_defaults(func=cmd_build_db, use_ftp=True)
 
     sp = sub.add_parser("fetch-db",
                         help="download a prebuilt standard kraken2+Bracken index (onboarding)")

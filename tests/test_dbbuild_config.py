@@ -152,3 +152,63 @@ def test_db_is_built_requires_core_and_bracken(tmp_path):
     assert dbbuild.db_is_built(str(tmp_path), [150]) is False   # bracken distrib missing
     (tmp_path / "database150mers.kmer_distrib").write_text("x")
     assert dbbuild.db_is_built(str(tmp_path), [150]) is True
+
+
+def test_use_ftp_flows_through_config():
+    cfg = cb.build_config(project="p", samples=SAMPLES,
+                          db={"kraken2": "d", "build": {"strategy": "standard", "libraries": "viral"}},
+                          modules={"classify": True})
+    assert cfg["db"]["build"]["use_ftp"] is True
+    cfg2 = cb.build_config(project="p", samples=SAMPLES,
+                           db={"kraken2": "d", "build": {"strategy": "standard", "libraries": "viral",
+                                                         "use_ftp": False}},
+                           modules={"classify": True})
+    assert cfg2["db"]["build"]["use_ftp"] is False
+
+
+def test_doctor_warns_slow_download_for_large_libraries():
+    big = doctor.check_db_build({"build": {"strategy": "standard", "libraries": "bacteria,viral"}})
+    assert any(c.name == "db-build:slow-download" for c in big)
+    small = doctor.check_db_build({"build": {"strategy": "standard", "libraries": "viral"}})
+    assert not any(c.name == "db-build:slow-download" for c in small)
+
+
+def test_doctor_taxid_precheck_real_custom(tmp_path):
+    untagged = tmp_path / "u.fasta"
+    untagged.write_text(">seq1 plain header\nACGTACGT\n")
+    checks = doctor.check_db_build({"build": {"strategy": "custom-fasta", "taxonomy": "real",
+                                              "source": str(untagged)}})
+    assert any(c.name == "db-build:taxids" for c in checks)
+    tagged = tmp_path / "t.fasta"
+    tagged.write_text(">acc|kraken:taxid|9606 human\nACGTACGT\n")
+    ok = doctor.check_db_build({"build": {"strategy": "custom-fasta", "taxonomy": "real",
+                                          "source": str(tagged)}})
+    assert not any(c.name == "db-build:taxids" for c in ok)
+    # synthetic taxonomy never needs taxid headers
+    syn = doctor.check_db_build({"build": {"strategy": "custom-fasta", "taxonomy": "synthetic",
+                                           "source": str(untagged)}})
+    assert not any(c.name == "db-build:taxids" for c in syn)
+
+
+def test_report_db_info_carries_build_manifest(tmp_path):
+    import json as _json
+    from metagx import report
+    (tmp_path / "hash.k2d").write_bytes(b"x" * 16)
+    (tmp_path / ".metagx_db.json").write_text(_json.dumps(
+        {"strategy": "standard", "taxonomy": "real", "kraken2_version": "2.17.1"}))
+    info = report.db_info(str(tmp_path))
+    assert info["build"]["strategy"] == "standard"
+    assert info["build"]["kraken2_version"] == "2.17.1"
+
+
+def test_db_build_auto_false_skips_autobuild_dependency():
+    """auto: false must drop the build manifest from classify's inputs (no surprise build)."""
+    cfg_auto = cb.build_config(project="p", samples=SAMPLES,
+                               db={"kraken2": "d", "build": {"strategy": "standard", "libraries": "viral"}},
+                               modules={"classify": True})
+    cfg_manual = cb.build_config(project="p", samples=SAMPLES,
+                                 db={"kraken2": "d", "build": {"strategy": "standard", "libraries": "viral",
+                                                               "auto": False}},
+                                 modules={"classify": True})
+    assert cfg_auto["db"]["build"]["auto"] is True
+    assert cfg_manual["db"]["build"]["auto"] is False

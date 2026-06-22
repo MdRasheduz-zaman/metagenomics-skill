@@ -23,8 +23,11 @@ DB_MANIFEST = os.path.join(DB["kraken2"], ".metagx_db.json") if DB.get("kraken2"
 
 
 def db_ready_input():
-    """The built-DB manifest, as a rule input — only when db.build is configured (else [])."""
-    return [DB_MANIFEST] if (DB_BUILD and DB_MANIFEST) else []
+    """The built-DB manifest, as a rule input — only when db.build is configured AND auto-build
+    is on (db.build.auto, default True). With ``auto: false`` a plain run won't trigger a
+    multi-hour build: the user builds it first (`metagx build-db` / target build_kraken2_db)."""
+    auto = (DB_BUILD or {}).get("auto", True)
+    return [DB_MANIFEST] if (DB_BUILD and DB_MANIFEST and auto) else []
 
 
 # Target domains for the (optional) domain-taxonomy layer: viral / prokaryote / eukaryote.

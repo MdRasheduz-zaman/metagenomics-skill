@@ -297,6 +297,15 @@ def db_info(path: Optional[str]) -> Dict[str, Any]:
             for dp, _, fs in os.walk(path) for f in fs
         )
         info["size_bytes"] = total
+    # If the DB was produced by db.build, carry its provenance manifest into the report so
+    # the Methods/manifest record how (and from what) the reference DB was constructed.
+    manifest = os.path.join(path, ".metagx_db.json") if os.path.isdir(path) else None
+    if manifest and os.path.isfile(manifest):
+        try:
+            with open(manifest) as fh:
+                info["build"] = json.load(fh)
+        except (OSError, ValueError):
+            pass
     return info
 
 
