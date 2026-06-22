@@ -18,6 +18,7 @@ rule metaphlan:
         sample=_alt(WGS_SAMPLES),
     input:
         reads=lambda wc: reads_for_classify(wc.sample),
+        db_ready=provision_ready("metaphlan"),
     output:
         tsv=f"{OUT}/consensus/{{sample}}.metaphlan.tsv",
     threads: THREADS

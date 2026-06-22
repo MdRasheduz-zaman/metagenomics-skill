@@ -8,6 +8,7 @@ rule antismash:
         sample=_alt(WGS_SAMPLES),
     input:
         contigs=f"{OUT}/assembly/{{sample}}/final.contigs.fa",
+        db_ready=provision_ready("antismash"),
     output:
         done=f"{OUT}/bgc/{{sample}}/antismash.done",
     threads: THREADS

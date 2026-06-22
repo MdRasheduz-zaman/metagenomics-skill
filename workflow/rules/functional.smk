@@ -24,6 +24,7 @@ rule humann:
         sample=_alt(WGS_SAMPLES),
     input:
         reads=f"{OUT}/functional/{{sample}}/humann/input.fastq.gz",
+        db_ready=provision_ready("humann_nucleotide") + provision_ready("humann_protein"),
     output:
         path=f"{OUT}/functional/{{sample}}/humann/input_pathabundance.tsv",
     threads: THREADS
@@ -112,6 +113,7 @@ rule eggnog:
         sample=_alt(WGS_SAMPLES),
     input:
         faa=f"{OUT}/functional/{{sample}}/annotate/bakta/bins.faa",
+        db_ready=provision_ready("eggnog"),
     output:
         annot=f"{OUT}/functional/{{sample}}/annotate/eggnog/bins.emapper.annotations",
     threads: THREADS

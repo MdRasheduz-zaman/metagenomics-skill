@@ -37,7 +37,7 @@ SPECS: Dict[str, DBSpec] = {
         "tool": "checkv",
         "cmd": lambda d: ["checkv", "download_database", d],
         "markers": ["checkv-db-*", "checkv-db-*/genome_db/*.dmnd"],
-        "size": "~0.5 GB",
+        "size": "~6 GB (extracted; ~0.5 GB download)",  # verified: checkv-db-v1.5 -> 6.4 GB
         "needed_by": "domain_taxonomy + viral domain",
     },
     "checkm2": {
@@ -73,6 +73,58 @@ SPECS: Dict[str, DBSpec] = {
         # graceful skip (abricate still covers AMR), not a fatal mid-run crash.
         "self_gates": True,
     },
+    "antismash": {
+        "tool": "download-antismash-databases",
+        "cmd": lambda d: ["download-antismash-databases", "--database-dir", d],
+        "markers": ["pfam", "clusterblast", "*/pfam*"],
+        "size": "~9 GB",
+        "needed_by": "bgc",
+    },
+    "humann_nucleotide": {
+        "tool": "humann_databases",
+        "cmd": lambda d: ["humann_databases", "--download", "chocophlan", "full", d, "--update-config", "no"],
+        "markers": ["chocophlan*", "**/*.v*.bz2", "**/chocophlan*"],
+        "size": "~16 GB",
+        "needed_by": "functional.pathways",
+    },
+    "humann_protein": {
+        "tool": "humann_databases",
+        "cmd": lambda d: ["humann_databases", "--download", "uniref", "uniref90_diamond", d, "--update-config", "no"],
+        "markers": ["uniref*", "**/uniref90*.dmnd"],
+        "size": "~20 GB",
+        "needed_by": "functional.pathways",
+    },
+    "eggnog": {
+        "tool": "download_eggnog_data.py",
+        "cmd": lambda d: ["download_eggnog_data.py", "-y", "--data_dir", d],
+        "markers": ["eggnog.db", "**/eggnog.db"],
+        "size": "~50 GB",
+        "needed_by": "functional.annotation",
+    },
+    "metaphlan": {
+        "tool": "metaphlan",
+        "cmd": lambda d: ["metaphlan", "--install", "--bowtie2db", d],
+        "markers": ["mpa_*.pkl", "*.pkl", "**/mpa_*"],
+        "size": "~25 GB",
+        "needed_by": "classify_consensus (when MetaPhlAn is the chosen consensus tool)",
+    },
+    # --- no clean CLI downloader: gate-only (doctor reports + points at the docs) ----------
+    "eukcc": {
+        "tool": None,
+        "manual": True,
+        "docs": "http://eukcc.readthedocs.io (download the EukCC2 DB tarball, set db.eukcc)",
+        "markers": ["**/*.dmnd", "**/refpkg", "eukcc2_db*"],
+        "size": "~12 GB",
+        "needed_by": "domain_taxonomy + eukaryote domain",
+    },
+    "emu": {
+        "tool": None,
+        "manual": True,
+        "docs": "https://github.com/treangenlab/emu#emu-database (download the default 16S DB, set db.emu)",
+        "markers": ["species_taxid.fasta", "**/species_taxid.fasta", "taxonomy.tsv"],
+        "size": "~0.7 GB",
+        "needed_by": "amplicon (long-read 16S)",
+    },
 }
 
 
@@ -102,6 +154,12 @@ def provision(tool: str, db_dir: str, run: bool = True, force: bool = False) -> 
         return {"tool": tool, "ok": False, "error": f"no provisioner for '{tool}'; "
                 f"known: {sorted(SPECS)}"}
     os.makedirs(db_dir, exist_ok=True)
+    if spec.get("manual"):  # no clean CLI downloader — point at the docs (still idempotent-check)
+        present = is_provisioned(tool, db_dir)
+        return {"tool": tool, "db": os.path.abspath(db_dir), "size": spec.get("size"),
+                "ran": False, "ok": present, "manual": True,
+                "note": ("already present" if present
+                         else f"no automatic downloader for {tool}; get it manually: {spec.get('docs')}")}
     cmd: List[str] = spec["cmd"](db_dir)                       # type: ignore[operator]
     result: Dict = {"tool": tool, "db": os.path.abspath(db_dir), "size": spec.get("size"),
                     "command": " ".join(cmd)}
@@ -131,6 +189,8 @@ def fetch_command(tool: str, db_dir: str = "<dir>") -> str:
     spec = SPECS.get(tool)
     if not spec:
         return f"(no metagx provisioner for {tool})"
+    if spec.get("manual"):
+        return f"(manual download — {spec.get('docs')})"
     pre = ""
     if spec.get("env"):
         pre = " ".join(f"{k}={v}" for k, v in spec["env"](db_dir).items()) + " "  # type: ignore[operator]
@@ -149,9 +209,18 @@ def needed_dbs(cfg: Dict) -> Dict[str, str]:
             need.update(genomad="genomad", checkv="checkv")
         if "prokaryote" in domains:
             need.update(checkm2="checkm2", gtdbtk="gtdbtk")
+        if "eukaryote" in domains:
+            need["eukcc"] = "eukcc"
     if mods.get("functional"):
         if func.get("annotation"):
-            need["bakta"] = "bakta"
+            need.update(bakta="bakta", eggnog="eggnog")
         if func.get("amr"):
             need["amrfinderplus"] = "amrfinderplus"   # note: the rule also self-gates on the db
+        if func.get("pathways"):
+            need.update(humann_nucleotide="humann_nucleotide", humann_protein="humann_protein")
+    if mods.get("bgc"):
+        need["antismash"] = "antismash"
+    # emu (long-read amplicon only) and metaphlan (an *optional* consensus tool) have
+    # platform/sub-tool nuances, so they're fetchable (SPECS) but not auto-required here to
+    # avoid false-positive doctor failures — leave them to the explicit path / db.provision.
     return need

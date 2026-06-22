@@ -651,6 +651,11 @@ def build_config(
         if bad:
             raise registry.ValidationError(
                 f"db.provision: no provisioner for {bad}; known: {sorted(dbprovision.SPECS)}")
+        manual = [t for t in provision if dbprovision.SPECS[t].get("manual")]
+        if manual:
+            raise registry.ValidationError(
+                f"db.provision can't auto-fetch {manual} (no CLI downloader); download them "
+                f"manually and set db.<tool> to the path instead")
         missing = [t for t in provision if not cfg["db"].get(t)]
         if missing:
             raise registry.ValidationError(

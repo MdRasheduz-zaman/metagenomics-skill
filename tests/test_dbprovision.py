@@ -9,8 +9,28 @@ from metagx import dbprovision as p
 from metagx import doctor, registry
 
 
-def test_specs_cover_the_common_six():
-    assert set(p.SPECS) == {"genomad", "checkv", "checkm2", "gtdbtk", "bakta", "amrfinderplus"}
+def test_specs_cover_all_module_dbs():
+    assert set(p.SPECS) == {
+        "genomad", "checkv", "checkm2", "gtdbtk", "bakta", "amrfinderplus",
+        "antismash", "humann_nucleotide", "humann_protein", "eggnog", "metaphlan",
+        "eukcc", "emu"}
+
+
+def test_manual_tools_have_no_auto_downloader():
+    for t in ("eukcc", "emu"):
+        assert p.SPECS[t].get("manual")
+        res = p.provision(t, "/tmp/whatever-not-real", run=False)
+        assert res["ran"] is False and res.get("manual") and "manually" in res["note"]
+        assert "manual download" in p.fetch_command(t)
+
+
+def test_needed_dbs_covers_functional_and_bgc():
+    cfg = {"modules": {"functional": True, "bgc": True, "domain_taxonomy": True},
+           "domains": ["eukaryote"],
+           "functional": {"annotation": True, "pathways": True}}
+    need = p.needed_dbs(cfg)
+    assert need["eggnog"] == "eggnog" and need["antismash"] == "antismash"
+    assert need["humann_nucleotide"] == "humann_nucleotide" and need["eukcc"] == "eukcc"
 
 
 def test_fetch_command_includes_env_for_gtdbtk():
@@ -42,7 +62,8 @@ def test_needed_dbs_maps_modules_to_dbs():
            "domains": ["viral", "prokaryote"], "functional": {"amr": True, "annotation": True}}
     need = p.needed_dbs(cfg)
     assert need == {"genomad": "genomad", "checkv": "checkv", "checkm2": "checkm2",
-                    "gtdbtk": "gtdbtk", "bakta": "bakta", "amrfinderplus": "amrfinderplus"}
+                    "gtdbtk": "gtdbtk", "bakta": "bakta", "eggnog": "eggnog",
+                    "amrfinderplus": "amrfinderplus"}
     # nothing needed when the modules are off
     assert p.needed_dbs({"modules": {}}) == {}
 

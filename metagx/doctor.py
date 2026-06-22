@@ -329,19 +329,20 @@ def check_module_dbs(cfg: Optional[Dict] = None) -> List[Check]:
     for tool, key in dbprovision.needed_dbs(cfg).items():
         spec = dbprovision.SPECS.get(tool, {})
         self_gates = bool(spec.get("self_gates"))
+        manual = bool(spec.get("manual"))
+        remedy_fetch = (f"download manually — {spec.get('docs')}" if manual
+                        else f"`metagx fetch-db --tool {tool} --dir <dir>` ({spec.get('size')})")
         path = db.get(key)
         if not path:
             status = _INFO if self_gates else _FAIL
             msg = (f"{tool} DB not set (db.{key}); its step will be skipped." if self_gates
                    else f"module needs {tool} ({spec.get('needed_by')}) but db.{key} is unset.")
             out.append(Check(f"moduledb:{tool}", status, msg,
-                             remedy=f"`metagx fetch-db --tool {tool} --dir <dir>` "
-                                    f"({spec.get('size')}), then set db.{key}."))
+                             remedy=f"{remedy_fetch}, then set db.{key}."))
         elif not dbprovision.is_provisioned(tool, path):
             out.append(Check(f"moduledb:{tool}", _FAIL,
                              f"db.{key}={path} has no recognizable {tool} DB files.",
-                             remedy=f"`metagx fetch-db --tool {tool} --dir {path}` "
-                                    f"(or set --use-conda to provision the tool first)."))
+                             remedy=f"{remedy_fetch} (or --use-conda to provision the tool first)."))
         else:
             out.append(Check(f"moduledb:{tool}", _OK, f"{tool} DB present: {path}."))
     return out
