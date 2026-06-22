@@ -120,6 +120,18 @@ def test_parse_help_flags():
     assert "--confidence" in names
 
 
+def test_diff_registry_marks_unmodeled_flags_reachable_via_passthrough():
+    # Every metagx registry has a passthrough valve, so a help flag absent from the typed
+    # params is reachable (via extra_args), not a drift/reachability gap. sync-help must say so.
+    fake = {"command": "kraken2", "ok": True, "version": "2.x",
+            "flags": [{"flag": "--confidence", "description": ""},
+                      {"flag": "--totally-new-flag", "description": ""}]}
+    d = sync_help.diff_registry("kraken2", help_capture=fake)
+    assert d["has_passthrough"] is True
+    assert "--totally-new-flag" in d["missing_in_registry"]
+    assert d["unmodeled_reachable_via_passthrough"] is True
+
+
 def test_history_append_and_best(tmp_path):
     hist = tmp_path / "history.jsonl"
     analysis = {

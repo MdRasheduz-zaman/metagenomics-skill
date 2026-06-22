@@ -77,6 +77,12 @@ def diff_registry(tool: str, help_capture: Dict[str, Any] | None = None) -> Dict
         if spec.get("flag") and not spec.get("managed")
     }
     help_flags = {f["flag"] for f in cap.get("flags", [])} if cap.get("ok") else set()
+    # Registries are deliberately curated, not exhaustive: a small typed funnel plus one
+    # `passthrough: true` valve (extra_args) for the long tail. So a help flag absent from the
+    # typed params is NOT unreachable when a passthrough valve exists — it's just unmodeled.
+    has_passthrough = any(
+        spec.get("passthrough") for spec in reg.get("params", {}).values()
+    )
 
     missing_in_registry = sorted(help_flags - reg_flags) if help_flags else []
     registry_only = sorted(reg_flags - help_flags) if help_flags else []
@@ -91,6 +97,11 @@ def diff_registry(tool: str, help_capture: Dict[str, Any] | None = None) -> Dict
         "help_flags_count": len(help_flags),
         "missing_in_registry": missing_in_registry,
         "in_registry_not_in_help": registry_only,
+        "has_passthrough": has_passthrough,
+        # With a passthrough valve every flag is still reachable (via extra_args), so the
+        # unmodeled flags are informational — curate them up into typed params only if users
+        # need bounds/recommendations on them. Without it, they are genuine reachability gaps.
+        "unmodeled_reachable_via_passthrough": has_passthrough and bool(missing_in_registry),
         "metadata": registry.tool_metadata(tool),
     }
 
@@ -101,9 +112,16 @@ def sync_all(tools: Optional[List[str]] = None) -> Dict[str, Any]:
     results = {t: diff_registry(t) for t in names}
     n_ok = sum(1 for r in results.values() if r.get("capture_ok"))
     n_drift = sum(1 for r in results.values() if r.get("missing_in_registry"))
+    # Genuine reachability gaps: unmodeled help flags on a tool with NO passthrough valve.
+    # (Every metagx registry currently has one, so this should be empty — that's the invariant.)
+    n_unreachable = sum(
+        1 for r in results.values()
+        if r.get("capture_ok") and r.get("missing_in_registry") and not r.get("has_passthrough")
+    )
     return {
         "tools_checked": len(names),
         "capture_ok": n_ok,
         "tools_with_help_flags_missing_from_registry": n_drift,
+        "tools_with_unreachable_flags": n_unreachable,
         "tools": results,
     }
