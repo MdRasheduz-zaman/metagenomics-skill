@@ -11,12 +11,76 @@ and the gap between what CI *claims* to test and what it *actually* runs.
 **One-line verdict:** the engine is genuinely good and well-tested *where the author's
 machine is the environment*. The project's stated goal — "work for end-users, not only
 locally" — is **not yet met**: the green path is narrow, depends on undocumented
-environment state, and the headline "CI runs the real pipeline" was masking a real,
-user-facing bug (now fixed).
+environment state, and the headline "CI runs the real pipeline" is *still red* — the
+first-round "fix" was declared done in this very document without the one piece of evidence
+that mattered: a green CI run.
 
 ---
 
-## 0. The CI e2e failure — ROOT CAUSE FOUND & FIXED ✅
+## 0b. ROUND 2 (the "fix" did not hold) — re-opened ⛔
+
+**This document said §0 was "FOUND & FIXED ✅" and checklist P0 was `[x]`. CI failed again
+with the byte-identical error.** That is the single most important finding of this round and
+it is a process failure, not just a code one: *victory was declared in the tracker before the
+gate went green.* Everything below is written to not repeat that.
+
+**New evidence (ground truth, this round):**
+- Re-ran the exact fixture build locally (`dbbuild.build_db(tests/fixtures/viral/genomes.fasta,
+  read_length=[150,1000], threads=4)`): **succeeds** — rc 0, `hash.k2d`/`opts.k2d`/`taxo.k2d`
+  all written, "Database construction complete." **No SIGPIPE at all.**
+- CI (2-core Linux runner) prints **`build_db: OMP only wants you to use 2 threads`** and then
+  `xargs: cat: terminated by signal 13`, and **writes no `*.k2d`** — the build aborts *inside*
+  step 3, not after it.
+
+**Why the round-1 fix was structurally wrong:** the round-1 fix "trust the artifacts over the
+exit code." But in the *actual* CI failure **there are no artifacts to trust** — the build
+aborts before writing them. The recovery branch (`_artifacts_present`) is never taken, so it
+falls straight through to `failed_step="build"`. The fix addressed a failure mode (build
+succeeds, wrapper exits non-zero) that **was not the one CI was hitting** (build aborts,
+writes nothing). It was never reproduced against the red environment — it was reasoned about
+from the log and shipped. The log even *showed* "Building database files (step 3)..." with no
+"complete" line, i.e. an abort, not a clean-build-with-noisy-exit.
+
+**Real root cause (high confidence):** multithreaded `build_db` on a low-core runner. With
+≥4 cores (macOS dev box) the build finishes cleanly; with 2 cores the OMP path caps threads,
+the internal `cat | build_db` pipe races, `cat` dies with SIGPIPE, and step 3 aborts with no
+database. It is environment- and core-count-specific, which is exactly why it is invisible on
+the author's machine and only ever shows up in CI.
+
+**Fix applied this round (`metagx/dbbuild.py`):** when `--build` exits non-zero **and** the
+`*.k2d` artifacts are missing, retry the build **once with `--threads 1`** before failing
+hard (single-threaded build has no pipe race). Recorded as a `recovered`/`retry_threads1`
+note. Regression test added: `test_build_db_recovers_via_single_threaded_retry`
+(multithreaded abort → single-threaded retry succeeds). Local suite green (6/6 in
+`test_dbbuild.py`).
+
+**This round the failure WAS reproduced locally** (the round-1 sin, not repeated). The bug is
+core-count-gated, so it was forced by capping OMP threads:
+`OMP_NUM_THREADS=2 metagx … build_db(threads=4)` on macOS reproduces CI **exactly**:
+
+```
+build_db: OMP only wants you to use 2 threads
+xargs: cat: terminated with signal 13     # SIGPIPE
+kraken2-build --build → rc 64, and ZERO *.k2d written   ("no matches found")
+```
+
+That is a *faithful* reproduction (same message, same no-artifacts outcome) — and against it:
+the round-1 artifact-trust path **does not fire** (correct: there are no artifacts), and the
+round-2 single-threaded retry **does** recover (`retry_threads1: 0`, full DB built, `ok:True`).
+So the fix is verified against the actual failure mode, not merely reasoned from a log.
+
+> **Honesty caveat (still do not check the box until CI is green):** the reproduction is
+> faithful but it is still macOS-with-forced-OMP-cap, not the literal GitHub runner. Confidence
+> is now high, not certain. **P0 stays OPEN until an actual green CI e2e run exists** — that is
+> the only evidence that round 1 lacked, and its absence is what made the "FIXED ✅" claim
+> false. On the next CI run, confirm the `retry_threads1` note appears in the build log (proof
+> the retry path is what saved it). If `--threads 1` *still* aborts, escalate: force
+> `--threads 1` for the whole small-DB build path unconditionally, or bypass the flaky
+> `kraken2-build` bash wrapper with a direct `build_db` call.
+
+---
+
+## 0. The CI e2e failure — round-1 attempt (SUPERSEDED by §0b) ⚠️
 
 **Symptom (from `e2e_error.txt`):** 7 errors, all in the session-scoped `viral_db` fixture:
 
@@ -160,8 +224,12 @@ that age into noise. New contributors can't tell which is current truth.
 
 ## 5. Tracked action checklist
 
-- [x] **P0** Fix kraken2-build SIGPIPE false-failure in `dbbuild.build_db` (artifact-based
-      success) + regression tests. *(done 2026-06-22; unblocks CI e2e and `metagx build-db`)*
+- [ ] **P0 — RE-OPENED ⛔** CI e2e still red; the artifact-based fix did not address the
+      actual failure (multithreaded `build_db` aborts on the 2-core runner, writing no
+      artifacts). Round-2 mitigation applied: single-threaded retry on missing-artifact build
+      failure (`dbbuild.build_db`) + regression test. **STAYS OPEN UNTIL A GREEN CI E2E RUN
+      EXISTS** — the round-1 lesson is that this is unverifiable on macOS and must not be
+      checked off from local evidence alone. (see §0b)
 - [x] **P0** Audit for other "local-state-masks-bugs" paths; ensure every code path with a
       gitignored-state shortcut also runs from-scratch in CI. *(done: the Kaiju consensus DB
       now builds from the committed fixture (`kaiju_db` session fixture) and the aDNA e2e falls
@@ -200,7 +268,76 @@ that age into noise. New contributors can't tell which is current truth.
 
 ---
 
-*Bottom line:* the architecture is strong and the author clearly knows the domain. The gap
-is entirely between "runs on my machine, with my prebuilt DBs and my conda env" and "a
-stranger can install and run it correctly." The CI failure was the first, concrete proof of
-that gap — and it's now fixed at the source, for the user too, not just for the test.
+## 6. ROUND 2 — brutal critique addendum (the meta-problems)
+
+The round-1 critique (§1–§5) was about the *product*. Round 2 is about the *process that keeps
+shipping the product red*, because that is now the binding constraint.
+
+### 6.1 The tracker declares victory before the gate is green — the cardinal sin
+Every item in §5 is `[x] done`, written in confident past tense ("verified", "enforced",
+"unblocks CI"). Yet the headline gate (CI e2e) is **red**, and was red when those boxes were
+ticked. "Done" in this repo has meant *"reasoned about and shipped on a green-locally machine,"*
+not *"observed working in the target environment."* Round 1 proved that standard fails: §0
+called the exact bug "FOUND & FIXED ✅" and CI failed again, identically. **Until proven
+otherwise, treat every other `[x]` with the same suspicion** (§6.2).
+
+### 6.2 None of the "end-user hardening" claims have a single green Linux signal
+Commit `8779fcd` ("Make metagx end-user ready: doctor, fetch-db, packaging, lockfile, honest
+CI") is the foundation of the end-user story — and **CI e2e has never gone green since**, so:
+- "verified a clean wheel install outside the repo resolves the Snakefile" (P1 packaging) —
+  on which OS? The only automated Linux check is the same job that's failing at the DB-build
+  step *before* it ever reaches packaging.
+- "CI e2e builds from `environment.yml`, parity enforced" (P1 CI parity) — the env may *parse*
+  and the parity *test* may pass, but we have **no evidence the env actually solves and the
+  pipeline runs on Linux**, because the run dies at `build_db`.
+- doctor / fetch-db / lockfile — all plausibly fine, but each is asserted from local runs.
+- **Action:** re-audit every §5 `[x]` against one standard — "is there a green CI job that
+  exercises this on Linux?" Demote any that fail that test back to `[ ]` with a note. An
+  honest tracker beats a green-looking one.
+
+### 6.3 "Fix by reading the log" is now twice-burned — make the red env reproducible
+Round 1 reasoned from the log and shipped; it was wrong. This round it was only caught because
+the failure was *forced* locally (`OMP_NUM_THREADS=2`). That trick should be **institutional,
+not a one-off**: the entire class of "only fails on the small/low-core CI runner" bugs is
+invisible until someone constrains the environment. **Action:** add a `make repro-ci` (or a
+pytest marker) that runs the fixture DB build under `OMP_NUM_THREADS=2` (and ideally
+`taskset`/cgroup core-pinning), so the low-core path is exercised on *every* dev machine, not
+just discovered in CI weeks later.
+
+### 6.4 Correctness depends on parsing a flaky third-party bash wrapper
+The small-DB build path's success/failure hinges on interpreting `kraken2-build`'s noisy,
+non-deterministic exit behavior (SIGPIPE → 64, sometimes with artifacts, sometimes without).
+We are now on our **second** layer of heuristics (artifact-trust, then thread-retry) wrapped
+around someone else's bash script. Each heuristic is a guess about a wrapper we don't control.
+**Action (longer-term):** for the synthetic small-DB path, call `build_db` directly with known
+args instead of going through `kraken2-build`, removing the wrapper and its pipe race entirely.
+That converts two heuristics into one deterministic call.
+
+### 6.5 The local prebuilt DB is a structural blind spot, not just one bug
+The root cause of *both* CI rounds is the same shape as P0 in §1: locally the prebuilt,
+gitignored `viral_custom` DB means **the build code never runs**, so every build-path bug is
+shipped blind. The DB-build fix narrows it, but the pattern recurs anywhere a gitignored
+artifact short-circuits a code path. **Action:** add a CI-only env flag (e.g.
+`METAGX_FORCE_DB_BUILD=1`) the fixture honors to *always* build from the committed fixture even
+when a prebuilt DB is present, so the build path has coverage on every CI run by construction.
+
+### 6.6 Tracked checklist (round 2)
+- [ ] **P0** Get CI e2e **actually green** — the only acceptance criterion. (fix applied +
+      reproduced locally via OMP cap; awaiting a green run. Confirm `retry_threads1` in the log.)
+- [ ] **P1** Re-audit every §5 `[x]` against "is there a green Linux CI job proving it?"; demote
+      the unproven ones to `[ ]`. (§6.2)
+- [ ] **P1** `make repro-ci` / pytest marker: run the fixture DB build under `OMP_NUM_THREADS=2`
+      (+ core-pinning) so low-core failures surface on dev machines. (§6.3)
+- [ ] **P2** Replace the `kraken2-build` wrapper call with a direct `build_db` invocation for the
+      synthetic small-DB path, eliminating the SIGPIPE race and both heuristic layers. (§6.4)
+- [ ] **P2** `METAGX_FORCE_DB_BUILD=1` so the e2e fixture builds from the committed fixture even
+      when a prebuilt DB exists — give the build path CI coverage by construction. (§6.5)
+
+---
+
+*Bottom line (round 2):* the architecture is strong and the author knows the domain — that has
+not changed. What this round exposes is a **discipline gap, not a knowledge gap**: the project
+keeps declaring fixes "done" in its own tracker on the strength of a green-locally machine,
+while the one Linux gate that represents an actual end-user stays red. The DB-build bug is now
+fixed *and reproduced* — but the rule that should outlive this bug is simple: **nothing is
+"done" until the target environment says so. The box stays unchecked until CI is green.**

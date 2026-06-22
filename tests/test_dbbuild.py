@@ -75,6 +75,43 @@ def test_build_db_recovers_from_kraken2_build_sigpipe(tmp_path, monkeypatch):
     assert "SIGPIPE" in res.get("note", "")
 
 
+def test_build_db_recovers_via_single_threaded_retry(tmp_path, monkeypatch):
+    """On a low-core runner, multithreaded `kraken2-build --build` aborts in step 3 *before*
+    writing any `*.k2d` (the `cat | build_db` pipe races, `cat` dies with SIGPIPE). The
+    artifact-trust path can't help — there are no artifacts. build_db must retry once with
+    `--threads 1`, which removes the race.
+
+    This is the second-round CI e2e failure (identical "xargs: cat: terminated by signal 13"
+    but with NO database written), which the artifact-only recovery did not catch.
+    """
+    g = _write_genomes(tmp_path / "g.fasta")
+    db_dir = tmp_path / "db"
+    monkeypatch.setattr(dbbuild, "_have", lambda t: True)
+
+    def fake_run(cmd, *a, **k):
+        if "--build" in cmd:
+            threads = cmd[cmd.index("--threads") + 1]
+            if threads != "1":
+                # multithreaded build aborts mid-step-3 writing nothing
+                return subprocess.CompletedProcess(
+                    cmd, 64, "Building database files (step 3)...",
+                    "build_db: OMP only wants you to use 2 threads\nxargs: cat: terminated by signal 13")
+            for f in ("hash.k2d", "opts.k2d", "taxo.k2d"):  # single-threaded retry succeeds
+                (db_dir / f).write_text("x")
+            return subprocess.CompletedProcess(cmd, 0, "Database construction complete.", "")
+        if "bracken-build" in cmd[0]:
+            length = cmd[cmd.index("-l") + 1]
+            (db_dir / f"database{length}mers.kmer_distrib").write_text("x")
+            return subprocess.CompletedProcess(cmd, 0, "ok", "")
+        return subprocess.CompletedProcess(cmd, 0, "ok", "")  # add-to-library
+
+    monkeypatch.setattr(dbbuild.subprocess, "run", fake_run)
+    res = dbbuild.build_db(g, str(db_dir), read_length=[150], threads=4, run=True)
+    assert res["ok"] is True, res
+    assert "build" in res.get("recovered", [])
+    assert res["logs"]["build"].get("retry_threads1", {}).get("returncode") == 0
+
+
 def test_build_db_real_failure_still_fails(tmp_path, monkeypatch):
     """A non-zero exit with *no* artifacts is a genuine failure — must not be swallowed."""
     g = _write_genomes(tmp_path / "g.fasta")

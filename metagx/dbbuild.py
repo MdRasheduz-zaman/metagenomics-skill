@@ -328,6 +328,26 @@ def build_db(
                 )
                 recovered.append(name)
                 continue
+            # Missing artifacts → the kraken2 `--build` genuinely aborted. On low-core CI runners
+            # build_db caps OMP threads and its internal `cat | build_db` pipe races so `cat` dies
+            # with SIGPIPE *before* step 3 writes any `*.k2d` (seen only on the 2-core GitHub
+            # Linux runner; multi-core builds finish cleanly). A single-threaded rebuild removes
+            # the race. Retry the build step once with --threads 1 before failing hard.
+            if name == "build" and "--threads" in cmd:
+                retry_cmd = list(cmd)
+                retry_cmd[retry_cmd.index("--threads") + 1] = "1"
+                rp = subprocess.run(retry_cmd, capture_output=True, text=True)
+                logs[name]["retry_threads1"] = {
+                    "returncode": rp.returncode,
+                    "tail": ((rp.stdout or "") + (rp.stderr or ""))[-1500:],
+                }
+                if rp.returncode == 0 or _artifacts_present(artifacts):
+                    logs[name]["recovered"] = (
+                        f"{tool} aborted under multithreading (exit {proc.returncode}, no artifacts); "
+                        "single-threaded rebuild produced the database — recovered."
+                    )
+                    recovered.append(name)
+                    continue
             result.update(ran=True, ok=False, failed_step=name, logs=logs)
             return result
     result.update(ran=True, ok=True, logs=logs)
@@ -335,8 +355,9 @@ def build_db(
     if recovered:
         result["recovered"] = recovered
         notes.append(
-            f"{', '.join(recovered)} exited non-zero but produced valid artifacts "
-            "(kraken2-build SIGPIPE quirk on small DBs) — recovered."
+            f"recovered {', '.join(recovered)}: exited non-zero (kraken2-build SIGPIPE quirk on "
+            "small DBs — either valid artifacts were written anyway, or a single-threaded rebuild "
+            "succeeded); see per-step logs for which."
         )
     if skipped:
         result["skipped"] = skipped
