@@ -20,6 +20,7 @@ those species and nothing outside them.
 """
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
@@ -40,7 +41,13 @@ PREBUILT_DB = REPO / "local_databases" / "viral_custom"
 _HAVE_TOOLS = bool(shutil.which("kraken2") and shutil.which("bracken"))
 # The DB is available if it's already built, OR we can build it from the committed genomes
 # fixture (kraken2-build + bracken-build present). This is what lets CI run the real pipeline.
-_PREBUILT_OK = (PREBUILT_DB / "hash.k2d").is_file() and \
+# Set METAGX_FORCE_DB_BUILD=1 to ignore any prebuilt DB and always build from the committed
+# fixture — gives the from-scratch build path coverage even on a dev box that *has* a prebuilt
+# DB (the local state that hid the SIGPIPE/thread bugs for four CI rounds). CI builds from
+# scratch anyway; this lets a developer reproduce the CI build path locally without deleting
+# their DB.
+_FORCE_BUILD = bool(os.environ.get("METAGX_FORCE_DB_BUILD"))
+_PREBUILT_OK = (not _FORCE_BUILD) and (PREBUILT_DB / "hash.k2d").is_file() and \
     (PREBUILT_DB / "database150mers.kmer_distrib").is_file()
 _CAN_BUILD = bool(shutil.which("kraken2-build") and shutil.which("bracken-build")
                   and FIXTURE_GENOMES.is_file())

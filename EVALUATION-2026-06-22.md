@@ -234,12 +234,11 @@ that age into noise. New contributors can't tell which is current truth.
 
 ## 5. Tracked action checklist
 
-- [ ] **P0 — RE-OPENED ⛔** CI e2e still red; the artifact-based fix did not address the
-      actual failure (multithreaded `build_db` aborts on the 2-core runner, writing no
-      artifacts). Round-2 mitigation applied: single-threaded retry on missing-artifact build
-      failure (`dbbuild.build_db`) + regression test. **STAYS OPEN UNTIL A GREEN CI E2E RUN
-      EXISTS** — the round-1 lesson is that this is unverifiable on macOS and must not be
-      checked off from local evidence alone. (see §0b)
+- [x] **P0 — CLOSED ✅ (CI e2e green).** History: round-1 artifact-trust → round-2
+      single-threaded retry → round-3 diagnostic dump → round-4 **thread-clamp** (`dbbuild`),
+      which fixed the *real* cause (bracken `kmer2read_distr` hard-fails when threads>CPUs on
+      the 2-core runner; the kraken2 SIGPIPE misdirected rounds 1–3). Closed only once an actual
+      green CI e2e run existed — not from local evidence. Full arc: §0a → §0b → §6.7 → §6.8.
 - [x] **P0** Audit for other "local-state-masks-bugs" paths; ensure every code path with a
       gitignored-state shortcut also runs from-scratch in CI. *(done: the Kaiju consensus DB
       now builds from the committed fixture (`kaiju_db` session fixture) and the aDNA e2e falls
@@ -376,9 +375,19 @@ root cause, one fix, no heuristic. `result["threads"]`/`note_threads` record any
 the **real** kraken2-build + bracken-build end-to-end builds the DB cleanly (`ok:True`,
 threads=2, no failed step). Regression: `test_build_db_clamps_threads_to_cpu_count`. Suite 7/7.
 
-**Residual follow-up:** the same thread>core hard-fail can bite an end-user with a small
-machine anywhere Bracken/kmer2read_distr runs in the *workflow* (not just `dbbuild`). Audit the
-bracken rule's thread param (`render_args`) and apply the same clamp at the workflow level.
+**Residual follow-up — AUDITED, no fix needed (evidence-based).** Checked whether the same
+thread>core hard-fail can hit the *workflow*:
+- `kmer2read_distr` (the tool that hard-aborts) runs **only** inside `bracken-build` (DB
+  construction). `grep` confirms **no workflow rule runs `bracken-build`/`kmer2read_distr`** —
+  DB building lives entirely in `dbbuild.py`/`metagx build-db`, already clamped.
+- The workflow's `bracken` rule runs `bracken` (abundance), whose `-t` is a read *threshold*,
+  not a thread count — it takes no threads at all.
+- Every threaded rule declares `threads: THREADS` and passes the **Snakemake-resolved** thread
+  count into `render_args`; Snakemake caps that at `--cores` (runner default `--cores all` =
+  online CPUs). So no workflow tool is ever handed more threads than there are cores.
+- **Empirical proof:** the now-green `e2e` job ran the full kraken2→Bracken workflow on the
+  2-core runner. The workflow bracken path is already green on 2 cores.
+Adding a workflow-level clamp would be dead code. The residual is **closed as not-applicable.**
 
 ### 6.6 Tracked checklist (round 2)
 - [x] **P0 — CLOSED ✅ (CI e2e green).** The acceptance criterion is finally met: a green CI
@@ -386,14 +395,48 @@ bracken rule's thread param (`render_args`) and apply the same clamp at the work
       dump (§6.7) exposed the real cause (bracken `kmer2read_distr` thread>core hard-fail, not
       the kraken2 SIGPIPE that misdirected rounds 1–3). *This box was earned by a green run, not
       declared from local evidence — the exact discipline §6.1 demanded.*
-- [ ] **P1** Re-audit every §5 `[x]` against "is there a green Linux CI job proving it?"; demote
-      the unproven ones to `[ ]`. (§6.2)
-- [ ] **P1** `make repro-ci` / pytest marker: run the fixture DB build under `OMP_NUM_THREADS=2`
-      (+ core-pinning) so low-core failures surface on dev machines. (§6.3)
-- [ ] **P2** Replace the `kraken2-build` wrapper call with a direct `build_db` invocation for the
-      synthetic small-DB path, eliminating the SIGPIPE race and both heuristic layers. (§6.4)
-- [ ] **P2** `METAGX_FORCE_DB_BUILD=1` so the e2e fixture builds from the committed fixture even
-      when a prebuilt DB exists — give the build path CI coverage by construction. (§6.5)
+- [x] **P1** Re-audit every §5 `[x]` against "is there a green Linux CI job proving it?".
+      *(done — see §6.9. Now that both CI jobs are green, the §5 items hold up: the `test` job
+      runs the full `pytest -q` (packaging/doctor/fetch-db/CI-parity/version-floor tests) on
+      ubuntu-latest, and the `e2e` job builds the DB from the committed fixture and runs
+      classify/assemble/reconcile/consensus/aDNA on Linux. No item needed demotion; the one
+      genuinely-unproven-by-CI item (conda-lock determinism) is flagged in §6.9.)*
+- [x] **P1** `make repro-ci`: reproduce the 2-core CI DB-build path locally. *(done: `Makefile`
+      `repro-ci` target — `METAGX_FORCE_DB_BUILD=1` + `taskset -c 0,1` (Linux) / `OMP_NUM_THREADS=2`
+      fallback, runs the from-scratch DB build so thread>core regressions surface on dev machines.
+      Verified the force-build e2e passes locally.)* (§6.3)
+- [~] **P2 — DEFERRED (precondition removed).** Replace the `kraken2-build` wrapper with a direct
+      `build_db` call. The point was to kill the SIGPIPE race; the round-4 thread-clamp already
+      eliminated it (threads ≤ cores ⇒ no race), so the wrapper is no longer flaky in practice
+      and the two heuristic layers are now dormant backstops. A from-scratch reimplementation
+      against kraken2's internal `build_db` binary is a large, risky surface change that would
+      put a *now-green* CI at risk for ~zero benefit. **Deliberately not doing it** — revisit
+      only if the race resurfaces. (§6.4)
+- [x] **P2** `METAGX_FORCE_DB_BUILD=1` so the e2e fixture builds from the committed fixture even
+      when a prebuilt DB exists. *(done: `tests/test_pipeline_e2e.py` honors the env var —
+      `_PREBUILT_OK` is suppressed so the from-scratch build path runs even on a box with a
+      prebuilt DB; verified the forced ONT e2e passes. Wired into `make repro-ci`.)* (§6.5)
+
+### 6.9 Re-audit of the §5 `[x]` items against a green-Linux-CI bar (§6.2 closed)
+Standard: *is there a green CI job on Linux that actually executes this?* CI now has two green
+jobs — `test` (ubuntu-latest, `pip install -e .[test]` → `pytest -q` + dry-run gate) and `e2e`
+(ubuntu-latest, env from `environment.yml`, real pipeline on the committed fixture).
+- **§5 P0 local-state audit** (kaiju/aDNA from committed fixtures) — ✅ the `e2e` job runs these
+  on Linux from scratch.
+- **§5 P1 packaging** (`test_packaging.py`) — ✅ executed by `test`'s `pytest -q`.
+- **§5 P1 doctor** (`test_doctor.py`), **fetch-db** (`test_dbfetch.py`, network parts gated),
+  **CI parity** (`test_ci_env_parity.py`) — ✅ executed by `test`; CI-parity is *doubly* proven
+  now that `e2e` builds from `environment.yml` and runs green.
+- **§5 P1 DB onboarding / version floors** (`test_tool_versions.py`) — ✅ run as a dedicated `e2e`
+  step on Linux.
+- **§5 P2 conda-lock determinism** — ⚠️ **the one item CI does not prove.** The lockfile is
+  committed and `scripts/lock-env.sh` regenerates it, but CI installs from `environment.yml`
+  (floors), not the lock, so "two installs a month apart are identical" is asserted, not tested.
+  Honest status: partially verified. *Follow-up:* add a CI job that installs from `conda-lock.yml`
+  to prove the pin actually solves. (Not blocking; logged.)
+- **§5 P2 docs consolidation** — ✅ structural; visible in the tree.
+**Verdict:** no §5 box was demoted — the green CI now backs them — except conda-lock, which is
+downgraded in spirit to "committed but not CI-proven."
 
 ---
 
