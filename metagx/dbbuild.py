@@ -432,6 +432,32 @@ def build_db(
     return result
 
 
+def build_aligned_blast_db(db_dir: str, blast_dir: str = None) -> Dict:
+    """Build a perfectly-ALIGNED, taxid-tagged BLAST DB from the SAME genomes + seqid2taxid.map
+    the kraken2 DB at ``db_dir`` was just built from. Run this together with the kraken2 build,
+    while the library is still on disk — `kraken2-build --clean` would delete it and make an
+    in-scope BLAST DB impossible later. Returns the build result (incl. the BLAST db prefix)."""
+    from . import validation
+    bdir = blast_dir or os.path.join(db_dir, "blast", "insync")
+    os.makedirs(os.path.dirname(bdir), exist_ok=True)
+    try:
+        src = validation.kraken2_db_sources(db_dir)  # raises if no genomes (cleaned/prebuilt)
+    except ValueError as e:
+        return {"ok": False, "error": str(e), "db": bdir}
+    fastas = src["fastas"]
+    source = fastas[0] if len(fastas) == 1 else fastas  # str or list (build_blast_db concats)
+    taxid_map = None
+    if src["seqid2taxid"]:
+        taxid_map = bdir + ".acc2taxid.tsv"
+        mapping = validation.normalize_seqid2taxid(src["seqid2taxid"])
+        with open(taxid_map, "w") as fh:
+            for acc, tx in mapping.items():
+                fh.write(f"{acc}\t{tx}\n")
+    res = validation.build_blast_db(source, bdir, run=True, taxid_map=taxid_map)
+    res["db"] = bdir
+    return res
+
+
 def build_database(
     *,
     db_dir: str,
@@ -447,6 +473,8 @@ def build_database(
     max_db_size=None,
     no_masking=None,
     use_ftp: bool = True,
+    build_blast: bool = False,
+    blast_dir: str = None,
     run: bool = True,
 ) -> Dict:
     """Build a kraken2 + Bracken DB per a db.build strategy. Dispatches:
@@ -527,6 +555,10 @@ def build_database(
             result["note"] = "kraken2-build not on PATH — commands not executed"
         return result
     result.update(_execute_steps(steps, db_dir))
+    # Build the aligned BLAST validation DB NOW, in the same step, while the library genomes are
+    # still present (before any clean) — so kraken2 + blastn cover the exact same organisms+taxids.
+    if build_blast and result.get("ok"):
+        result["blast"] = build_aligned_blast_db(db_dir, blast_dir)
     return result
 
 

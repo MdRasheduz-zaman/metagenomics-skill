@@ -365,6 +365,48 @@ def check_config_flags(cfg: Optional[Dict] = None) -> List[Check]:
     return out
 
 
+def check_validate_alignment(cfg: Optional[Dict] = None) -> List[Check]:
+    """STRONG guard on kraken2↔blastn alignment for the `validate` module. The validation is
+    only meaningful if the BLAST reference covers the SAME organisms as the classifier — best
+    guaranteed by building both together (db.build.blast) while the kraken2 library is on disk."""
+    out: List[Check] = []
+    if not cfg:
+        return out
+    mods = cfg.get("modules", {}) or {}
+    if not mods.get("validate"):
+        return out
+    db = cfg.get("db", {}) or {}
+    build = db.get("build") or {}
+    val = cfg.get("validate", {}) or {}
+    if build:
+        if build.get("blast"):
+            out.append(Check("validate:alignment", _OK,
+                             "kraken2 + aligned BLAST DB are built together (db.build.blast) — "
+                             "validation is in scope and taxid-tagged."))
+        else:
+            out.append(Check(
+                "validate:alignment", _WARN,
+                "STRONG WARNING: db.build will build the kraken2 DB but NOT the aligned BLAST DB "
+                "(db.build.blast: false). Validation will be out-of-scope — and IMPOSSIBLE if the "
+                "kraken2 library is later cleaned (kraken2-build --clean deletes the genomes blastn "
+                "needs). You are validating against a different reference than you classified with.",
+                remedy="Set db.build.blast: true to build both together (recommended), or keep the "
+                       "kraken2 library (never run kraken2-build --clean) and set "
+                       "validate.build_from: classifier. Use db.blast/validate.remote only to "
+                       "compare against a deliberately broader reference."))
+    elif not (db.get("blast") or val.get("build_from") or val.get("remote")):
+        out.append(Check("validate:alignment", _WARN,
+                         "validate is on but no BLAST reference is configured.",
+                         remedy="db.blast, or validate.build_from (same genomes as the classifier), "
+                                "or validate.remote."))
+    elif db.get("blast") and not val.get("build_from"):
+        out.append(Check("validate:alignment", _INFO,
+                         "validating against db.blast — ensure it covers the SAME organisms as the "
+                         "kraken2 DB, or the agreement rate reflects DB-scope differences, not "
+                         "classifier error. validate.build_from: classifier guarantees alignment."))
+    return out
+
+
 def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -> List[Check]:
     """Run every preflight check and return the results in display order."""
     checks: List[Check] = []
@@ -380,6 +422,7 @@ def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -
     checks += check_db_build(db_paths)
     checks += check_module_dbs(cfg)
     checks += check_config_flags(cfg)
+    checks += check_validate_alignment(cfg)
     return checks
 
 

@@ -208,6 +208,75 @@ def test_validate_build_from_classifier_ok_via_db_build():
     assert cfg["db"]["kraken2"]  # defaulted from db.build
 
 
+def test_db_build_blast_defaults_on_with_validate_and_colocates():
+    # validate + db.build => build the aligned BLAST DB together, db.blast co-located, no build_from
+    cfg = cb.build_config(
+        samples=SAMPLES,
+        db={"build": {"strategy": "custom-fasta", "source": "g.fasta", "taxonomy": "synthetic"}},
+        modules={"validate": True})
+    assert cfg["db"]["build"]["blast"] is True
+    assert cfg["db"]["blast"].endswith("blast/insync")
+    assert "build_from" not in cfg["validate"]  # uses the co-located db.blast directly
+
+
+def test_db_build_blast_explicit_false_does_not_colocate():
+    # opt-out: user supplies their own (out-of-scope) db.blast; we don't co-locate
+    cfg = cb.build_config(
+        samples=SAMPLES,
+        db={"blast": "/ext/nt",
+            "build": {"strategy": "custom-fasta", "source": "g.fasta", "taxonomy": "synthetic",
+                      "blast": False}},
+        modules={"validate": True})
+    assert cfg["db"]["build"]["blast"] is False
+    assert cfg["db"]["blast"] == "/ext/nt"
+
+
+def test_db_build_blast_opt_in_without_validate():
+    # "I want both DBs" even though validate isn't enabled in this config
+    cfg = cb.build_config(
+        samples=SAMPLES,
+        db={"build": {"strategy": "custom-fasta", "source": "g.fasta", "taxonomy": "synthetic",
+                      "blast": True}},
+        modules={"classify": True})
+    assert cfg["db"]["build"]["blast"] is True
+    assert cfg["db"]["blast"].endswith("blast/insync")
+
+
+def test_doctor_strong_warns_validate_without_aligned_blast():
+    from metagx import doctor
+    cfg = {"modules": {"validate": True, "classify": True},
+           "db": {"blast": "/ext/nt", "build": {"strategy": "custom-fasta", "blast": False}},
+           "validate": {}}
+    checks = doctor.check_validate_alignment(cfg)
+    assert checks and checks[0].status == "warn" and "STRONG" in checks[0].message
+
+
+def test_doctor_ok_when_kraken2_and_blast_built_together():
+    from metagx import doctor
+    cfg = {"modules": {"validate": True},
+           "db": {"build": {"strategy": "custom-fasta", "blast": True}}, "validate": {}}
+    checks = doctor.check_validate_alignment(cfg)
+    assert checks and checks[0].status == "ok"
+
+
+@pytest.mark.skipif(not (shutil.which("kraken2-build") and shutil.which("makeblastdb")
+                         and shutil.which("blastdbcmd") and os.path.isdir(_FIXTURE)),
+                    reason="needs kraken2-build + BLAST+ and the viral fixture")
+def test_joint_build_produces_aligned_taxid_tagged_blast_db(tmp_path):
+    """db.build with build_blast builds kraken2 + an aligned, taxid-tagged BLAST DB together."""
+    from metagx import dbbuild
+    db_dir = str(tmp_path / "db")
+    res = dbbuild.build_database(db_dir=db_dir, strategy="custom-fasta", taxonomy="synthetic",
+                                 source=os.path.join(_FIXTURE, "genomes.fasta"),
+                                 read_lengths=[150], threads=2, build_blast=True, run=True)
+    assert res.get("ok") and res["blast"]["ok"] and res["blast"].get("taxid_mapped")
+    prefix = os.path.join(db_dir, "blast", "insync")
+    assert validate.blast_db_present(prefix)
+    out = subprocess.run(["blastdbcmd", "-db", prefix, "-entry", "all", "-outfmt", "%T"],
+                         capture_output=True, text=True).stdout.split()
+    assert "1001" in out  # subjects carry kraken2's exact (synthetic) taxids
+
+
 def test_build_from_drops_blast_from_needed_dbs():
     from metagx import dbprovision
     cfg = {"modules": {"classify": True, "validate": True}, "validate": {"build_from": "x.fasta"}}

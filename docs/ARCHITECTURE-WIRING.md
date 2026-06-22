@@ -210,26 +210,33 @@ Result: `staxids = 1004` (kraken2's synthetic taxid) → `names.dmp` → *Yellow
 
 ### How metagx wires this for you
 
-- `validate.build_from: classifier` — resolve the genomes **and** `seqid2taxid.map` **and**
-  `names.dmp` from the **kraken2 DB dir** (`db.kraken2`); `build_validate_blast_db` runs `makeblastdb`
-  with the normalized taxid map, and `blast_validate` resolves hits through `names.dmp`. Works for any
-  kraken2 DB whose genomes are on disk (custom or standard-not-cleaned).
-- `validate.build_from: <FASTA|folder>` — you supply the genomes (required for a prebuilt/`--clean`'d
-  index, since it ships none). Organism comparison falls back to the subject title.
+- **`db.build.blast: true`** (CLI `--with-blast`) — **best when you're building the classifier DB
+  anyway.** `build_aligned_blast_db` runs `makeblastdb` (with the normalized taxid map) **in the same
+  `db.build` step, right after kraken2-build** — while the library genomes are guaranteed present,
+  before any clean — and sets `db.blast`. Defaults ON when `modules.validate` is enabled.
+- `validate.build_from: classifier` — for an already-built kraken2 DB on disk: resolve its genomes +
+  `seqid2taxid.map` + `names.dmp` and build the aligned DB on the fly (`build_validate_blast_db`).
+- `validate.build_from: <FASTA|folder>` — you supply the genomes (**required** for a prebuilt/
+  `--clean`'d index, which ships none). Comparison falls back to the subject title.
 - `db.blast: <path>` / `validate.remote: true` — only when you *deliberately* want a broader
   reference (e.g. nt). That is a different benchmark, by design.
 
 ```mermaid
 flowchart LR
-    Q{"is the kraken2 DB's source<br/>genomes on disk?"}
-    Q -->|"yes (custom / standard not --clean'd)"| A["validate.build_from: classifier<br/>(genomes + seqid2taxid.map + names.dmp,<br/>taxid-tagged, in sync)"]
-    Q -->|"no (prebuilt fetch-db / --clean'd)"| B["validate.build_from: refs.fasta<br/>(supply the genomes you used)"]
+    Q{"are you building the<br/>kraken2 DB now (db.build)?"}
+    Q -->|"yes"| J["db.build.blast: true<br/>(build BOTH together; default on with validate)"]
+    Q -->|"no — DB exists, genomes on disk"| A["validate.build_from: classifier<br/>(genomes + seqid2taxid.map + names.dmp, taxid-tagged)"]
+    Q -->|"no — prebuilt fetch-db / --clean'd"| B["validate.build_from: refs.fasta<br/>(supply the genomes you used)"]
     Q -->|"broader benchmark on purpose"| C["db.blast: nt  /  validate.remote: true"]
 ```
 
-> **Limit (next pass):** for a *standard* download build, `build_from: classifier` reads the retained
-> `library/**/library.fna`; there is no auto **re-download** of genomes for a `--clean`'d or
-> prebuilt-fetched index (you must supply them). Tracked in the ROADMAP.
+> ⚠️ **Do not `kraken2-build --clean` if you want to validate later** — it deletes the library
+> genomes blastn needs. metagx's `db.build` never cleans; `metagx doctor` STRONG-warns if you build
+> a kraken2 DB for validation without the aligned BLAST DB.
+>
+> **Limit (next pass):** for a `--clean`'d or prebuilt-fetched index there are genuinely no genomes
+> on disk; auto **re-download** by accession is a future pass — until then supply
+> `validate.build_from: <FASTA>`. Tracked in the ROADMAP.
 
 ---
 

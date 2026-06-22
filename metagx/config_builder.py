@@ -393,6 +393,9 @@ def _validate_db_build(build: Dict[str, Any] | None, samples: Any) -> Dict[str, 
     source = build.pop("source", None)
     read_lengths = build.pop("read_lengths", "auto")
     auto = bool(build.pop("auto", True))
+    # build the aligned BLAST validation DB together with kraken2? None = undecided (build_config
+    # may default it on when modules.validate is enabled). Not a kraken2-build flag.
+    blast = build.pop("blast", None)
     # NCBI deprecated rsync, so kraken2-build's default rsync downloads now fail; --use-ftp
     # (wget) is the working path, hence the default. Override to False only on a host where
     # rsync to NCBI still works and you want its speed.
@@ -441,6 +444,8 @@ def _validate_db_build(build: Dict[str, Any] | None, samples: Any) -> Dict[str, 
                source=source, read_lengths=read_lengths, auto=auto, download_on=download_on,
                use_ftp=use_ftp,
                bracken_kmer_len=kmer)  # Bracken -k is locked to the kraken2 --kmer-len
+    if blast is not None:
+        out["blast"] = bool(blast)
     return out
 
 
@@ -546,6 +551,16 @@ def build_config(
     # not repeat it. The DB need not exist yet — the build step produces it.
     if db_build and not db.get("kraken2"):
         db["kraken2"] = os.path.join(outdir, "dbs", str(db_build.get("strategy", "standard")))
+
+    # Build the ALIGNED BLAST validation DB together with kraken2 when validating — while the
+    # library genomes are guaranteed present (before any --clean). Default it on for validate;
+    # the user can set db.build.blast: false explicitly (doctor then warns strongly). A
+    # co-located in-scope db.blast means validate needs no build_from / external nt DB.
+    if db_build:
+        if mods.get("validate") and db_build.get("blast") is None:
+            db_build["blast"] = True
+        if db_build.get("blast") and not db.get("blast"):
+            db["blast"] = os.path.join(db["kraken2"], "blast", "insync")
 
     if mods.get("classify") and not db.get("kraken2"):
         raise registry.ValidationError(

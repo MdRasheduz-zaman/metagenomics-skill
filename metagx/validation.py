@@ -19,7 +19,7 @@ import os
 import re
 import shutil
 import subprocess
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from . import formats
 
@@ -93,8 +93,8 @@ def kraken2_db_sources(db_dir: str) -> Dict[str, object]:
             "names_dmp": names if os.path.isfile(names) else None}
 
 
-def build_blast_db(source: str, out_prefix: str, run: bool = True, force: bool = False,
-                   taxid_map: Optional[str] = None) -> Dict[str, object]:
+def build_blast_db(source: Union[str, List[str]], out_prefix: str, run: bool = True,
+                   force: bool = False, taxid_map: Optional[str] = None) -> Dict[str, object]:
     """Build a BLAST+ nucleotide DB from a FASTA (or a folder of FASTAs) via makeblastdb.
 
     THIS is how the validation reference is kept *in scope* with the classifier: build it from
@@ -109,15 +109,19 @@ def build_blast_db(source: str, out_prefix: str, run: bool = True, force: bool =
     if not force and blast_db_present(out_prefix):
         result.update(ran=False, ok=True, skipped="already present")
         return result
-    # a folder of FASTAs -> concatenate into one input makeblastdb can read
+    # a folder OR an explicit list of FASTAs -> concatenate into one input makeblastdb can read
     fasta = source
-    if os.path.isdir(source):
+    files: List[str] = []
+    if isinstance(source, (list, tuple)):
+        files = [str(f) for f in source]
+    elif os.path.isdir(source):
+        files = [fp for fp in sorted(glob.glob(os.path.join(source, "*")))
+                 if formats.read_format(fp) == "fasta"]
+    if files:
         tmp_cat = out_prefix + ".sources.fasta"
         os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
         with open(tmp_cat, "w") as out:
-            for fp in sorted(glob.glob(os.path.join(source, "*"))):
-                if formats.read_format(fp) != "fasta":
-                    continue
+            for fp in files:
                 opener = gzip.open if formats.is_gzipped(fp) else open
                 with opener(fp, "rt") as fh:
                     shutil.copyfileobj(fh, out)

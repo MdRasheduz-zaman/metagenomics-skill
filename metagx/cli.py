@@ -159,7 +159,7 @@ def cmd_build_db(args) -> int:
             db_dir=args.db, strategy=args.strategy, taxonomy=args.taxonomy,
             libraries=args.libraries, source=source,
             read_lengths=lengths, threads=args.threads,
-            use_ftp=args.use_ftp, run=not args.dry_run,
+            use_ftp=args.use_ftp, build_blast=args.with_blast, run=not args.dry_run,
         )
     else:  # legacy custom-fasta synthetic path
         if not args.genomes:
@@ -626,8 +626,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--source", help="FASTA file or folder of FASTAs for custom-*/spike-in")
     sp.add_argument("--no-use-ftp", dest="use_ftp", action="store_false",
                     help="use rsync instead of FTP for NCBI downloads (rsync is deprecated; default FTP)")
+    sp.add_argument("--with-blast", action="store_true",
+                    help="also build an ALIGNED, taxid-tagged BLAST validation db from the SAME "
+                         "genomes (together, before any clean) — sets db.blast for `validate`")
     sp.add_argument("--dry-run", action="store_true", help="write taxonomy/library, print commands, don't build")
-    sp.set_defaults(func=cmd_build_db, use_ftp=True)
+    sp.set_defaults(func=cmd_build_db, use_ftp=True, with_blast=False)
 
     sp = sub.add_parser("fetch-db",
                         help="download a prebuilt standard kraken2+Bracken index (onboarding)")

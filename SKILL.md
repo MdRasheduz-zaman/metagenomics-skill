@@ -177,16 +177,19 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
     calls against *full NCBI nt* is a **different benchmark** — a read can BLAST-match an organism
     the classifier never had a chance to call, producing false "disagreements". kraken2 and blastn
     are separate tools with incompatible formats (the `.k2d` hash is **not** BLASTable), so they
-    are kept in sync by sharing the **same source genomes + the same taxids**:
-    `validate.build_from: classifier` resolves the genomes, `seqid2taxid.map`, and `names.dmp`
-    from the kraken2 DB dir (`db.kraken2`), runs `makeblastdb` with kraken2's (normalized) taxid
-    map so BLAST subjects carry kraken2's **exact** taxids, and scores agreement through kraken2's
-    *own* `names.dmp` — no NCBI taxdb needed, no `db.blast`. **Caveat:** this needs the genomes on
-    disk; a **prebuilt `fetch-db` index or a `kraken2-build --clean`'d DB ships only the `.k2d`
-    hash**, so there `build_from: classifier` fails fast — instead give `validate.build_from:
-    <the genome FASTA(s) you used>` (or `metagx build-blast-db --from … --out …` then `db.blast`).
-    Use `db.blast: nt` / `validate.remote` only when you deliberately want a broader benchmark.
-    See `docs/ARCHITECTURE-WIRING.md` Part 2 for the verified mechanism + diagrams.
+    are kept in sync by sharing the **same source genomes + the same taxids**. **Cleanest when
+    you're building the classifier DB anyway: `db.build.blast: true`** (CLI `--with-blast`) builds
+    the aligned, taxid-tagged BLAST DB *together with* kraken2 in the same step — while the
+    library genomes are guaranteed present — and sets `db.blast` for you. It defaults ON when
+    `modules.validate` is enabled. If you already have a kraken2 DB on disk (not a prebuilt index),
+    `validate.build_from: classifier` resolves its genomes + `seqid2taxid.map` + `names.dmp`,
+    `makeblastdb`s with kraken2's (normalized) taxid map so subjects carry kraken2's **exact**
+    taxids, and scores agreement through kraken2's *own* `names.dmp` — no NCBI taxdb, no `db.blast`.
+    **Caveat / STRONG warning:** a **prebuilt `fetch-db` index or a `kraken2-build --clean`'d DB
+    ships only the `.k2d` hash** (no genomes) — there `build_from: classifier` fails fast; give
+    `validate.build_from: <the genome FASTA(s) you used>` (or `metagx build-blast-db`). **Do not
+    `--clean` the kraken2 DB if you want to validate later.** Use `db.blast: nt` / `validate.remote`
+    only for a deliberately broader benchmark. See `docs/ARCHITECTURE-WIRING.md` Part 2.
 - **Confidence sweep ("k-dense" matrix):** `sweep: {param: confidence, values: [...]}`
   runs kraken2 at each value and produces a per-sample matrix + line plot showing how
   each organism's read count changes with threshold. Never also pin the swept param in

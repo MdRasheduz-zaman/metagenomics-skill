@@ -24,6 +24,7 @@ result = dbbuild.build_database(
     max_db_size=build.get("max_db_size"),
     no_masking=build.get("no_masking"),
     use_ftp=build.get("use_ftp", True),
+    build_blast=bool(build.get("blast", False)),  # aligned BLAST validation DB, built together
     run=True,
 )
 
@@ -32,3 +33,8 @@ dbbuild.write_manifest(db_dir, result)
 
 if not result.get("ok"):
     sys.exit(f"db.build failed at step '{result.get('failed_step')}' — see logs under {db_dir}")
+# The aligned BLAST DB is opt-in; if it was requested but failed, fail loudly (don't silently
+# leave the user with an out-of-scope validation later).
+_b = result.get("blast")
+if _b and not _b.get("ok"):
+    sys.exit(f"db.build: kraken2 DB built but the aligned BLAST DB failed: {_b.get('error') or _b}")
