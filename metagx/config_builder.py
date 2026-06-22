@@ -261,15 +261,34 @@ def _validate_validate(val: Dict[str, Any] | None, db: Dict[str, Any]) -> Dict[s
     if top_n < 1 or reads_per_taxon < 1:
         raise registry.ValidationError("validate.top_n and reads_per_taxon must be >= 1")
     remote = bool(val.get("remote", False))
-    if not remote and not db.get("blast"):
+    # build_from: keep the validation reference IN SCOPE with the classifier by building the
+    # BLAST DB from the SAME genomes. Either a FASTA/folder path, or "classifier" => reuse the
+    # db.build source (only meaningful for custom-fasta/custom-folder builds, where a local
+    # source FASTA exists). Validating against a broader DB is a different benchmark.
+    build_from = val.get("build_from")
+    if build_from:
+        build_from = str(build_from)
+        if build_from == "classifier":
+            b = db.get("build") or {}
+            strat = str(b.get("strategy", ""))
+            if strat not in {"custom-fasta", "custom-folder", "spike-in"} or not b.get("source"):
+                raise registry.ValidationError(
+                    "validate.build_from: 'classifier' needs a db.build with a local source "
+                    "(strategy custom-fasta/custom-folder/spike-in). For a standard/prebuilt "
+                    "classifier DB, point validate.build_from at the genome FASTA(s) you used, "
+                    "or set db.blast / validate.remote.")
+    elif not remote and not db.get("blast"):
         raise registry.ValidationError(
-            "validate needs a BLAST database: set db.blast to a local BLAST+ db (e.g. nt, or "
-            "one built with makeblastdb), or set validate.remote: true to search NCBI remotely "
+            "validate needs a BLAST database: set db.blast to a local BLAST+ db, or "
+            "validate.build_from to a FASTA/folder of the SAME genomes as your classifier DB "
+            "(keeps the benchmark in scope), or validate.remote: true to search NCBI remotely "
             "(only practical for a few sequences). nt is ~200 GB — never auto-fetched.")
     out: Dict[str, Any] = {"target": target, "level": level, "top_n": top_n,
                            "reads_per_taxon": reads_per_taxon, "remote": remote,
                            "rank": "S" if level == "species" else "G",
                            "seed": int(val.get("seed", 42))}
+    if build_from:
+        out["build_from"] = build_from
     return out
 
 

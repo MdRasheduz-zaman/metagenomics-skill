@@ -121,9 +121,12 @@ that matches their goal.
   `control: true` sample) — remove reagent contaminants. `aggregate` — MultiQC + Krona.
 - `validate` (needs classify) — **BLAST cross-check that a kraken2/Bracken call is real**, not a
   k-mer artifact: BLASTs a seeded read subsample for the top taxa and reports per-taxon
-  agreement + a verdict. Needs `db.blast` (a local BLAST+ nucleotide DB, e.g. nt or a custom
-  `makeblastdb` one) **or** `validate: {remote: true}` to search NCBI (only for a few sequences;
-  nt is ~200 GB and never auto-fetched). Tune via the `blastn` params (evalue/perc_identity).
+  agreement + a verdict. **Keep the reference in scope with the classifier** — validating a
+  virus+bacteria DB's calls against full nt is a different benchmark. Prefer
+  `validate: {build_from: <same genomes FASTA/folder>}` (or `build_from: classifier` to reuse a
+  custom `db.build` source) so the pipeline builds the BLAST DB from the same organisms; else set
+  `db.blast` (e.g. nt, ~200 GB, never auto-fetched) or `validate: {remote: true}` (a few seqs).
+  Tune via the `blastn` params (evalue/perc_identity).
 - `host_removal: {genome: <fasta>}` — deplete host reads before the whole pipeline (clinical/
   host-pathogen samples; pair with high kraken2 confidence + the consensus cross-check).
 

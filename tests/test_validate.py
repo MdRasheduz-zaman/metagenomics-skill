@@ -128,6 +128,38 @@ def test_validate_remote_needs_no_local_db():
     assert cfg["validate"]["remote"] is True
 
 
+def test_validate_build_from_fasta_satisfies_db_requirement():
+    # building the BLAST DB from a FASTA (the in-scope design) means no db.blast is needed up front
+    cfg = cb.build_config(samples=SAMPLES, db={"kraken2": "DB"},
+                          modules={"validate": True}, validate={"build_from": "refs.fasta"})
+    assert cfg["validate"]["build_from"] == "refs.fasta"
+
+
+def test_validate_build_from_classifier_requires_custom_db_build():
+    # "classifier" only works when db.build has a local source (custom-fasta/folder/spike-in)
+    with pytest.raises(registry.ValidationError) as e:
+        cb.build_config(samples=SAMPLES, db={"kraken2": "DB"},
+                        modules={"validate": True}, validate={"build_from": "classifier"})
+    assert "classifier" in str(e.value)
+
+
+def test_validate_build_from_classifier_ok_with_custom_fasta_build():
+    cfg = cb.build_config(
+        samples=SAMPLES,
+        db={"build": {"strategy": "custom-fasta", "source": "genomes.fasta", "taxonomy": "synthetic"}},
+        modules={"validate": True}, validate={"build_from": "classifier"})
+    assert cfg["validate"]["build_from"] == "classifier"
+    assert cfg["db"]["build"]["source"] == "genomes.fasta"
+
+
+def test_build_from_drops_blast_from_needed_dbs():
+    from metagx import dbprovision
+    cfg = {"modules": {"classify": True, "validate": True}, "validate": {"build_from": "x.fasta"}}
+    assert "blast" not in dbprovision.needed_dbs(cfg)
+    cfg_need = {"modules": {"classify": True, "validate": True}, "validate": {}}
+    assert "blast" in dbprovision.needed_dbs(cfg_need)
+
+
 def test_validate_needs_classify():
     with pytest.raises(registry.ValidationError) as e:
         cb.build_config(samples=SAMPLES, db={"kraken2": "DB", "blast": "/b"},
@@ -165,3 +197,15 @@ def test_blast_validate_end_to_end_distinguishes_right_from_wrong(tmp_path):
     assert right["agreement_rate"] == 1.0
     assert validate.verdict(right["agreement_rate"], right["hit_rate"]) == "corroborated"
     assert wrong["n_agree"] == 0  # mislabel caught (the whole point of validation)
+
+
+@pytest.mark.skipif(not (shutil.which("makeblastdb") and os.path.isdir(_FIXTURE)),
+                    reason="needs BLAST+ makeblastdb and the viral fixture")
+def test_build_blast_db_from_fixture_is_in_scope_and_idempotent(tmp_path):
+    """build_blast_db builds an in-scope DB from the classifier's own genomes and is idempotent."""
+    prefix = str(tmp_path / "insync")
+    res = validate.build_blast_db(os.path.join(_FIXTURE, "genomes.fasta"), prefix)
+    assert res["ok"] and res.get("ran") is True
+    assert validate.blast_db_present(prefix)
+    again = validate.build_blast_db(os.path.join(_FIXTURE, "genomes.fasta"), prefix)
+    assert again["ok"] and again.get("ran") is False  # skipped — already present

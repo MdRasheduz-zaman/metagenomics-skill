@@ -171,7 +171,19 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   auto-fetched — like GTDB-Tk). Agreement level via `validate.level` (genus|species); BLAST
   strictness via the `blastn` registry (`evalue`, `perc_identity`, `qcov_hsp_perc`). Outputs
   `results/<project>/validation/<sample>.blast_validation.{json,tsv}`. `metagx doctor --config`
-  fails fast if `validate` is on with neither `db.blast` nor `remote`.
+  fails fast if `validate` is on with no reference at all.
+  - **Keep the reference IN SCOPE with the classifier (important).** Metagenomics is only as
+    good as the DB curation: if your kraken2/Bracken DB holds only viruses+bacteria, validating
+    its calls against *full NCBI nt* is a **different benchmark** — a read can BLAST-match an
+    organism the classifier never had a chance to call, producing false "disagreements". So
+    build the BLAST DB from the **same genomes** that built the classifier DB. Set
+    `validate.build_from` to that FASTA/folder (or the literal `classifier` to reuse the
+    `db.build` source for `custom-fasta`/`custom-folder`/`spike-in` builds) and the pipeline runs
+    `makeblastdb` on it first (no separate `db.blast` needed). Or do it by hand:
+    `metagx build-blast-db --from <same_genomes.fasta> --out <dir>/insync` then set `db.blast`.
+    Use `db.blast: nt` / `validate.remote` only when you deliberately want to test against a
+    broader reference. (Auto-deriving the in-scope DB from a *standard/prebuilt* kraken2 index's
+    `library/` FASTAs is a future pass; for now point `build_from` at the genomes you used.)
 - **Confidence sweep ("k-dense" matrix):** `sweep: {param: confidence, values: [...]}`
   runs kraken2 at each value and produces a per-sample matrix + line plot showing how
   each organism's read count changes with threshold. Never also pin the swept param in

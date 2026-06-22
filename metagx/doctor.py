@@ -272,6 +272,8 @@ def check_db_build(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
             out.append(Check(f"db-build:{t}", _FAIL, f"{t} not on PATH (needed to build the DB).",
                              remedy="Install the core stack (kraken2 + bracken ship these): "
                                     "`conda env create -f environment.yml`."))
+        else:
+            out.append(Check(f"db-build:{t}", _OK, f"{t} present."))
 
     # Real-taxonomy custom/spike-in builds need each sequence to carry a real NCBI taxid in its
     # header (kraken:taxid|<id>); otherwise the build "succeeds" but those sequences map nowhere.

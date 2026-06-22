@@ -247,8 +247,10 @@ def needed_dbs(cfg: Dict) -> Dict[str, str]:
             need.update(humann_nucleotide="humann_nucleotide", humann_protein="humann_protein")
     if mods.get("bgc"):
         need["antismash"] = "antismash"
-    # validate BLASTs classifier calls — needs a local BLAST DB unless searching NCBI remotely.
-    if mods.get("validate") and not (cfg.get("validate", {}) or {}).get("remote"):
+    # validate BLASTs classifier calls — needs a local BLAST DB unless searching NCBI remotely
+    # or building one in-sync from the classifier's genomes (validate.build_from).
+    val = cfg.get("validate", {}) or {}
+    if mods.get("validate") and not val.get("remote") and not val.get("build_from"):
         need["blast"] = "blast"
     # emu (long-read amplicon only) and metaphlan (an *optional* consensus tool) have
     # platform/sub-tool nuances, so they're fetchable (SPECS) but not auto-required here to

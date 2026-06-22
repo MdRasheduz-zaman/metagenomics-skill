@@ -135,6 +135,18 @@ SCENARIOS = {
                   "blastn": {"evalue": 1e-10}},
         "expect_rules": {"blast_validate"},
     },
+    # validate building an IN-SCOPE BLAST DB from a FASTA (same genomes as the classifier).
+    "validate_build_from": {
+        "reads": {"r1": ("vb.fastq.gz", "fastq_gz")},
+        "platform": "illumina", "layout": "se",
+        "modules": {"qc": False, "classify": True, "abundance": True,
+                    "assembly": False, "validate": True},
+        "extra": {"bracken": {"read_length": 150},
+                  "validate": {"target": "reads", "level": "genus", "rank": "G", "top_n": 10,
+                               "reads_per_taxon": 50, "remote": False, "seed": 42,
+                               "build_from": "refs.fasta"}},
+        "expect_rules": {"build_validate_blast_db", "blast_validate"},
+    },
 }
 
 

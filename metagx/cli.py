@@ -174,6 +174,17 @@ def cmd_build_db(args) -> int:
     return 0 if result.get("ok", not result.get("ran", False)) else 1
 
 
+def cmd_build_blast_db(args) -> int:
+    """Build an in-scope BLAST validation DB from the SAME genomes as the classifier."""
+    from metagx import validation
+    result = validation.build_blast_db(args.source, args.out, run=not args.dry_run, force=args.force)
+    _print_json(result)
+    if result.get("ok"):
+        print(f"\nset db.blast: {result['db']}  (or validate.build_from: {args.source})",
+              file=sys.stderr)
+    return 0 if result.get("ok", not result.get("ran", True)) else 1
+
+
 def cmd_fetch_db(args) -> int:
     if args.tool:  # provision a per-tool module DB (genomad/checkv/checkm2/gtdbtk/bakta/...)
         from metagx import dbprovision
@@ -634,6 +645,16 @@ def build_parser() -> argparse.ArgumentParser:
     sp = sub.add_parser("readlen", help="estimate read-length stats (to pick Bracken length)")
     sp.add_argument("files", nargs="+", help="FASTA/FASTQ (±gz) read files")
     sp.set_defaults(func=cmd_readlen)
+
+    sp = sub.add_parser("build-blast-db",
+                        help="build an in-scope BLAST validation db from the SAME genomes as your "
+                             "classifier (makeblastdb); set db.blast to the output")
+    sp.add_argument("--from", dest="source", required=True,
+                    help="FASTA (or folder of FASTAs) — use the same genomes that built your kraken2 db")
+    sp.add_argument("--out", required=True, help="output BLAST db prefix (e.g. local_databases/blast/insync)")
+    sp.add_argument("--force", action="store_true", help="rebuild even if a db is already present")
+    sp.add_argument("--dry-run", action="store_true")
+    sp.set_defaults(func=cmd_build_blast_db)
 
     sp = sub.add_parser("build-cat-db", help="build a custom CAT contig-annotation db from genomes")
     sp.add_argument("--genomes", required=True, help="FASTA of reference genomes")

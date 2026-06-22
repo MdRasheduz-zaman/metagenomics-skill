@@ -13,11 +13,62 @@ shells out to `blastn`. Matches the project's no-scipy/no-R convention.
 """
 from __future__ import annotations
 
+import glob
 import gzip
+import os
 import re
+import shutil
+import subprocess
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from . import formats
+
+
+def blast_db_present(out_prefix: str) -> bool:
+    """True if a BLAST nucleotide DB already exists at this prefix (idempotent build guard)."""
+    return bool(glob.glob(out_prefix + "*.nin") or glob.glob(out_prefix + "*.nal"))
+
+
+def build_blast_db(source: str, out_prefix: str, run: bool = True,
+                   force: bool = False) -> Dict[str, object]:
+    """Build a BLAST+ nucleotide DB from a FASTA (or a folder of FASTAs) via makeblastdb.
+
+    THIS is how the validation reference is kept *in scope* with the classifier: build it from
+    the **same genomes** that built the kraken2/Bracken DB. Validating against a broader DB
+    (e.g. full nt) measures a different benchmark — a read can match an organism the classifier
+    never had a chance to call. ``-parse_seqids`` keeps subject titles so the organism is
+    recoverable from ``stitle`` even without NCBI's taxdb. Idempotent: skips if present.
+    """
+    result: Dict[str, object] = {"source": source, "db": os.path.abspath(out_prefix)}
+    if not force and blast_db_present(out_prefix):
+        result.update(ran=False, ok=True, skipped="already present")
+        return result
+    # a folder of FASTAs -> concatenate into one input makeblastdb can read
+    fasta = source
+    tmp_cat = None
+    if os.path.isdir(source):
+        tmp_cat = out_prefix + ".sources.fasta"
+        os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
+        with open(tmp_cat, "w") as out:
+            for fp in sorted(glob.glob(os.path.join(source, "*"))):
+                if formats.read_format(fp) != "fasta":
+                    continue
+                opener = gzip.open if formats.is_gzipped(fp) else open
+                with opener(fp, "rt") as fh:
+                    shutil.copyfileobj(fh, out)
+        fasta = tmp_cat
+    cmd = ["makeblastdb", "-in", fasta, "-dbtype", "nucl", "-out", out_prefix, "-parse_seqids"]
+    result["command"] = " ".join(cmd)
+    if not run or not shutil.which("makeblastdb"):
+        result["ran"] = False
+        if not shutil.which("makeblastdb"):
+            result["note"] = "makeblastdb not on PATH (install BLAST+, or use --use-conda)"
+        return result
+    os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    result.update(ran=True, ok=(proc.returncode == 0 and blast_db_present(out_prefix)),
+                  returncode=proc.returncode, tail=((proc.stdout or "") + (proc.stderr or ""))[-1000:])
+    return result
 
 # The outfmt-6 columns the validate rule requests. Order matters — it's how we parse.
 BLAST6_FIELDS = ["qseqid", "sseqid", "pident", "length", "evalue", "bitscore",
