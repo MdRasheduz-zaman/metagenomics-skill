@@ -189,7 +189,7 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
     ships only the `.k2d` hash** (no genomes) — there `build_from: classifier` fails fast; give
     `validate.build_from: <the genome FASTA(s) you used>` (or `metagx build-blast-db`). **Do not
     `--clean` the kraken2 DB if you want to validate later.** Use `db.blast: nt` / `validate.remote`
-    only for a deliberately broader benchmark. See `docs/ARCHITECTURE-WIRING.md` Part 2.
+    only for a deliberately broader benchmark.
 - **Confidence sweep ("k-dense" matrix):** `sweep: {param: confidence, values: [...]}`
   runs kraken2 at each value and produces a per-sample matrix + line plot showing how
   each organism's read count changes with threshold. Never also pin the swept param in
@@ -348,9 +348,8 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   breadth via minimap2, read-to-contig concordance). Any blank manifest cell skips that block,
   so it works for classify-only or assembly-only sets. Add `--paper` to also emit an IMRaD
   comparison manuscript (`comparison_paper.{tex,pdf}`, pdflatex — same layout as `metagx paper`).
-  See experiments 07–08 and
-  `BENCHMARKING-DATASETS.md` for valid comparison design (match the abundance model + depth, or
-  differences are confounded).
+  For a valid comparison, match the abundance model + depth across platforms, or the
+  differences are confounded.
 - **Report scope = one project.** A `metagx report`/`paper` covers exactly one project (one
   config = one sample set + the modules enabled on it). All enabled modules combine into that
   single report — adding a module to the *same* data means re-running the *same* config/project,

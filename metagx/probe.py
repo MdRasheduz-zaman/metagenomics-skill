@@ -5,7 +5,7 @@ non-reconstructive aggregate statistics (length / quality / GC / duplication / i
 platform). The output `context` dict feeds ``registry.interview_spec(context=)`` so
 goal/data-conditional promotion fires on measured facts, not asserted ones.
 
-Constraints (see docs/spec-probe.md): consent-gated, local-only, never stores read sequences
+Constraints (see docs/internal/spec-probe.md): consent-gated, local-only, never stores read sequences
 or IDs, pure-Python core (no scipy). The one reference-dependent metric — host fraction — is
 optional: when a host index and minimap2 are both available it maps the subsample to the host
 and reports the aligned fraction; otherwise it degrades to null. Mapping uses a transient,

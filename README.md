@@ -112,7 +112,7 @@ per domain (set `domains: [viral, prokaryote, eukaryote]`):
 
 It also adds **horizontal coverage (breadth)** per contig to `reconcile` — at large reference
 scale, breadth is a better "is it really present?" signal than depth. See
-`docs/DESIGN-multidomain-and-db-scaling.md` for the full rationale + references.
+`docs/internal/DESIGN-multidomain-and-db-scaling.md` for the full rationale + references.
 
 ## Filtered assembly: deplete/target reads, then compare (`modules.filtered_assembly`)
 
@@ -150,7 +150,7 @@ marker-gene DB + OTU/Emu). An all-amplicon run with assembly modules enabled err
 Mixed WGS+amplicon runs are fine — each sample is routed by its `library`. A third value,
 `library: ancient`, routes degraded/ancient samples through read-merging + damage
 authentication (see "Ancient DNA, decontamination & strain-level" above). See
-`docs/DESIGN-multidomain-and-db-scaling.md` for the rationale + references (DADA2/QIIME2, Emu, SILVA).
+`docs/internal/DESIGN-multidomain-and-db-scaling.md` for the rationale + references (DADA2/QIIME2, Emu, SILVA).
 
 ## Cross-sample statistics & host removal
 
@@ -234,8 +234,8 @@ provision their own tools under `--use-conda` and appear in the Methods/citation
 diversity, formats, subsampling, and read-filter logic. CI runs them on every push
 (`.github/workflows/ci.yml`): a tool-free `test` job (unit suite + the workflow dry-run DAG
 gate) and an `e2e` job that installs the bio stack **from `environment.yml`** (parity is
-enforced by `tests/test_ci_env_parity.py`) and runs the real pipeline. See `docs/history/`
-for past gap analyses and `ROADMAP.md` for what's next.
+enforced by `tests/test_ci_env_parity.py`) and runs the real pipeline. See `docs/internal/history/`
+for past gap analyses and `docs/internal/ROADMAP.md` for what's next.
 
 ### What's actually verified (honest coverage matrix)
 
@@ -271,7 +271,7 @@ registry/config validation). "~20 modules exist" ≠ "~20 modules run in CI" —
 ¹ AMR (ABRicate) runs in CI at the DAG level; its real execution needs `--use-conda`
 (samtools-pin isolation) and is exercised locally. Domain-taxonomy and amplicon need large
 external reference DBs, so they are DAG/config-verified rather than executed — building tiny
-fixtures for them is tracked in `ROADMAP.md`.
+fixtures for them is tracked in `docs/internal/ROADMAP.md`.
 
 ## Self-provisioning tools (conda)
 
