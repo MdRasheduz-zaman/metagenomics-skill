@@ -3,6 +3,8 @@
 Snakemake 8+ refuses an older conda; the runner now prefers mamba and, on conda, fails fast
 with an actionable message instead of a cryptic Snakemake traceback.
 """
+import sys
+
 from metagx import runner
 
 
@@ -68,3 +70,30 @@ def test_dry_run_skips_preflight(monkeypatch, tmp_path):
     cfg.write_text("project: x\n")
     runner.run(config=str(cfg), use_conda=True, dry_run=True)
     assert "--use-conda" in captured["cmd"] and "--dry-run" in captured["cmd"]
+
+
+def test_snakemake_runs_under_this_interpreter(monkeypatch, tmp_path):
+    """The Snakemake subprocess must run as `sys.executable -m snakemake`, not a bare
+    `snakemake` off PATH. The workflow's common.smk does `from metagx import ...` in the
+    Snakemake process's Python; resolving snakemake via PATH can pick an interpreter that
+    lacks metagx (e.g. running `metagx` by absolute path without activating its env), which
+    failed with `ModuleNotFoundError: No module named 'metagx'` at DAG-load time. Pinning the
+    invocation to this interpreter guarantees the subprocess shares metagx's environment.
+    """
+    captured = {}
+
+    def fake_run(cmd, **k):
+        captured["cmd"] = cmd
+        class P:
+            returncode, stdout, stderr = 0, "", ""
+        return P()
+
+    monkeypatch.setattr(runner.subprocess, "run", fake_run)
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text("project: x\n")
+    runner.run(config=str(cfg), dry_run=True)
+
+    cmd = captured["cmd"]
+    assert cmd[:3] == [sys.executable, "-m", "snakemake"], cmd
+    # never invoke a bare PATH-resolved snakemake
+    assert cmd[0] != "snakemake"

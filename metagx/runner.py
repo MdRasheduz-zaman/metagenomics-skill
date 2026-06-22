@@ -6,6 +6,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from importlib import resources
 from typing import List, Optional, Tuple
 
@@ -101,8 +102,14 @@ def run(
     ``use_conda`` makes Snakemake create/use the per-rule conda envs under workflow/envs/,
     so the heavy domain tools are provisioned automatically on first run.
     """
+    # Invoke Snakemake under *this* interpreter, not a bare "snakemake" off PATH.
+    # The workflow's common.smk does `from metagx import ...`, evaluated in the
+    # Snakemake process's Python; resolving snakemake via PATH can pick an env that
+    # lacks metagx (e.g. running `metagx` by absolute path without activating its
+    # env) → ModuleNotFoundError at load time. sys.executable + `-m snakemake`
+    # guarantees the subprocess shares metagx's interpreter (snakemake is a hard dep).
     cmd = [
-        "snakemake",
+        sys.executable, "-m", "snakemake",
         "--snakefile", workflow_path(),
         "--configfile", os.path.abspath(config),
         "--cores", str(cores),
