@@ -17,6 +17,16 @@ that mattered: a green CI run.
 
 ---
 
+## 0a. RESOLUTION (read this first) ✅
+**CI e2e is green.** It took four rounds and the real cause was *not* what §0/§0b first blamed.
+The kraken2-build SIGPIPE (§0b) was a real-but-survivable side show; the actual blocker was
+**bracken-build's `kmer2read_distr` hard-aborting when `-t` exceeds the 2-core runner's CPUs**
+(§6.8). Fix: clamp DB-build threads to online CPUs (`dbbuild.build_db`). The turning point was
+giving up on log-reading guesses and instead **dumping the untruncated tool output** (§6.7),
+which named the failing step on the very next run. Full arc: §0b → §6.7 → §6.8.
+
+---
+
 ## 0b. ROUND 2 (the "fix" did not hold) — re-opened ⛔
 
 **This document said §0 was "FOUND & FIXED ✅" and checklist P0 was `[x]`. CI failed again
@@ -371,9 +381,11 @@ machine anywhere Bracken/kmer2read_distr runs in the *workflow* (not just `dbbui
 bracken rule's thread param (`render_args`) and apply the same clamp at the workflow level.
 
 ### 6.6 Tracked checklist (round 2)
-- [ ] **P0** Get CI e2e **actually green** — the only acceptance criterion. (round-2 retry +
-      round-3 observability/`OMP_NUM_THREADS=1` applied; still awaiting a green run. **Next step
-      is to READ the now-untruncated build log, not to guess again.**)
+- [x] **P0 — CLOSED ✅ (CI e2e green).** The acceptance criterion is finally met: a green CI
+      e2e run exists. Resolved by the round-4 thread-clamp (§6.8) after the round-3 diagnostic
+      dump (§6.7) exposed the real cause (bracken `kmer2read_distr` thread>core hard-fail, not
+      the kraken2 SIGPIPE that misdirected rounds 1–3). *This box was earned by a green run, not
+      declared from local evidence — the exact discipline §6.1 demanded.*
 - [ ] **P1** Re-audit every §5 `[x]` against "is there a green Linux CI job proving it?"; demote
       the unproven ones to `[ ]`. (§6.2)
 - [ ] **P1** `make repro-ci` / pytest marker: run the fixture DB build under `OMP_NUM_THREADS=2`
