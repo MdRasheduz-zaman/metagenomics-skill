@@ -16,6 +16,17 @@ OUT = os.path.join(OUTDIR, PROJECT)
 THREADS = int(config.get("threads", 8))
 MODULES = config.get("modules", {})
 DB = config.get("db", {})
+# An optional db.build block builds the kraken2+Bracken DB as a pipeline step; classify/
+# abundance then depend on the produced manifest so the build runs first (and only once).
+DB_BUILD = DB.get("build")
+DB_MANIFEST = os.path.join(DB["kraken2"], ".metagx_db.json") if DB.get("kraken2") else None
+
+
+def db_ready_input():
+    """The built-DB manifest, as a rule input — only when db.build is configured (else [])."""
+    return [DB_MANIFEST] if (DB_BUILD and DB_MANIFEST) else []
+
+
 # Target domains for the (optional) domain-taxonomy layer: viral / prokaryote / eukaryote.
 DOMAINS = [d.lower() for d in config.get("domains", [])]
 

@@ -1,0 +1,133 @@
+# Parameter registry for kraken2-build (database construction). See kraken2.yaml for the
+# full field schema. Three buckets, as usual:
+#   - interpreted: user-facing orchestration (strategy/taxonomy/libraries) consumed by the
+#     dbbuild workflow script, NOT emitted as a flag (like mafft.method);
+#   - real kraken2-build flags (kmer/minimizer/masking/size tuning);
+#   - managed: the workflow supplies --db/--threads and the build *actions*
+#     (--download-taxonomy/--download-library/--add-to-library/--build).
+tool: kraken2-build
+command: kraken2-build
+source_repo: https://github.com/DerrickWood/kraken2
+docs_url: https://github.com/DerrickWood/kraken2/wiki/Manual#custom-databases
+version_probe: kraken2 --version
+description: >
+  Builds a kraken2 reference database: downloads NCBI taxonomy + standard libraries, and/or
+  adds curated sequences, then builds the k-mer index. Bracken's database is built on top of
+  the finished kraken2 DB (see bracken-build).
+params:
+  # --- orchestration (user-facing, consumed by the dbbuild script, no CLI flag) --------
+  strategy:
+    type: enum
+    choices: [standard, custom-fasta, custom-folder, spike-in]
+    default: standard
+    interpreted: true
+    tier: 1
+    ask: true
+    question: >
+      How should the database be built? 'standard' = download NCBI libraries (real
+      taxonomy); 'custom-fasta' = one multifasta of your reference genomes; 'custom-folder'
+      = a folder of per-genome FASTAs; 'spike-in' = your genomes of interest ADDED to a
+      standard library (e.g. an engineered strain against the bacterial background).
+  taxonomy:
+    type: enum
+    choices: [real, synthetic]
+    default: real
+    interpreted: true
+    tier: 1
+    ask: true
+    question: >
+      Taxonomy for custom/spike-in sequences. 'real' = resolve each sequence to its NCBI
+      taxid (real names + genus/family rollups + required to mix with a standard library);
+      'synthetic' = fabricate a flat species-per-genome taxonomy (zero NCBI dependency,
+      good for closed-set detection/simulation, but no rank rollups). Standard libraries
+      always use real taxonomy.
+    warn_if:
+      - when: { strategy: spike-in, taxonomy: synthetic }
+        message: >
+          spike-in requires real taxonomy so your genomes integrate with the standard
+          library's tree — synthetic taxids cannot be merged. Use taxonomy: real.
+  libraries:
+    type: str
+    default: "viral"
+    interpreted: true
+    tier: 1
+    ask: true
+    question: >
+      For 'standard'/'spike-in': comma-separated NCBI libraries to download — any of
+      bacteria, viral, archaea, fungi, protozoa, human, plasmid, UniVec_Core, nt. Start
+      small (viral is ~hundreds of MB; bacteria is 100s of GB of RAM to build/classify).
+  # --- real kraken2-build flags --------------------------------------------------------
+  kmer_len:
+    flag: "--kmer-len"
+    type: int
+    default: 35
+    min: 1
+    tier: 3
+    ask: false
+    question: k-mer length used to build the index (must match bracken-build -k).
+  minimizer_len:
+    flag: "--minimizer-len"
+    type: int
+    default: 31
+    min: 1
+    tier: 3
+    ask: false
+    question: Minimizer length (must be <= kmer-len).
+  minimizer_spaces:
+    flag: "--minimizer-spaces"
+    type: int
+    default: 7
+    min: 0
+    tier: 3
+    ask: false
+    question: Number of spaced-seed positions in the minimizer.
+  max_db_size:
+    flag: "--max-db-size"
+    type: int
+    min: 0
+    tier: 2
+    ask: false
+    question: >
+      Cap the database size in bytes (kraken2 downsamples minimizers to fit). Use when RAM
+      is the constraint — the DB must fit in memory to classify (or use --memory-mapping).
+    promote_when:
+      - when: { goal: low_memory }
+        to_tier: 1
+        reason: Low-memory goal — surface the DB size cap.
+  no_masking:
+    flag: "--no-masking"
+    type: bool
+    default: false
+    tier: 2
+    ask: false
+    question: >
+      Skip low-complexity masking. Masking needs dustmasker/segmasker (BLAST+); set this
+      true to avoid that dependency, at the cost of slightly more false positives.
+  load_factor:
+    flag: "--load-factor"
+    type: float
+    default: 0.7
+    min: 0.1
+    max: 0.9
+    tier: 3
+    ask: false
+    question: Hash-table load factor; lower uses more memory but is faster to build.
+  # --- raw escape hatch ----------------------------------------------------------------
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: >
+      Additional raw kraken2-build tokens, passed verbatim (escape hatch; recorded in
+      run provenance).
+  # --- managed by the workflow ---------------------------------------------------------
+  db:
+    flag: "--db"
+    type: path
+    managed: true
+  threads:
+    flag: "--threads"
+    type: int
+    managed: true

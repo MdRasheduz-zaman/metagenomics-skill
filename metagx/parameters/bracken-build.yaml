@@ -1,0 +1,44 @@
+# Parameter registry for bracken-build (builds Bracken's k-mer distribution ON TOP of a
+# finished kraken2 DB). See kraken2.yaml for the field schema. The read length(s) (-l) are
+# managed: the workflow derives them from the sample sheet's platforms so every length the
+# run classifies at has a matching databaseLmers.kmer_distrib.
+tool: bracken-build
+command: bracken-build
+source_repo: https://github.com/jenniferlu717/Bracken
+docs_url: https://github.com/jenniferlu717/Bracken#step-1-generate-the-bracken-database-file-databasexmerskmer_distrib
+version_probe: bracken --version
+description: >
+  Generates the Bracken database (databaseLmers.kmer_distrib) for a built kraken2 DB, one
+  per read length. Requires the kraken2 DB to exist first.
+params:
+  kmer_len:
+    flag: "-k"
+    type: int
+    default: 35
+    min: 1
+    tier: 3
+    ask: false
+    question: >
+      k-mer length — MUST equal the kraken2-build --kmer-len the database was built with,
+      or Bracken's estimates are wrong.
+  # --- raw escape hatch ---
+  extra_args:
+    type: str
+    default: ""
+    tier: 3
+    ask: false
+    passthrough: true
+    question: Additional raw bracken-build tokens, passed verbatim (escape hatch).
+  # --- managed by the workflow ---
+  db:
+    flag: "-d"
+    type: path
+    managed: true
+  threads:
+    flag: "-t"
+    type: int
+    managed: true
+  read_length:
+    flag: "-l"
+    type: int
+    managed: true

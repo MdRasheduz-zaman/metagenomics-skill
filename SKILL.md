@@ -43,6 +43,15 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    - **Custom index from the user's genomes:** `metagx build-db --genomes <genomes.fasta>
      --db <dir> --read-length <len>` builds a kraken2 + Bracken db with a synthetic taxonomy
      (no NCBI download).
+   - **Build as a pipeline step (`db.build`):** add a `db.build` block to the config and
+     `metagx run` builds the DB first, with read lengths derived from the sample sheet.
+     Strategies: `standard` (NCBI libraries, real taxonomy), `custom-fasta`/`custom-folder`
+     (your references), `spike-in` (your genomes + a standard library). **NCBI deprecated
+     rsync**, so `standard`/`spike-in` downloads use `--use-ftp` (wget) automatically — this
+     works but fetches genomes one-by-one, so it is **slow for large libraries** (bacteria/nt
+     = hours). Use `db.build` for `viral`/custom/spike-in; for a big standard DB prefer the
+     **prebuilt index** (`fetch-db`) instead. `metagx doctor` warns when a slow build is
+     configured and flags the air-gapped-cluster download caveat.
 3. **Offer a preset.** Run `metagx presets` and let the user pick a starting point
    (`pathogen-detection`, `gut-profiling`, `soil-deep-assembly`, `quick-screen`,
    `amr-surveillance`, `ancient-dna`). A preset

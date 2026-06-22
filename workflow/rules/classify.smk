@@ -28,6 +28,8 @@ def _kraken_cmd(wc, output, threads):
 rule kraken2:
     input:
         reads=lambda wc: reads_for_classify(wc.sample),
+        # When db.build is configured, wait for the DB manifest so the build runs first.
+        db_ready=db_ready_input(),
     output:
         report=f"{OUT}/kraken2/{{sample}}.{{label}}.kreport",
         # per-read calls — kept (not temp) so reconcile can score read-vs-contig accuracy

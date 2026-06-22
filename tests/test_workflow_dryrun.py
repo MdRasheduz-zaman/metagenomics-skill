@@ -194,6 +194,33 @@ def test_workflow_dry_run_builds_and_renders(name, tmp_path):
         )
 
 
+def test_db_build_step_wires_into_dag(tmp_path):
+    """A configured db.build adds build_kraken2_db as an upstream dependency of kraken2, and
+    the classify-time Bracken -r matches the per-platform length the DB is built for (the
+    coupling that makes a detached CLI build error-prone)."""
+    from metagx import config_builder as cb
+
+    genomes = tmp_path / "genomes.fasta"
+    _write_fasta(genomes, n=3)
+    reads = tmp_path / "ont.fasta"
+    _write_fasta(reads, n=4)
+    cfg = cb.build_config(
+        project="dbb", outdir=str(tmp_path / "out"),
+        samples=[{"sample": "s", "r1": str(reads), "platform": "ont", "layout": "se"}],
+        db={"kraken2": str(tmp_path / "viraldb"),
+            "build": {"strategy": "custom-fasta", "taxonomy": "synthetic", "source": str(genomes)}},
+        modules={"classify": True, "abundance": True})
+    cfg_path = tmp_path / "config.yaml"
+    cfg_path.write_text(yaml.safe_dump(cfg))
+
+    proc = runner.run(config=str(cfg_path), cores=2, dry_run=True)
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    assert proc.returncode == 0, combined[-3000:]
+    assert "build_kraken2_db" in combined            # the build runs as a pipeline step
+    assert ".metagx_db.json" in combined             # kraken2 depends on the build manifest
+    assert "bracken -r 1000" in combined             # ont -> 1000, matching the built DB
+
+
 def test_managed_key_typo_raises_loudly():
     """The safety net behind the gate: an orphaned/mistyped managed key must raise.
 

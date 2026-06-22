@@ -23,25 +23,47 @@ def _open(path: str):
     return gzip.open(path, "rt") if is_gzipped(path) else open(path, "rt")
 
 
-def _parse_genomes(genomes: str) -> List[Tuple[str, str, List[str]]]:
-    """Return [(accession, description, [seq_lines])] for each record."""
+def _parse_genomes(genomes) -> List[Tuple[str, str, List[str]]]:
+    """Return [(accession, description, [seq_lines])] for each record.
+
+    ``genomes`` may be a single FASTA path or a list of them (a folder of per-genome
+    FASTAs), so the synthetic-taxonomy path serves both custom-fasta and custom-folder.
+    """
+    sources = [genomes] if isinstance(genomes, str) else list(genomes)
     records: List[Tuple[str, str, List[str]]] = []
-    acc, desc, seq = None, "", []
-    with _open(genomes) as fh:
-        for line in fh:
-            line = line.rstrip("\n")
-            if line.startswith(">"):
-                if acc is not None:
-                    records.append((acc, desc, seq))
-                head = line[1:].split(None, 1)
-                acc = head[0]
-                desc = head[1] if len(head) > 1 else acc
-                seq = []
-            elif acc is not None:
-                seq.append(line)
-    if acc is not None:
-        records.append((acc, desc, seq))
+    for src in sources:
+        acc, desc, seq = None, "", []
+        with _open(src) as fh:
+            for line in fh:
+                line = line.rstrip("\n")
+                if line.startswith(">"):
+                    if acc is not None:
+                        records.append((acc, desc, seq))
+                    head = line[1:].split(None, 1)
+                    acc = head[0]
+                    desc = head[1] if len(head) > 1 else acc
+                    seq = []
+                elif acc is not None:
+                    seq.append(line)
+        if acc is not None:
+            records.append((acc, desc, seq))
     return records
+
+
+_FASTA_EXT = (".fa", ".fna", ".fasta", ".fa.gz", ".fna.gz", ".fasta.gz")
+
+
+def _collect_fastas(source: str) -> List[str]:
+    """A db.build source -> list of FASTA files (a folder is expanded, a file is wrapped)."""
+    if os.path.isdir(source):
+        files = sorted(os.path.join(source, f) for f in os.listdir(source)
+                       if f.lower().endswith(_FASTA_EXT))
+        if not files:
+            raise ValueError(f"no FASTA files (*.fa/.fna/.fasta[.gz]) in folder {source}")
+        return files
+    if os.path.isfile(source):
+        return [source]
+    raise ValueError(f"db.build source not found: {source}")
 
 
 def write_library_and_taxonomy(genomes: str, db_dir: str) -> Dict[str, Dict]:
@@ -270,6 +292,82 @@ def build_kaiju_db(genomes: str, db_dir: str, taxonomy_dir: str,
     return result
 
 
+def _execute_steps(steps: List[Tuple[str, List[str]]], db_dir: str) -> Dict:
+    """Run kraken2-build/bracken-build steps with the SIGPIPE / thread>core recovery logic.
+
+    Returns a dict to merge into a build result: ``ran``/``ok``[/``failed_step``]/``logs``
+    [/``skipped``][/``recovered``][/``note``]. Shared by ``build_db`` (custom synthetic) and
+    ``build_database`` (all strategies) so the hard-won recovery rules live in one place.
+    """
+    logs, skipped, recovered = {}, [], []
+    for name, cmd in steps:
+        tool = cmd[0]
+        if not _have(tool):
+            skipped.append(name)
+            logs[name] = {"skipped": f"{tool} not on PATH"}
+            continue
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        logs[name] = {
+            "returncode": proc.returncode,
+            "tail": ((proc.stdout or "") + (proc.stderr or ""))[-1500:],
+        }
+        if proc.returncode != 0:
+            # A non-zero exit is only a real failure if the step's artifacts are missing.
+            # kraken2-build emits a SIGPIPE-driven exit 64 on small DBs while still writing a
+            # valid database; trust the artifacts over the exit code.
+            artifacts = _step_artifacts(name, db_dir)
+            if _artifacts_present(artifacts):
+                logs[name]["recovered"] = (
+                    f"{tool} exited {proc.returncode}, but {', '.join(os.path.basename(a) for a in artifacts)} "
+                    "were produced — treating as success (known SIGPIPE quirk of the build wrapper)."
+                )
+                recovered.append(name)
+                continue
+            # Missing artifacts → the kraken2 `--build` genuinely aborted. On low-core CI runners
+            # build_db caps OMP threads and its internal `cat | build_db` pipe races so `cat` dies
+            # with SIGPIPE *before* step 3 writes any `*.k2d` (seen only on the 2-core GitHub
+            # Linux runner; multi-core builds finish cleanly). A single-threaded rebuild removes
+            # the race. Retry the build step once with --threads 1 before failing hard.
+            if name == "build" and "--threads" in cmd:
+                retry_cmd = list(cmd)
+                retry_cmd[retry_cmd.index("--threads") + 1] = "1"
+                # --threads 1 caps build_db's own threads, but its libgomp regions can still
+                # spawn the racing reader; force OMP_NUM_THREADS=1 in the env too so the
+                # `cat | build_db` pipe is genuinely serial.
+                retry_env = {**os.environ, "OMP_NUM_THREADS": "1"}
+                rp = subprocess.run(retry_cmd, capture_output=True, text=True, env=retry_env)
+                logs[name]["retry_threads1"] = {
+                    "returncode": rp.returncode,
+                    "tail": ((rp.stdout or "") + (rp.stderr or ""))[-1500:],
+                }
+                if rp.returncode == 0 or _artifacts_present(artifacts):
+                    logs[name]["recovered"] = (
+                        f"{tool} aborted under multithreading (exit {proc.returncode}, no artifacts); "
+                        "single-threaded rebuild produced the database — recovered."
+                    )
+                    recovered.append(name)
+                    continue
+            return {"ran": True, "ok": False, "failed_step": name, "logs": logs}
+    out: Dict = {"ran": True, "ok": True, "logs": logs}
+    notes = []
+    if recovered:
+        out["recovered"] = recovered
+        notes.append(
+            f"recovered {', '.join(recovered)}: exited non-zero (kraken2-build SIGPIPE quirk on "
+            "small DBs — either valid artifacts were written anyway, or a single-threaded rebuild "
+            "succeeded); see per-step logs for which."
+        )
+    if skipped:
+        out["skipped"] = skipped
+        notes.append(
+            f"skipped {', '.join(skipped)} (tool missing); "
+            "the kraken2 db is usable but abundance (Bracken) won't run until bracken-build is available"
+        )
+    if notes:
+        out["note"] = " ".join(notes)
+    return out
+
+
 def build_db(
     genomes: str,
     db_dir: str,
@@ -330,72 +428,134 @@ def build_db(
         if not _have("kraken2-build"):
             result["note"] = "kraken2-build not on PATH — commands not executed"
         return result
-
-    logs, skipped, recovered = {}, [], []
-    for name, cmd in steps:
-        tool = cmd[0]
-        if not _have(tool):
-            skipped.append(name)
-            logs[name] = {"skipped": f"{tool} not on PATH"}
-            continue
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        logs[name] = {
-            "returncode": proc.returncode,
-            "tail": ((proc.stdout or "") + (proc.stderr or ""))[-1500:],
-        }
-        if proc.returncode != 0:
-            # A non-zero exit is only a real failure if the step's artifacts are missing.
-            # kraken2-build emits a SIGPIPE-driven exit 64 on small DBs while still writing a
-            # valid database; trust the artifacts over the exit code.
-            artifacts = _step_artifacts(name, db_dir)
-            if _artifacts_present(artifacts):
-                logs[name]["recovered"] = (
-                    f"{tool} exited {proc.returncode}, but {', '.join(os.path.basename(a) for a in artifacts)} "
-                    "were produced — treating as success (known SIGPIPE quirk of the build wrapper)."
-                )
-                recovered.append(name)
-                continue
-            # Missing artifacts → the kraken2 `--build` genuinely aborted. On low-core CI runners
-            # build_db caps OMP threads and its internal `cat | build_db` pipe races so `cat` dies
-            # with SIGPIPE *before* step 3 writes any `*.k2d` (seen only on the 2-core GitHub
-            # Linux runner; multi-core builds finish cleanly). A single-threaded rebuild removes
-            # the race. Retry the build step once with --threads 1 before failing hard.
-            if name == "build" and "--threads" in cmd:
-                retry_cmd = list(cmd)
-                retry_cmd[retry_cmd.index("--threads") + 1] = "1"
-                # --threads 1 caps build_db's own threads, but its libgomp regions can still
-                # spawn the racing reader; force OMP_NUM_THREADS=1 in the env too so the
-                # `cat | build_db` pipe is genuinely serial.
-                retry_env = {**os.environ, "OMP_NUM_THREADS": "1"}
-                rp = subprocess.run(retry_cmd, capture_output=True, text=True, env=retry_env)
-                logs[name]["retry_threads1"] = {
-                    "returncode": rp.returncode,
-                    "tail": ((rp.stdout or "") + (rp.stderr or ""))[-1500:],
-                }
-                if rp.returncode == 0 or _artifacts_present(artifacts):
-                    logs[name]["recovered"] = (
-                        f"{tool} aborted under multithreading (exit {proc.returncode}, no artifacts); "
-                        "single-threaded rebuild produced the database — recovered."
-                    )
-                    recovered.append(name)
-                    continue
-            result.update(ran=True, ok=False, failed_step=name, logs=logs)
-            return result
-    result.update(ran=True, ok=True, logs=logs)
-    notes = []
-    if recovered:
-        result["recovered"] = recovered
-        notes.append(
-            f"recovered {', '.join(recovered)}: exited non-zero (kraken2-build SIGPIPE quirk on "
-            "small DBs — either valid artifacts were written anyway, or a single-threaded rebuild "
-            "succeeded); see per-step logs for which."
-        )
-    if skipped:
-        result["skipped"] = skipped
-        notes.append(
-            f"skipped {', '.join(skipped)} (tool missing); "
-            "the kraken2 db is usable but abundance (Bracken) won't run until bracken-build is available"
-        )
-    if notes:
-        result["note"] = " ".join(notes)
+    result.update(_execute_steps(steps, db_dir))
     return result
+
+
+def build_database(
+    *,
+    db_dir: str,
+    strategy: str = "standard",
+    taxonomy: str = "real",
+    libraries=None,
+    source: str = None,
+    read_lengths=(150,),
+    threads: int = 4,
+    kmer_len: int = 35,
+    minimizer_len: int = 31,
+    minimizer_spaces=None,
+    max_db_size=None,
+    no_masking=None,
+    use_ftp: bool = True,
+    run: bool = True,
+) -> Dict:
+    """Build a kraken2 + Bracken DB per a db.build strategy. Dispatches:
+
+      standard      download NCBI taxonomy + one or more libraries, then build (real taxonomy)
+      custom-fasta  one multifasta (synthetic taxonomy, or real if headers carry kraken:taxid|)
+      custom-folder a folder of per-genome FASTAs (same taxonomy rules as custom-fasta)
+      spike-in      custom genomes ADDED to standard libraries (real taxonomy, required)
+
+    Returns the same shape as ``build_db`` (commands + per-step logs + ran/ok). Masking
+    defaults off for synthetic (no dustmasker dep) and on for real builds unless overridden.
+    """
+    os.makedirs(db_dir, exist_ok=True)
+    requested_threads = threads
+    threads = max(1, min(int(threads), _usable_cpus()))
+    lengths = list(read_lengths) if isinstance(read_lengths, (list, tuple)) else [read_lengths]
+    libs = [l.strip() for l in str(libraries or "").split(",") if l.strip()]
+    sources = _collect_fastas(source) if source else []
+    if no_masking is None:
+        no_masking = (taxonomy == "synthetic")
+    mask = ["--no-masking"] if no_masking else []
+    # NCBI deprecated rsync access to ftp.ncbi.nlm.nih.gov, so kraken2-build's default rsync
+    # downloads now fail ("connect refused" on port 873). --use-ftp switches to wget, which
+    # works — hence the default. Only the NCBI download steps take it.
+    ftp = ["--use-ftp"] if use_ftp else []
+
+    result: Dict = {"db": os.path.abspath(db_dir), "strategy": strategy, "taxonomy": taxonomy,
+                    "libraries": libs, "read_lengths": lengths, "threads": threads}
+    steps: List[Tuple[str, List[str]]] = []
+
+    # NCBI taxonomy: needed for standard/spike-in and for any real-taxonomy custom build.
+    # --skip-maps drops the giant accession2taxid maps; standard libraries carry their own
+    # seqid->taxid, and custom sequences are expected to carry kraken:taxid| headers.
+    if strategy in {"standard", "spike-in"} or (taxonomy == "real" and sources):
+        steps.append(("download-taxonomy",
+                      ["kraken2-build", "--download-taxonomy", "--skip-maps", "--db", db_dir] + ftp))
+    if strategy in {"standard", "spike-in"}:
+        for lib in libs:
+            steps.append((f"download-library-{lib}",
+                          ["kraken2-build", "--download-library", lib, "--db", db_dir] + mask + ftp))
+
+    if strategy in {"custom-fasta", "custom-folder"} and taxonomy == "synthetic":
+        # fabricate a flat taxonomy + a kraken:taxid|-tagged library, then add it
+        mapping = write_library_and_taxonomy(sources, db_dir)
+        result["n_sequences"] = len(mapping)
+        result["taxids"] = {acc: m["taxid"] for acc, m in mapping.items()}
+        steps.append(("add-to-library",
+                      ["kraken2-build", "--add-to-library",
+                       os.path.join(db_dir, "custom_library.fasta"), "--db", db_dir] + mask))
+    else:
+        # real-taxonomy custom, or spike-in: add each source FASTA as-is (its headers must
+        # carry real NCBI taxids, e.g. kraken:taxid|<taxid>, to map into the NCBI taxonomy).
+        for i, fa in enumerate(sources):
+            steps.append((f"add-to-library-{i}",
+                          ["kraken2-build", "--add-to-library", fa, "--db", db_dir] + mask))
+
+    build_cmd = ["kraken2-build", "--build", "--db", db_dir, "--threads", str(threads),
+                 "--kmer-len", str(kmer_len), "--minimizer-len", str(minimizer_len)]
+    if minimizer_spaces is not None:
+        build_cmd += ["--minimizer-spaces", str(minimizer_spaces)]
+    if max_db_size:
+        build_cmd += ["--max-db-size", str(max_db_size)]
+    steps.append(("build", build_cmd))
+    for L in lengths:
+        steps.append((f"bracken-build-{L}",
+                      ["bracken-build", "-d", db_dir, "-t", str(threads),
+                       "-k", str(kmer_len), "-l", str(L)]))
+
+    result["commands"] = {name: " ".join(cmd) for name, cmd in steps}
+    if threads != requested_threads:
+        result["note_threads"] = (
+            f"requested {requested_threads} threads but only {threads} CPU(s) are available; "
+            "clamped (bracken-build/kmer2read_distr aborts when threads exceed online CPUs)."
+        )
+    if not run or not _have("kraken2-build"):
+        result["ran"] = False
+        if not _have("kraken2-build"):
+            result["note"] = "kraken2-build not on PATH — commands not executed"
+        return result
+    result.update(_execute_steps(steps, db_dir))
+    return result
+
+
+def db_is_built(db_dir: str, read_lengths=()) -> bool:
+    """True iff a usable kraken2 DB (+ the requested Bracken distributions) already exists,
+    so the build step is idempotent and a re-run skips it."""
+    core = all(os.path.isfile(os.path.join(db_dir, f)) for f in ("hash.k2d", "opts.k2d", "taxo.k2d"))
+    brk = all(os.path.isfile(os.path.join(db_dir, f"database{L}mers.kmer_distrib"))
+              for L in read_lengths)
+    return core and brk
+
+
+def write_manifest(db_dir: str, result: Dict) -> str:
+    """Record DB provenance next to the index (`.metagx_db.json`) for `metagx report`."""
+    import json
+    from datetime import datetime, timezone
+    path = os.path.join(db_dir, ".metagx_db.json")
+    manifest = {k: result.get(k) for k in
+                ("strategy", "taxonomy", "libraries", "read_lengths", "threads", "commands")}
+    manifest["built_at"] = datetime.now(timezone.utc).isoformat()
+    manifest["kraken2_version"] = _probe_version("kraken2")
+    with open(path, "w") as fh:
+        json.dump(manifest, fh, indent=2)
+    return path
+
+
+def _probe_version(tool: str) -> str:
+    try:
+        out = subprocess.run([tool, "--version"], capture_output=True, text=True)
+        return (out.stdout or out.stderr or "").strip().splitlines()[0] if (out.stdout or out.stderr) else ""
+    except (OSError, IndexError):
+        return ""

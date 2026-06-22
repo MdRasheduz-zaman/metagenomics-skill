@@ -206,11 +206,16 @@ def check_database(db_paths: Optional[Dict[str, str]] = None) -> Check:
                      remedy="Get a usable kraken2/Bracken index with `metagx fetch-db --list` "
                             "then `metagx fetch-db <name> --dir <path>`.")
     kdb = db_paths.get("kraken2")
+    has_build = bool(db_paths.get("build"))
     if not kdb:
         return Check("database", _WARN, "Config has no db.kraken2 entry.",
                      remedy="Set db.kraken2 to a kraken2 index directory, or run `metagx fetch-db`.")
     info = report.db_info(kdb)
     if not info.get("present"):
+        if has_build:  # the DB doesn't exist yet, but db.build will produce it — not a failure
+            return Check("database", _INFO,
+                         f"kraken2 db {kdb} not present yet — will be built by db.build.",
+                         remedy="Run `metagx build-db` (or `metagx run`, which auto-builds it).")
         return Check("database", _FAIL, f"Configured kraken2 db not found: {kdb}",
                      remedy="Download one with `metagx fetch-db standard-8 --dir <path>` "
                             "or build a custom one with `metagx build-db`.")
@@ -219,6 +224,54 @@ def check_database(db_paths: Optional[Dict[str, str]] = None) -> Check:
                      remedy="Finish the build (`metagx build-db`) or re-download (`metagx fetch-db`).")
     size_gb = info.get("size_bytes", 0) / 1e9
     return Check("database", _OK, f"kraken2 db OK: {kdb} ({size_gb:.1f} GB).")
+
+
+def check_db_build(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
+    """When db.build is configured, surface the build tooling, the masking dependency, and
+    the air-gapped-HPC download caveat — so a user catches a no-internet compute node before
+    a multi-hour job, or tells us up front that their cluster is air-gapped."""
+    out: List[Check] = []
+    build = (db_paths or {}).get("build")
+    if not build:
+        return out
+    strategy = build.get("strategy", "standard")
+    taxonomy = build.get("taxonomy", "real")
+    needs_download = strategy in {"standard", "spike-in"} or taxonomy == "real"
+
+    for t in ("kraken2-build", "bracken-build"):
+        if shutil.which(t) is None:
+            out.append(Check(f"db-build:{t}", _FAIL, f"{t} not on PATH (needed to build the DB).",
+                             remedy="Install the core stack (kraken2 + bracken ship these): "
+                                    "`conda env create -f environment.yml`."))
+    if needs_download and not build.get("no_masking", False) and shutil.which("dustmasker") is None:
+        out.append(Check("db-build:masking", _WARN,
+                         "dustmasker (BLAST+) not on PATH — low-complexity masking will fail.",
+                         remedy="Install `blast`, or set db.build.no_masking: true (a few more "
+                                "false positives, no BLAST+ dependency)."))
+    if needs_download:
+        kind = "taxonomy + libraries" if strategy in {"standard", "spike-in"} else "taxonomy"
+        on = build.get("download_on", "rule")
+        out.append(Check(
+            "db-build:network", _INFO,
+            f"db.build downloads NCBI {kind} (download_on={on}, use_ftp={build.get('use_ftp', True)}). "
+            "HPC check: make sure the node that runs the build can reach the internet — many "
+            "clusters allow it from compute nodes, some need http_proxy/https_proxy set, a few "
+            "air-gap compute nodes (then set db.build.download_on: login, or pre-stage the DB "
+            "from a login/data-transfer node)."))
+        # NCBI deprecated rsync, so a from-scratch standard build now fetches every genome
+        # individually over FTP/wget — fine for small libraries (viral, UniVec_Core), but slow
+        # for large ones (bacteria alone is ~15k+ genomes / hours). Prefer the prebuilt index.
+        libs = {l.strip() for l in str(build.get("libraries") or "").split(",") if l.strip()}
+        big = libs - {"viral", "UniVec_Core", "plasmid"}
+        if strategy in {"standard", "spike-in"} and big:
+            out.append(Check(
+                "db-build:slow-download", _WARN,
+                f"building {sorted(big)} from NCBI is slow now — rsync is deprecated, so "
+                "kraken2-build fetches genomes one-by-one over FTP (bacteria/nt = hours).",
+                remedy="Prefer a prebuilt index: `metagx fetch-db --list` "
+                       "(standard-8 ~6GB, standard ~76GB) and set db.kraken2 to it; reserve "
+                       "db.build for custom/spike-in or small libraries (viral)."))
+    return out
 
 
 def run(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
@@ -233,6 +286,7 @@ def run(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
         checks.append(b)
     checks.append(check_conda_frontend())
     checks.append(check_database(db_paths))
+    checks += check_db_build(db_paths)
     return checks
 
 

@@ -296,6 +296,102 @@ def _any_provided_contigs(samples: Any) -> bool:
     return False
 
 
+# NCBI libraries that `kraken2-build --download-library` accepts.
+_KRAKEN2_LIBRARIES = {"bacteria", "viral", "archaea", "fungi", "protozoa", "human",
+                      "plasmid", "UniVec_Core", "nt"}
+# Map sample platform -> the Bracken read length the DB should carry (mirrors the
+# bracken registry `recommend:` table). Used to derive read_lengths: auto.
+_PLATFORM_READ_LENGTH = {"illumina": 150, "mgi": 150, "bgi": 150,
+                         "ont": 1000, "pacbio_hifi": 1000, "pacbio_clr": 1000}
+
+
+def _sheet_platforms(path: str) -> set:
+    """The set of platform labels declared in a sample-sheet TSV."""
+    if not (isinstance(path, str) and os.path.isfile(path)):
+        return set()
+    import csv
+    with open(path) as fh:
+        return {str(row.get("platform", "")).lower() for row in csv.DictReader(fh, delimiter="\t")}
+
+
+def _platform_read_lengths(samples: Any) -> List[int]:
+    """The sorted set of Bracken read lengths implied by the samples' platforms."""
+    if isinstance(samples, list):
+        plats = {str(r.get("platform", "")).lower() for r in samples}
+    else:
+        plats = _sheet_platforms(samples)
+    lengths = {_PLATFORM_READ_LENGTH.get(p, 150) for p in plats if p}
+    return sorted(lengths) or [150]
+
+
+def _validate_db_build(build: Dict[str, Any] | None, samples: Any) -> Dict[str, Any] | None:
+    """Validate a ``db.build`` block: how to construct the kraken2 + Bracken DB.
+
+    The registry (kraken2-build) validates the strategy/taxonomy/libraries/tuning params;
+    this enforces the cross-field invariants the per-param check can't (a source for
+    custom/spike-in, libraries for standard/spike-in, spike-in => real taxonomy,
+    minimizer<=kmer) and locks Bracken's ``-k`` to the kraken2 ``--kmer-len``. Read lengths
+    default to ``auto`` => derived from the sample sheet's platforms, so every length the run
+    classifies at has a matching ``databaseLmers.kmer_distrib``.
+    """
+    if not build:
+        return None
+    build = dict(build)
+    # orchestration keys consumed by the dbbuild script, not kraken2-build flags
+    source = build.pop("source", None)
+    read_lengths = build.pop("read_lengths", "auto")
+    auto = bool(build.pop("auto", True))
+    # NCBI deprecated rsync, so kraken2-build's default rsync downloads now fail; --use-ftp
+    # (wget) is the working path, hence the default. Override to False only on a host where
+    # rsync to NCBI still works and you want its speed.
+    use_ftp = bool(build.pop("use_ftp", True))
+    download_on = str(build.pop("download_on", "rule"))
+    if download_on not in {"rule", "login"}:
+        raise registry.ValidationError("db.build.download_on must be 'rule' or 'login'")
+
+    params = registry.validate("kraken2-build", build)  # strategy/taxonomy/libraries + tuning
+    strategy = params.get("strategy", "standard")
+    taxonomy = params.get("taxonomy", "real")
+
+    if strategy in {"custom-fasta", "custom-folder", "spike-in"} and not source:
+        raise registry.ValidationError(
+            f"db.build.strategy={strategy} needs db.build.source (a FASTA, or a folder of FASTAs)")
+    if strategy in {"standard", "spike-in"} and not params.get("libraries"):
+        raise registry.ValidationError(
+            f"db.build.strategy={strategy} needs db.build.libraries (e.g. 'viral' or 'bacteria,viral')")
+    if strategy == "spike-in" and taxonomy != "real":
+        raise registry.ValidationError(
+            "db.build.strategy=spike-in requires taxonomy: real — synthetic taxids cannot merge "
+            "into a standard library's taxonomy tree")
+    if params.get("libraries"):
+        bad = [l for l in (x.strip() for x in str(params["libraries"]).split(","))
+               if l and l not in _KRAKEN2_LIBRARIES]
+        if bad:
+            raise registry.ValidationError(
+                f"db.build.libraries has unknown NCBI libraries {bad}; choose from "
+                f"{sorted(_KRAKEN2_LIBRARIES)}")
+    kmer = int(params.get("kmer_len", 35))
+    if int(params.get("minimizer_len", 31)) > kmer:
+        raise registry.ValidationError("db.build.minimizer_len must be <= kmer_len")
+
+    if read_lengths == "auto":
+        read_lengths = _platform_read_lengths(samples)
+    elif isinstance(read_lengths, (list, tuple)) and all(isinstance(x, int) for x in read_lengths):
+        read_lengths = sorted(set(read_lengths))
+    else:
+        raise registry.ValidationError(
+            "db.build.read_lengths must be 'auto' or a list of integer read lengths")
+
+    out = dict(params)
+    # Materialize the resolved orchestration choices so the stored config is self-describing
+    # (registry.validate only returns keys the user passed; defaults live in the registry).
+    out.update(strategy=strategy, taxonomy=taxonomy,
+               source=source, read_lengths=read_lengths, auto=auto, download_on=download_on,
+               use_ftp=use_ftp,
+               bracken_kmer_len=kmer)  # Bracken -k is locked to the kraken2 --kmer-len
+    return out
+
+
 def build_config(
     *,
     project: str = "run",
@@ -390,8 +486,16 @@ def build_config(
     have_contigs = _any_provided_contigs(samples)
     assembly_ok = bool(mods.get("assembly") or have_contigs)
 
+    db = dict(db or {})
+    db_build = _validate_db_build(db.get("build"), samples)
+    # A configured db.build writes the DB to db.kraken2; default that path so the user need
+    # not repeat it. The DB need not exist yet — the build step produces it.
+    if db_build and not db.get("kraken2"):
+        db["kraken2"] = os.path.join(outdir, "dbs", str(db_build.get("strategy", "standard")))
+
     if mods.get("classify") and not db.get("kraken2"):
-        raise registry.ValidationError("classify is enabled but db.kraken2 is missing")
+        raise registry.ValidationError(
+            "classify is enabled but db.kraken2 is missing (set a path, or add a db.build block)")
     if mods.get("abundance") and not db.get("bracken", db.get("kraken2")):
         raise registry.ValidationError("abundance is enabled but no Bracken db is set")
     if mods.get("binning") and not assembly_ok:
@@ -535,6 +639,8 @@ def build_config(
                   "metaphlan", "kaiju", "antismash"):
         if db.get(extra):
             cfg["db"][extra] = db[extra]
+    if db_build:
+        cfg["db"]["build"] = db_build
     if probe_report:  # provenance: what the probe measured + any backfills/warnings it drove
         proj = probe_report.get("project", {})
         cfg["probe"] = {
@@ -577,13 +683,26 @@ def build_config(
         cfg["consensus"] = {"classifier": clf}
     # Per-platform Bracken read length (a routing hint, not a Bracken flag — kept top-level so
     # registry validation of the bracken section doesn't reject it). Per-sample sheet field wins.
+    brpp: Dict[str, int] = {}
+    # A db.build builds databaseLmers for exactly the lengths each platform implies, so the
+    # classify-time Bracken -r MUST match — backfill the per-platform map from the same source.
+    if db_build:
+        for rec in (cfg["samples"] if isinstance(cfg["samples"], list) else []):
+            p = str(rec.get("platform", "")).lower()
+            if p in _PLATFORM_READ_LENGTH:
+                brpp[p] = _PLATFORM_READ_LENGTH[p]
+        if isinstance(cfg["samples"], str):  # TSV: derive from the sheet's platforms
+            for p in _sheet_platforms(cfg["samples"]):
+                if p in _PLATFORM_READ_LENGTH:
+                    brpp[p] = _PLATFORM_READ_LENGTH[p]
     if bracken_read_length_by_platform:
         bad = [k for k in bracken_read_length_by_platform if k not in KNOWN_PLATFORMS]
         if bad:
             raise registry.ValidationError(
                 f"bracken_read_length_by_platform: unknown platform(s) {bad}")
-        cfg["bracken_read_length_by_platform"] = {
-            k: int(v) for k, v in bracken_read_length_by_platform.items()}
+        brpp.update({k: int(v) for k, v in bracken_read_length_by_platform.items()})  # user wins
+    if brpp:
+        cfg["bracken_read_length_by_platform"] = brpp
     if preset:
         cfg["preset"] = preset
     sweep_clean = _validate_sweep(sweep, cleaned_sections.get("kraken2", {}))
