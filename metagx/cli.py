@@ -45,6 +45,7 @@ from . import (
     schedulers,
     sync_help,
     tool_advisor,
+    toollock,
     wiring,
 )
 
@@ -87,6 +88,27 @@ def cmd_probe(args) -> int:
 
 def cmd_presets(args) -> int:
     _print_json(presets.describe_presets())
+    return 0
+
+
+def cmd_lock(args) -> int:
+    """Lock tool versions + accepted flags, or verify the current env against a lock."""
+    if args.verify:
+        with open(args.verify) as fh:
+            locked = json.load(fh)
+        current = toollock.snapshot()
+        drift = toollock.diff_lock(locked, current)
+        _print_json({"ok": not any(d["severity"] == "error" for d in drift), "drift": drift})
+        return 0 if not any(d["severity"] == "error" for d in drift) else 1
+    snap = toollock.snapshot()
+    snap["metadata"] = {"platform": sys.platform}
+    if args.out:
+        with open(args.out, "w") as fh:
+            json.dump(snap, fh, indent=2)
+        print(f"wrote {args.out} ({sum(1 for t in snap['tools'].values() if t['installed'])} "
+              f"tools installed of {len(snap['tools'])})")
+    else:
+        _print_json(snap)
     return 0
 
 
@@ -463,6 +485,13 @@ def build_parser() -> argparse.ArgumentParser:
                                        "advisor/report/MCP/docs in sync); exit 1 on gaps")
     sp.add_argument("--verbose", action="store_true", help="also print the parts inventory")
     sp.set_defaults(func=cmd_wiring)
+
+    sp = sub.add_parser("lock", help="snapshot tool versions + accepted --help flags to a "
+                                     "lockfile, or --verify the current env against one")
+    sp.add_argument("--out", default=None, help="write the lock JSON here (default: print)")
+    sp.add_argument("--verify", default=None, help="a lockfile to check the current env against "
+                                                   "(exit 1 on version/flag drift)")
+    sp.set_defaults(func=cmd_lock)
 
     sub.add_parser("presets", help="list workflow presets with descriptions").set_defaults(func=cmd_presets)
 

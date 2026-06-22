@@ -348,6 +348,21 @@ def check_module_dbs(cfg: Optional[Dict] = None) -> List[Check]:
     return out
 
 
+def check_config_flags(cfg: Optional[Dict] = None) -> List[Check]:
+    """Validate that flags a config sets actually exist in the *installed* tool versions —
+    catching a renamed/removed flag (or wrong tool version) before the run, not mid-pipeline.
+    Only fires for tools on PATH whose --help parses; otherwise stays silent."""
+    out: List[Check] = []
+    if not cfg:
+        return out
+    from . import toollock
+    for f in toollock.config_flag_check(cfg):
+        out.append(Check(f"toolflag:{f['tool']}", _FAIL, f["message"],
+                         remedy=f"check the installed {f['tool']} version, pin it (see "
+                                f"`metagx lock`), or move the flag to {f['tool']}.extra_args."))
+    return out
+
+
 def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -> List[Check]:
     """Run every preflight check and return the results in display order."""
     checks: List[Check] = []
@@ -362,6 +377,7 @@ def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -
     checks.append(check_database(db_paths))
     checks += check_db_build(db_paths)
     checks += check_module_dbs(cfg)
+    checks += check_config_flags(cfg)
     return checks
 
 

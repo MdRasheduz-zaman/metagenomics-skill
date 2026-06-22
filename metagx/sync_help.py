@@ -12,40 +12,50 @@ from . import registry
 FLAG_RE = re.compile(r"^\s+(-{1,2}[\w-]+)(?:[,\s]+(-{1,2}[\w-]+))?\s+(.*)$")
 
 
-def capture_help(command: str, timeout: int = 30) -> Dict[str, Any]:
-    """Run ``command --help`` and ``command --version`` when available."""
+def _run(argv: List[str], timeout: int) -> str:
+    try:
+        proc = subprocess.run(argv, capture_output=True, text=True, timeout=timeout)
+        return proc.stdout or proc.stderr or ""
+    except (subprocess.TimeoutExpired, OSError):
+        return ""
+
+
+def capture_help(command: str, timeout: int = 30,
+                 version_cmd: Optional[str] = None) -> Dict[str, Any]:
+    """Run a tool's help + version, robust to non-uniform CLIs.
+
+    Tools differ: some use ``--help``/``--version`` (GNU style), others single-dash
+    ``-help``/``-version`` (BLAST+), or print usage only on bare invocation / ``-h``. We try
+    ``--help`` first, then fall back to ``-help`` / ``-h`` / bare when no flags parse, so a
+    single-dash tool's arguments are still captured. ``version_cmd`` (e.g. the registry's
+    ``version_probe`` like ``blastn -version``) overrides the default ``--version`` probe.
+    """
     exe = command.split()[0]
     if not shutil.which(exe):
         return {"command": command, "ok": False, "error": f"{exe} not found on PATH"}
-    try:
-        proc = subprocess.run(
-            [exe, "--help"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-        help_text = proc.stdout or proc.stderr or ""
-    except (subprocess.TimeoutExpired, OSError) as e:
-        return {"command": command, "ok": False, "error": str(e)}
+
+    help_text, flags = "", []
+    for help_args in (["--help"], ["-help"], ["-h"], []):
+        text = _run([exe] + help_args, timeout)
+        parsed = parse_help_flags(text)
+        if parsed:
+            help_text, flags = text, parsed
+            break
+        if text and not help_text:
+            help_text = text  # keep something to report even if no flags parsed
 
     version = None
-    try:
-        vproc = subprocess.run(
-            [exe, "--version"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
-        version = (vproc.stdout or vproc.stderr or "").strip().split("\n")[0]
-    except (subprocess.TimeoutExpired, OSError):
-        version = None
+    vargs = version_cmd.split()[1:] if version_cmd else ["--version"]
+    vtext = _run([exe] + vargs, 10)
+    if vtext:
+        version = vtext.strip().split("\n")[0]
 
     return {
         "command": command,
         "ok": True,
         "version": version,
         "help_text": help_text,
-        "flags": parse_help_flags(help_text),
+        "flags": flags,
     }
 
 

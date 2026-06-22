@@ -31,5 +31,5 @@ def build_catalog() -> Dict[str, Any]:
         "schedulers": schedulers.list_schedulers(),
         "planned_modules": [],
         "advisor_commands": ["plan", "recommend", "advise", "history", "sync-help",
-                             "scaffold", "catalog", "schedulers"],
+                             "scaffold", "catalog", "schedulers", "wiring", "lock"],
     }
