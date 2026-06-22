@@ -63,7 +63,20 @@ def viral_db(tmp_path_factory):
     db_dir = tmp_path_factory.mktemp("viral_db")
     res = dbbuild.build_db(str(FIXTURE_GENOMES), str(db_dir),
                            read_length=[150, 1000], threads=4, run=True)
-    assert res.get("ok"), f"DB build failed: {res}"
+    if not res.get("ok"):
+        # Surface the actual tool output untruncated — a bare `{res}` gets abbreviated by
+        # pytest's repr (the `...`), which has hidden the real cause across CI rounds.
+        step = res.get("failed_step")
+        log = (res.get("logs") or {}).get(step, {})
+        retry = log.get("retry_threads1")
+        raise AssertionError(
+            "DB build failed.\n"
+            f"  failed_step : {step}\n"
+            f"  note        : {res.get('note')}\n"
+            f"  returncode  : {log.get('returncode')}\n"
+            f"  tail        : {log.get('tail')}\n"
+            f"  retry(-t1)  : {retry}"
+        )
     return db_dir
 
 # The assembly→map→bin→reconcile path needs the long-read assembler + mapping stack.

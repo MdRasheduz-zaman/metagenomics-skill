@@ -336,7 +336,11 @@ def build_db(
             if name == "build" and "--threads" in cmd:
                 retry_cmd = list(cmd)
                 retry_cmd[retry_cmd.index("--threads") + 1] = "1"
-                rp = subprocess.run(retry_cmd, capture_output=True, text=True)
+                # --threads 1 caps build_db's own threads, but its libgomp regions can still
+                # spawn the racing reader; force OMP_NUM_THREADS=1 in the env too so the
+                # `cat | build_db` pipe is genuinely serial.
+                retry_env = {**os.environ, "OMP_NUM_THREADS": "1"}
+                rp = subprocess.run(retry_cmd, capture_output=True, text=True, env=retry_env)
                 logs[name]["retry_threads1"] = {
                     "returncode": rp.returncode,
                     "tail": ((rp.stdout or "") + (rp.stderr or ""))[-1500:],

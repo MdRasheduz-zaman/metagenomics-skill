@@ -321,9 +321,31 @@ artifact short-circuits a code path. **Action:** add a CI-only env flag (e.g.
 `METAGX_FORCE_DB_BUILD=1`) the fixture honors to *always* build from the committed fixture even
 when a prebuilt DB is present, so the build path has coverage on every CI run by construction.
 
+### 6.7 ROUND 3 — the round-2 fix did not turn CI green, and the log was blind
+The single-threaded retry shipped; CI failed again, **identically**. But this round exposed a
+second discipline failure: **the e2e log was uninformative.** The fixture asserted
+`f"DB build failed: {res}"`, and pytest's repr abbreviates the large `res` dict with `...`,
+so `failed_step`, `logs`, the build's stderr, and *whether the retry even ran* were all hidden.
+Three rounds of guessing partly because the test threw away the evidence.
+
+**Round-3 actions:**
+- **Observability first (`tests/test_pipeline_e2e.py`):** on build failure the fixture now
+  raises with the *untruncated* `failed_step` + returncode + tool `tail` + the `retry_threads1`
+  result. The next CI log will finally show what `kraken2-build` actually printed and whether
+  the retry path executed — so the next fix is evidence-driven, not another guess.
+- **Strengthened retry (`metagx/dbbuild.py`):** the single-threaded retry now also forces
+  `OMP_NUM_THREADS=1` in the subprocess env (—threads 1 caps build_db's own threads but its
+  libgomp regions could still spawn the racing reader).
+
+**Honest status:** this push may *still* be red. That is acceptable this round only because its
+purpose is to make the failure legible. **Do not attempt a fourth blind fix — read the new log
+first.** If the retry ran and still produced no DB, escalate straight to §6.4 (bypass the
+`kraken2-build` wrapper; call `build_db` directly) rather than adding a fourth heuristic.
+
 ### 6.6 Tracked checklist (round 2)
-- [ ] **P0** Get CI e2e **actually green** — the only acceptance criterion. (fix applied +
-      reproduced locally via OMP cap; awaiting a green run. Confirm `retry_threads1` in the log.)
+- [ ] **P0** Get CI e2e **actually green** — the only acceptance criterion. (round-2 retry +
+      round-3 observability/`OMP_NUM_THREADS=1` applied; still awaiting a green run. **Next step
+      is to READ the now-untruncated build log, not to guess again.**)
 - [ ] **P1** Re-audit every §5 `[x]` against "is there a green Linux CI job proving it?"; demote
       the unproven ones to `[ ]`. (§6.2)
 - [ ] **P1** `make repro-ci` / pytest marker: run the fixture DB build under `OMP_NUM_THREADS=2`
