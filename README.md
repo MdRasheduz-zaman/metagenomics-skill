@@ -329,6 +329,8 @@ and whether a database is present) and prints the exact remedy for anything wron
 
 ```bash
 metagx doctor                 # preflight: arch/tool/DB hazards + remedies (run this first)
+metagx plan                   # intent-first opener: hint of what to mention in your goal
+metagx plan --preset gut-profiling   # a goal -> modules + the DB checklist to ask up front
 metagx tools                  # list pipeline steps
 metagx presets                # list workflow presets (pick a starting point)
 metagx interview kraken2      # questions an LLM should ask (JSON)
