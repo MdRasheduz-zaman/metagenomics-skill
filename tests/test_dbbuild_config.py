@@ -212,3 +212,14 @@ def test_db_build_auto_false_skips_autobuild_dependency():
                                  modules={"classify": True})
     assert cfg_auto["db"]["build"]["auto"] is True
     assert cfg_manual["db"]["build"]["auto"] is False
+
+
+def test_doctor_warns_blast_cost_for_big_standard_library():
+    # db.build.blast on a big standard library => makeblastdb is heavy; doctor should warn.
+    checks = doctor.check_db_build({"kraken2": "x", "build": {
+        "strategy": "standard", "taxonomy": "real", "libraries": "bacteria", "blast": True}})
+    assert any(c.name == "db-build:blast-cost" and c.status == "warn" for c in checks)
+    # ...but NOT for a small viral library
+    small = doctor.check_db_build({"kraken2": "x", "build": {
+        "strategy": "standard", "taxonomy": "real", "libraries": "viral", "blast": True}})
+    assert not any(c.name == "db-build:blast-cost" for c in small)

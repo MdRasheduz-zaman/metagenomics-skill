@@ -112,6 +112,22 @@ def cmd_lock(args) -> int:
     return 0
 
 
+def cmd_env_file(args) -> int:
+    """Print (or --write) the bundled environment.yml — so a wheel-only user can create the env."""
+    path = runner.environment_file_path()
+    if not path:
+        print("bundled environment.yml not found in this install", file=sys.stderr)
+        return 1
+    if args.write:
+        import shutil as _sh
+        dest = os.path.join(os.getcwd(), "environment.yml")
+        _sh.copyfile(path, dest)
+        print(f"wrote {dest}\nNow: conda env create -f environment.yml  (or mamba), then activate it.")
+    else:
+        print(path)
+    return 0
+
+
 def cmd_wiring(args) -> int:
     """Cross-part wiring audit: catch a tool/module wired into some parts but not others."""
     rep = wiring.audit()
@@ -491,6 +507,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--context-only", action="store_true",
                     help="print just the context dict (for piping into `interview --probe`)")
     sp.set_defaults(func=cmd_probe)
+
+    sp = sub.add_parser("env-file", help="print (or --write) the bundled environment.yml for the "
+                                         "core conda env (handy on a wheel-only install)")
+    sp.add_argument("--write", action="store_true", help="copy it into the current directory")
+    sp.set_defaults(func=cmd_env_file)
 
     sp = sub.add_parser("wiring", help="cross-part wiring audit (registry/config/Snakefile/doctor/"
                                        "advisor/report/MCP/docs in sync); exit 1 on gaps")

@@ -135,8 +135,9 @@ def check_tools(floors: Optional[Dict[str, tuple]] = None,
             if is_core:
                 checks.append(Check(
                     f"tool:{tool}", _FAIL, f"{tool} (core) not on PATH.",
-                    remedy="Install the core stack: `conda env create -f environment.yml` "
-                           "(or `mamba env create -f environment.yml`), then activate it."))
+                    remedy="Install the core stack: get the spec with `metagx env-file --write` "
+                           "(a wheel install has no environment.yml in your cwd), then "
+                           "`conda env create -f environment.yml` (or `mamba`), and activate it."))
             else:
                 checks.append(Check(
                     f"tool:{tool}", _INFO,
@@ -316,6 +317,20 @@ def check_db_build(db_paths: Optional[Dict[str, str]] = None) -> List[Check]:
                 remedy="Prefer a prebuilt index: `metagx fetch-db --list` "
                        "(standard-8 ~6GB, standard ~76GB) and set db.kraken2 to it; reserve "
                        "db.build for custom/spike-in or small libraries (viral)."))
+    # The aligned BLAST DB (db.build.blast) runs makeblastdb on the SAME genomes; for a big
+    # standard library that's a large, slow build + a large second on-disk DB. Flag it so the
+    # user sizes for it (the validation reference can be huge — e.g. a full standard library).
+    if build.get("blast"):
+        libs = {l.strip() for l in str(build.get("libraries") or "").split(",") if l.strip()}
+        big = libs - {"viral", "UniVec_Core", "plasmid"}
+        if strategy in {"standard", "spike-in"} and big:
+            out.append(Check(
+                "db-build:blast-cost", _WARN,
+                f"db.build.blast will makeblastdb the {sorted(big)} library too — a large, slow "
+                "build and a second multi-GB on-disk DB alongside the kraken2 index.",
+                remedy="Fine for custom/small/viral DBs. For a big standard library, either accept "
+                       "the cost (size your disk), or validate a representative subset, or use "
+                       "validate.remote for a handful of sequences."))
     return out
 
 

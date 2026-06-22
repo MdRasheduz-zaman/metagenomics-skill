@@ -89,6 +89,24 @@ def workflow_path() -> str:
     )
 
 
+def environment_file_path() -> Optional[str]:
+    """Absolute path to the bundled ``environment.yml`` (the core conda env spec), or None.
+
+    Same resolution as ``workflow_path``: repo-sibling (editable/clone) then packaged
+    (``metagx/environment.yml`` in a wheel). A wheel-only end user has no ``environment.yml``
+    in their cwd, so doctor's "conda env create -f environment.yml" remedy would otherwise point
+    at a file they don't have — ``metagx env-file`` surfaces/copies the packaged one.
+    """
+    pkg_dir = os.path.dirname(os.path.abspath(__file__))
+    for candidate in (
+        os.path.join(os.path.dirname(pkg_dir), "environment.yml"),  # repo sibling (editable)
+        os.path.join(pkg_dir, "environment.yml"),                   # packaged in the wheel
+    ):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
 def run(
     config: str = "config.yaml",
     cores: str | int = "all",

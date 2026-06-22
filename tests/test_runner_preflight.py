@@ -3,6 +3,7 @@
 Snakemake 8+ refuses an older conda; the runner now prefers mamba and, on conda, fails fast
 with an actionable message instead of a cryptic Snakemake traceback.
 """
+import os
 import sys
 
 from metagx import runner
@@ -97,3 +98,10 @@ def test_snakemake_runs_under_this_interpreter(monkeypatch, tmp_path):
     assert cmd[:3] == [sys.executable, "-m", "snakemake"], cmd
     # never invoke a bare PATH-resolved snakemake
     assert cmd[0] != "snakemake"
+
+
+def test_environment_file_path_resolves_in_repo():
+    # in the source checkout, the bundled env spec is the repo-root environment.yml
+    from metagx import runner
+    p = runner.environment_file_path()
+    assert p and p.endswith("environment.yml") and os.path.isfile(p)
