@@ -113,22 +113,18 @@ CITATIONS: Dict[str, str] = {
            "16S rRNA Oxford Nanopore sequencing data. Nature Methods. 2022;19:845-853.",
     "cutadapt": "Martin M. Cutadapt removes adapter sequences from high-throughput "
                 "sequencing reads. EMBnet.journal. 2011;17(1):10-12.",
+    "blastn": "Camacho C, et al. BLAST+: architecture and applications. BMC Bioinformatics. "
+              "2009;10:421.",
+    "mafft": "Katoh K, Standley DM. MAFFT multiple sequence alignment software version 7. "
+             "Molecular Biology and Evolution. 2013;30(4):772-780.",
+    "iqtree": "Minh BQ, et al. IQ-TREE 2: new models and efficient methods for phylogenetic "
+              "inference in the genomic era. Molecular Biology and Evolution. 2020;37(5):1530-1534.",
+    "fasttree": "Price MN, Dehal PS, Arkin AP. FastTree 2 — approximately maximum-likelihood "
+                "trees for large alignments. PLoS ONE. 2010;5(3):e9490.",
 }
 
-MODULE_TOOLS = {
-    "qc": ["fastp"],
-    "classify": ["kraken2"],
-    "classify_consensus": ["metaphlan", "kaiju"],
-    "abundance": ["bracken"],
-    "assembly": ["megahit"],
-    "binning": ["minimap2", "samtools", "metabat2"],
-    "bin_refinement": ["maxbin2", "concoct", "das_tool", "drep"],
-    "functional": ["humann", "metaphlan", "amrfinderplus", "abricate", "bakta", "eggnog"],
-    "aggregate": ["multiqc", "krona"],
-    "damage": ["mapdamage"],
-    "strain": ["instrain"],
-    "bgc": ["antismash"],
-}
+# (module->tools lives in tool_advisor.MODULE_TOOLS; the version-capture path here is the
+# routing-aware active_tools(); a stale duplicate map was dead code and removed — see wiring.py)
 
 
 # --------------------------------------------------------------------------- #
@@ -211,6 +207,14 @@ def active_tools(cfg: Dict[str, Any]) -> List[str]:
         tools.append("mapdamage")
     if mods.get("bgc") and mods.get("assembly"):
         tools.append("antismash")
+    if mods.get("phylogenetics"):
+        method = str(cfg.get("phylogenetics", {}).get("method", "iqtree")).lower()
+        tools.append("mafft")
+        tools += (["fasttree"] if method == "fasttree" else
+                  ["iqtree"] if method == "iqtree" else ["iqtree", "fasttree"])
+    if mods.get("validate"):
+        tools.append("blastn")   # version capture matters: validation is only as good as the
+        #                          blastn version + DB it ran against (record both in provenance)
     # amplicon branch is data-driven (per-sample library=amplicon), not a module toggle
     amp = [r for r in _records(cfg) if str(r.get("library", "wgs")).lower() == "amplicon"]
     if amp:

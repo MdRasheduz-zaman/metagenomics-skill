@@ -28,6 +28,7 @@ MODULE_TOOLS: Dict[str, List[str]] = {
     "aggregate": ["multiqc", "krona"],
     "functional": ["humann", "amrfinderplus", "abricate", "bakta", "eggnog"],
     "filtered_assembly": ["megahit", "flye"],
+    "validate": ["blastn"],
 }
 
 SHORT_PLATFORMS = {"illumina", "mgi", "bgi"}

@@ -45,6 +45,7 @@ from . import (
     schedulers,
     sync_help,
     tool_advisor,
+    wiring,
 )
 
 
@@ -87,6 +88,13 @@ def cmd_probe(args) -> int:
 def cmd_presets(args) -> int:
     _print_json(presets.describe_presets())
     return 0
+
+
+def cmd_wiring(args) -> int:
+    """Cross-part wiring audit: catch a tool/module wired into some parts but not others."""
+    rep = wiring.audit()
+    _print_json(rep if args.verbose else {"ok": rep["ok"], "gaps": rep["gaps"]})
+    return 0 if rep["ok"] else 1
 
 
 def cmd_plan(args) -> int:
@@ -450,6 +458,11 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--context-only", action="store_true",
                     help="print just the context dict (for piping into `interview --probe`)")
     sp.set_defaults(func=cmd_probe)
+
+    sp = sub.add_parser("wiring", help="cross-part wiring audit (registry/config/Snakefile/doctor/"
+                                       "advisor/report/MCP/docs in sync); exit 1 on gaps")
+    sp.add_argument("--verbose", action="store_true", help="also print the parts inventory")
+    sp.set_defaults(func=cmd_wiring)
 
     sub.add_parser("presets", help="list workflow presets with descriptions").set_defaults(func=cmd_presets)
 

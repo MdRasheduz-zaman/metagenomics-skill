@@ -227,6 +227,11 @@ def build_config(
     antismash: Optional[Dict[str, Any]] = None,
     dada2: Optional[Dict[str, Any]] = None,
     differential: Optional[Dict[str, Any]] = None,
+    # phylogenetics (modules.phylogenetics)
+    phylogenetics: Optional[Dict[str, Any]] = None,
+    mafft: Optional[Dict[str, Any]] = None,
+    iqtree: Optional[Dict[str, Any]] = None,
+    fasttree: Optional[Dict[str, Any]] = None,
     # BLAST validation of classifier calls (modules.validate)
     validate: Optional[Dict[str, Any]] = None,
     blastn: Optional[Dict[str, Any]] = None,
@@ -267,6 +272,7 @@ def build_config(
             metaphlan=metaphlan, kaiju=kaiju, multiqc=multiqc, krona=krona,
             mapdamage=mapdamage, instrain=instrain,
             antismash=antismash, dada2=dada2, differential=differential,
+            phylogenetics=phylogenetics, mafft=mafft, iqtree=iqtree, fasttree=fasttree,
             validate=validate, blastn=blastn,
             bracken_read_length_by_platform=bracken_read_length_by_platform,
         )

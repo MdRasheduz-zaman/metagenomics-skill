@@ -14,20 +14,15 @@ import yaml
 
 from . import presets, registry
 
-MODULE_TOOLS = {
-    "qc": "fastp",
-    "classify": "kraken2",
-    "abundance": "bracken",
-    "assembly": "megahit",
-    "binning": "metabat2",
-    "bin_refinement": "das_tool",
-    "classify_consensus": "metaphlan",
-    "functional": "humann",
-    "aggregate": "multiqc",
-    "damage": "mapdamage",
-    "strain": "instrain",
-    "bgc": "antismash",
-}
+# (the canonical module->tools map lives in tool_advisor.MODULE_TOOLS; a stale duplicate here
+# and in report.py was dead code and was removed to avoid drift — see metagx/wiring.py)
+
+# Optional `db.<key>` paths accepted beyond the always-present kraken2/bracken. Each is a
+# per-tool module/validation DB; keep in sync with dbprovision.SPECS (the wiring audit checks
+# this) — "cat" is the only one with no provisioner (built via the custom CAT helper).
+DB_EXTRA_KEYS = ("cat", "genomad", "checkv", "gtdbtk", "checkm2", "eukcc", "emu",
+                 "humann_nucleotide", "humann_protein", "amrfinderplus", "bakta", "eggnog",
+                 "metaphlan", "kaiju", "antismash", "blast")
 
 DEFAULT_MODULES = {
     "qc": True,
@@ -672,9 +667,7 @@ def build_config(
         "db": {"kraken2": db.get("kraken2"), "bracken": db.get("bracken", db.get("kraken2"))},
         "modules": mods,
     }
-    for extra in ("cat", "genomad", "checkv", "gtdbtk", "checkm2", "eukcc", "emu",
-                  "humann_nucleotide", "humann_protein", "amrfinderplus", "bakta", "eggnog",
-                  "metaphlan", "kaiju", "antismash", "blast"):
+    for extra in DB_EXTRA_KEYS:
         if db.get(extra):
             cfg["db"][extra] = db[extra]
     if db_build:
