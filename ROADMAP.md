@@ -123,3 +123,12 @@ caught real bugs that dry-run cannot:
 `metagx run --executor {local,slurm,lsf,sge,pbs,generic}` via bundled `workflow/profiles/`,
 one registry in `metagx/schedulers.py`, exposed on CLI + MCP + HTTP. slurm/lsf use native
 Snakemake plugins; sge/pbs/generic use cluster-generic with site-editable submit commands.
+
+## Open / next pass
+
+- **In-scope BLAST validation from a *standard/prebuilt* kraken2 index.** `validate.build_from`
+  already builds the BLAST DB from the classifier's genomes for `db.build` custom-fasta/folder/
+  spike-in (and any user FASTA). For a *standard* build or a `fetch-db` prebuilt index, auto-derive
+  the in-scope BLAST DB from the index's `library/*/library.fna` (when retained). Until then, point
+  `validate.build_from` at the genome FASTA(s) you classified against. See
+  `docs/ARCHITECTURE-WIRING.md` Part 2.
