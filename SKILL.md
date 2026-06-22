@@ -30,7 +30,11 @@ their platform — it changes the tools (see below).
 Do **not** guess kraken2 flags. Drive the interview from the registries.
 
 0. **Open with the research question (intent-first funnel).** Before anything else, ask the
-   user in plain words: *"What are you trying to do?"* Their answer (e.g. "profile what's in my
+   user in plain words: *"What are you trying to do?"* Run bare **`metagx plan`** (no args)
+   first — it returns an `intake` hint listing what to nudge the user to mention (goal,
+   sequencing platform, #samples & groups, DBs they have/need, where to run, run scope), with
+   examples pulled from the real registries. Surface those as a short grey-text hint under the
+   question so the user answers in one go. Their answer (e.g. "profile what's in my
    gut samples", "detect a pathogen in a clinical swab", "authenticate ancient DNA", "survey
    AMR genes", "recover MAGs from soil") is what routes the rest of the interview — classify it
    into a **preset** (`metagx presets` lists each with `when_to_use`) and/or an explicit module

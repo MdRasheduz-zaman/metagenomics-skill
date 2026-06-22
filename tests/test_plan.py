@@ -80,3 +80,35 @@ def test_self_gating_db_is_noted():
 def test_unknown_preset_raises_keyerror():
     with pytest.raises(KeyError):
         plan.plan(preset="does-not-exist")
+
+
+# --- intake hints (the grey-text opener) -------------------------------------------------
+def test_intake_prompt_covers_the_routing_dimensions():
+    ik = plan.intake_prompt()
+    assert ik["prompt"] and ik["example"]
+    fields = {f["field"] for f in ik["include"]}
+    # the dimensions that actually route the funnel must all be hinted
+    assert any("platform" in f for f in fields)
+    assert any("database" in f for f in fields)
+    assert any("where to run" in f for f in fields)
+    assert any("run scope" in f for f in fields)
+    assert any("sample" in f for f in fields)
+    assert any("goal" in f or "research" in f for f in fields)
+
+
+def test_intake_examples_pulled_from_real_registries():
+    from metagx import config_builder, presets, schedulers
+    ik = {f["field"]: f for f in plan.intake_prompt()["include"]}
+    goal = next(f for k, f in ik.items() if "goal" in k or "research" in k)
+    assert set(goal["examples"]) == set(presets.list_presets())
+    run = next(f for k, f in ik.items() if "where to run" in k)
+    assert run["examples"] == schedulers.list_schedulers()
+    platform = next(f for k, f in ik.items() if "platform" in k)
+    assert set(platform["config_values"]) == config_builder.KNOWN_PLATFORMS
+
+
+def test_plan_includes_intake_only_in_opening_state():
+    # no goal yet -> show the hint; goal resolved -> focus on the DB checklist
+    assert "intake" in plan.plan()
+    assert "intake" not in plan.plan(preset="gut-profiling")
+    assert "intake" not in plan.plan(modules={"classify": True})

@@ -24,7 +24,46 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
-from . import dbprovision, presets
+from . import dbprovision, presets, schedulers
+
+
+def intake_prompt() -> Dict[str, Any]:
+    """The grey-text *hint* for the opening "what are you trying to do?" question.
+
+    Like a placeholder under a search box: it nudges the user to mention the few things that
+    actually *route* the funnel, so the LLM can plan in one turn instead of a dozen round-trips.
+    Every dimension is tied to where it lands in the design (and the example lists are pulled
+    from the real registries — presets, platforms, schedulers — not hardcoded prose), so this
+    can't drift from what the pipeline actually supports.
+    """
+    from .config_builder import KNOWN_PLATFORMS  # local import: avoid import cost at module load
+    return {
+        "prompt": "Describe your research question in plain words. It helps to mention:",
+        "include": [
+            {"field": "goal / research question", "routes": "preset + which modules run",
+             "examples": [p["name"] for p in presets.describe_presets()]},
+            {"field": "sequencing platform", "routes": "QC tool + assembler dispatch",
+             # friendly labels; canonical sample-sheet values are in config_builder.KNOWN_PLATFORMS
+             "examples": ["ONT", "Illumina", "PacBio HiFi", "PacBio CLR", "MGI/BGI",
+                          "amplicon (16S/ITS)"],
+             "config_values": sorted(KNOWN_PLATFORMS)},
+            {"field": "number of samples & groups", "routes": "cross-sample comparison + "
+             "differential abundance (needs >=2 groups)",
+             "examples": ["12 samples", "treated vs control", "single sample"]},
+            {"field": "databases you have or need", "routes": "db.<tool> path vs "
+             "db.provision / db.build (I'll ask per-DB)",
+             "examples": ["have a kraken2 DB at /path", "need a viral DB", "build from my genomes"]},
+            {"field": "where to run", "routes": "executor / scheduler",
+             "examples": schedulers.list_schedulers()},
+            {"field": "run scope", "routes": "emit config.yaml + Snakemake to run yourself "
+             "(BYOK handoff) vs run it end-to-end here",
+             "examples": ["just generate the config + Snakemake", "run it for me"]},
+        ],
+        "example": ("e.g. \"12 paired-end Illumina gut samples in two groups (treated vs "
+                    "control) — species profiling + differential abundance; I don't have a "
+                    "kraken2 DB; just generate the config + Snakemake to run on our SLURM "
+                    "cluster.\""),
+    }
 
 # Modules that consume the kraken2 + Bracken classifier DB (the db.build / fetch-db layer).
 _CLASSIFIER_MODULES = ("classify", "abundance")
@@ -148,7 +187,7 @@ def plan(
 
     questions = [_question_for(e) for e in databases if not e["resolved"]]
 
-    return {
+    result: Dict[str, Any] = {
         "preset": preset,
         "summary": summary,
         "modules": mods,
@@ -157,3 +196,8 @@ def plan(
         "databases": databases,
         "questions": questions,
     }
+    # Opening state (no goal resolved yet): include the intake hint so the LLM can ask a
+    # well-framed "what are you trying to do?" with the prompts that route the funnel.
+    if not mods:
+        result["intake"] = intake_prompt()
+    return result
