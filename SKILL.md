@@ -173,17 +173,20 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   `results/<project>/validation/<sample>.blast_validation.{json,tsv}`. `metagx doctor --config`
   fails fast if `validate` is on with no reference at all.
   - **Keep the reference IN SCOPE with the classifier (important).** Metagenomics is only as
-    good as the DB curation: if your kraken2/Bracken DB holds only viruses+bacteria, validating
-    its calls against *full NCBI nt* is a **different benchmark** — a read can BLAST-match an
-    organism the classifier never had a chance to call, producing false "disagreements". So
-    build the BLAST DB from the **same genomes** that built the classifier DB. Set
-    `validate.build_from` to that FASTA/folder (or the literal `classifier` to reuse the
-    `db.build` source for `custom-fasta`/`custom-folder`/`spike-in` builds) and the pipeline runs
-    `makeblastdb` on it first (no separate `db.blast` needed). Or do it by hand:
-    `metagx build-blast-db --from <same_genomes.fasta> --out <dir>/insync` then set `db.blast`.
-    Use `db.blast: nt` / `validate.remote` only when you deliberately want to test against a
-    broader reference. (Auto-deriving the in-scope DB from a *standard/prebuilt* kraken2 index's
-    `library/` FASTAs is a future pass; for now point `build_from` at the genomes you used.)
+    good as DB curation: if your kraken2/Bracken DB holds only viruses+bacteria, validating its
+    calls against *full NCBI nt* is a **different benchmark** — a read can BLAST-match an organism
+    the classifier never had a chance to call, producing false "disagreements". kraken2 and blastn
+    are separate tools with incompatible formats (the `.k2d` hash is **not** BLASTable), so they
+    are kept in sync by sharing the **same source genomes + the same taxids**:
+    `validate.build_from: classifier` resolves the genomes, `seqid2taxid.map`, and `names.dmp`
+    from the kraken2 DB dir (`db.kraken2`), runs `makeblastdb` with kraken2's (normalized) taxid
+    map so BLAST subjects carry kraken2's **exact** taxids, and scores agreement through kraken2's
+    *own* `names.dmp` — no NCBI taxdb needed, no `db.blast`. **Caveat:** this needs the genomes on
+    disk; a **prebuilt `fetch-db` index or a `kraken2-build --clean`'d DB ships only the `.k2d`
+    hash**, so there `build_from: classifier` fails fast — instead give `validate.build_from:
+    <the genome FASTA(s) you used>` (or `metagx build-blast-db --from … --out …` then `db.blast`).
+    Use `db.blast: nt` / `validate.remote` only when you deliberately want a broader benchmark.
+    See `docs/ARCHITECTURE-WIRING.md` Part 2 for the verified mechanism + diagrams.
 - **Confidence sweep ("k-dense" matrix):** `sweep: {param: confidence, values: [...]}`
   runs kraken2 at each value and produces a per-sample matrix + line plot showing how
   each organism's read count changes with threshold. Never also pin the swept param in

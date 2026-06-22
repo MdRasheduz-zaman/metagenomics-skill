@@ -29,15 +29,81 @@ def blast_db_present(out_prefix: str) -> bool:
     return bool(glob.glob(out_prefix + "*.nin") or glob.glob(out_prefix + "*.nal"))
 
 
-def build_blast_db(source: str, out_prefix: str, run: bool = True,
-                   force: bool = False) -> Dict[str, object]:
+def normalize_seqid2taxid(map_path: str) -> Dict[str, str]:
+    """kraken2 ``seqid2taxid.map`` -> ``{bare_accession: taxid}``.
+
+    kraken2's map keys are the full internal seqid (``ACC|kraken:taxid|N``), but
+    ``makeblastdb -taxid_map`` matches on the *bare* accession that ``-parse_seqids`` extracts —
+    so the kraken2 map fails verbatim ("No sequences matched any of the taxids") and must be
+    reduced to ``ACC -> taxid`` first. This is the bridge that makes the BLAST DB carry the
+    EXACT taxids kraken2 assigned (synthetic or real), so validation is taxid-vs-taxid.
+    """
+    out: Dict[str, str] = {}
+    with open(map_path) as fh:
+        for line in fh:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) < 2:
+                continue
+            acc = parts[0].split("|")[0].strip()
+            taxid = parts[1].strip()
+            if acc and taxid:
+                out[acc] = taxid
+    return out
+
+
+def parse_names_dmp(path: str) -> Dict[str, str]:
+    """taxid -> scientific name from an NCBI/kraken2 ``names.dmp`` (the in-sync name source —
+    no NCBI taxdb needed, because both kraken2 and the taxid-tagged BLAST hits resolve here)."""
+    # names.dmp columns: tax_id | name_txt | unique_name | name_class |
+    out: Dict[str, str] = {}
+    with open(path) as fh:
+        for line in fh:
+            f = [x.strip() for x in line.split("|")]
+            if len(f) >= 4 and f[3] == "scientific name":
+                out[f[0]] = f[1]
+    return out
+
+
+def kraken2_db_sources(db_dir: str) -> Dict[str, object]:
+    """Resolve the inputs for an *in-sync* BLAST DB from a kraken2 DB directory.
+
+    Returns the genome FASTA(s), the ``seqid2taxid.map``, and ``names.dmp`` when present.
+    **Raises ValueError when the DB has no source genomes on disk** — a prebuilt/fetched index
+    or a ``kraken2-build --clean``'d DB keeps only the opaque ``*.k2d`` hash, so there is
+    nothing for blastn to align against; the caller must then supply the original genome FASTAs.
+    """
+    fastas: List[str] = []
+    cl = os.path.join(db_dir, "custom_library.fasta")
+    if os.path.isfile(cl):
+        fastas = [cl]
+    else:
+        for pat in ("library/**/*.fna", "library/**/*.fa", "library/**/*.fasta",
+                    "library/**/*.fna.gz", "library/**/*.fasta.gz"):
+            fastas += glob.glob(os.path.join(db_dir, pat), recursive=True)
+        fastas = sorted(set(fastas))
+    if not fastas:
+        raise ValueError(
+            f"kraken2 DB '{db_dir}' has no source genomes on disk (a prebuilt/fetched index, or "
+            f"a `kraken2-build --clean`'d build — only the *.k2d hash remains). blastn needs the "
+            f"actual sequences: set validate.build_from to the genome FASTA(s) you built it from.")
+    smap = os.path.join(db_dir, "seqid2taxid.map")
+    names = os.path.join(db_dir, "taxonomy", "names.dmp")
+    return {"fastas": fastas,
+            "seqid2taxid": smap if os.path.isfile(smap) else None,
+            "names_dmp": names if os.path.isfile(names) else None}
+
+
+def build_blast_db(source: str, out_prefix: str, run: bool = True, force: bool = False,
+                   taxid_map: Optional[str] = None) -> Dict[str, object]:
     """Build a BLAST+ nucleotide DB from a FASTA (or a folder of FASTAs) via makeblastdb.
 
     THIS is how the validation reference is kept *in scope* with the classifier: build it from
     the **same genomes** that built the kraken2/Bracken DB. Validating against a broader DB
     (e.g. full nt) measures a different benchmark — a read can match an organism the classifier
     never had a chance to call. ``-parse_seqids`` keeps subject titles so the organism is
-    recoverable from ``stitle`` even without NCBI's taxdb. Idempotent: skips if present.
+    recoverable from ``stitle``; pass ``taxid_map`` (a bare-accession->taxid TSV, e.g. from
+    ``normalize_seqid2taxid``) to tag subjects with kraken2's EXACT taxids so the comparison
+    can be taxid-vs-taxid (no NCBI taxdb needed). Idempotent: skips if present.
     """
     result: Dict[str, object] = {"source": source, "db": os.path.abspath(out_prefix)}
     if not force and blast_db_present(out_prefix):
@@ -45,7 +111,6 @@ def build_blast_db(source: str, out_prefix: str, run: bool = True,
         return result
     # a folder of FASTAs -> concatenate into one input makeblastdb can read
     fasta = source
-    tmp_cat = None
     if os.path.isdir(source):
         tmp_cat = out_prefix + ".sources.fasta"
         os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
@@ -58,6 +123,8 @@ def build_blast_db(source: str, out_prefix: str, run: bool = True,
                     shutil.copyfileobj(fh, out)
         fasta = tmp_cat
     cmd = ["makeblastdb", "-in", fasta, "-dbtype", "nucl", "-out", out_prefix, "-parse_seqids"]
+    if taxid_map:
+        cmd += ["-taxid_map", taxid_map]
     result["command"] = " ".join(cmd)
     if not run or not shutil.which("makeblastdb"):
         result["ran"] = False
@@ -67,7 +134,8 @@ def build_blast_db(source: str, out_prefix: str, run: bool = True,
     os.makedirs(os.path.dirname(out_prefix) or ".", exist_ok=True)
     proc = subprocess.run(cmd, capture_output=True, text=True)
     result.update(ran=True, ok=(proc.returncode == 0 and blast_db_present(out_prefix)),
-                  returncode=proc.returncode, tail=((proc.stdout or "") + (proc.stderr or ""))[-1000:])
+                  returncode=proc.returncode, taxid_mapped=bool(taxid_map),
+                  tail=((proc.stdout or "") + (proc.stderr or ""))[-1000:])
     return result
 
 # The outfmt-6 columns the validate rule requests. Order matters — it's how we parse.
@@ -233,13 +301,35 @@ def names_agree(classifier_name: str, blast_name: str, level: str = "genus") -> 
     return c[0] == b[0] or c[0] in b  # genus token present in the BLAST hit
 
 
+def _blast_name(hit: Dict, name_resolver=None) -> str:
+    """Best organism name for a BLAST hit, preferring the IN-SYNC taxonomy.
+
+    When the BLAST DB was built with kraken2's taxid map, the hit carries kraken2's taxid in
+    ``staxids`` and ``name_resolver`` (kraken2's names.dmp) turns it into the same name kraken2
+    uses — an apples-to-apples comparison with no NCBI taxdb. Otherwise fall back to the BLAST
+    scientific name, then the subject title (organism text in the FASTA header).
+    """
+    if name_resolver and hit.get("staxids"):
+        tid = str(hit["staxids"]).split(";")[0].strip()
+        nm = name_resolver(tid)
+        if nm:
+            return nm
+    bname = (hit.get("sscinames") or "").strip()
+    if not bname or bname.upper() == "N/A":
+        bname = (hit.get("stitle") or "").strip()
+    return bname
+
+
 def assess(query_taxon: Dict[str, str], best_hits: Dict[str, Dict],
-           level: str = "genus") -> Dict:
+           level: str = "genus", name_resolver=None) -> Dict:
     """Per-query agreement between the classifier name and the best BLAST hit.
 
     Args:
-      query_taxon : {query_id: classifier_taxon_name} for the sequences we BLASTed.
-      best_hits   : {query_id: blast6_row} (use sscinames, falling back to stitle).
+      query_taxon  : {query_id: classifier_taxon_name} for the sequences we BLASTed.
+      best_hits    : {query_id: blast6_row}.
+      name_resolver: optional taxid->name (kraken2's names.dmp) — when the BLAST DB carries
+                     kraken2's taxids, the comparison uses the SAME taxonomy (in-sync), not
+                     BLAST's free-text title.
     Returns aggregate counts + per-query verdicts.
     """
     n = len(query_taxon)
@@ -253,11 +343,7 @@ def assess(query_taxon: Dict[str, str], best_hits: Dict[str, Dict],
                               "has_hit": False, "agree": False})
             continue
         with_hits += 1
-        # Prefer the scientific name; but without NCBI's taxdb installed blastn writes "N/A"
-        # there, so fall back to the subject title (which carries the organism in its text).
-        bname = (hit.get("sscinames") or "").strip()
-        if not bname or bname.upper() == "N/A":
-            bname = (hit.get("stitle") or "").strip()
+        bname = _blast_name(hit, name_resolver=name_resolver)
         ok = names_agree(cname, bname, level=level)
         agree += int(ok)
         per_query.append({"query": q, "classifier": cname, "blast": bname,

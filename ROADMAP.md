@@ -126,9 +126,11 @@ Snakemake plugins; sge/pbs/generic use cluster-generic with site-editable submit
 
 ## Open / next pass
 
-- **In-scope BLAST validation from a *standard/prebuilt* kraken2 index.** `validate.build_from`
-  already builds the BLAST DB from the classifier's genomes for `db.build` custom-fasta/folder/
-  spike-in (and any user FASTA). For a *standard* build or a `fetch-db` prebuilt index, auto-derive
-  the in-scope BLAST DB from the index's `library/*/library.fna` (when retained). Until then, point
-  `validate.build_from` at the genome FASTA(s) you classified against. See
-  `docs/ARCHITECTURE-WIRING.md` Part 2.
+- **In-scope BLAST validation when the classifier's genomes are NOT on disk.**
+  `validate.build_from: classifier` builds a taxid-tagged in-scope BLAST DB from the kraken2 DB
+  dir's own genomes + `seqid2taxid.map` + `names.dmp` — works for custom builds and standard builds
+  that were not `--clean`'d (genomes retained in `custom_library.fasta` / `library/**/library.fna`).
+  The gap: a **prebuilt `fetch-db` index or a `--clean`'d DB ships only the `.k2d` hash** (no
+  genomes), so there is nothing for blastn to align against. Future pass: re-fetch the genomes by
+  accession to reconstruct an in-scope reference; until then the user supplies
+  `validate.build_from: <genome FASTA(s)>`. See `docs/ARCHITECTURE-WIRING.md` Part 2.

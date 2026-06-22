@@ -269,14 +269,17 @@ def _validate_validate(val: Dict[str, Any] | None, db: Dict[str, Any]) -> Dict[s
     if build_from:
         build_from = str(build_from)
         if build_from == "classifier":
-            b = db.get("build") or {}
-            strat = str(b.get("strategy", ""))
-            if strat not in {"custom-fasta", "custom-folder", "spike-in"} or not b.get("source"):
+            # Resolve at run time from the kraken2 DB dir (its custom_library.fasta / library/
+            # genomes + seqid2taxid.map, so the BLAST DB carries kraken2's exact taxids). Needs
+            # the genomes ON DISK — a prebuilt/fetched or --clean'd index has only *.k2d and the
+            # build rule will fail fast (validation.kraken2_db_sources) telling the user to pass a
+            # FASTA. So require a kraken2 DB path here.
+            if not db.get("kraken2"):
                 raise registry.ValidationError(
-                    "validate.build_from: 'classifier' needs a db.build with a local source "
-                    "(strategy custom-fasta/custom-folder/spike-in). For a standard/prebuilt "
-                    "classifier DB, point validate.build_from at the genome FASTA(s) you used, "
-                    "or set db.blast / validate.remote.")
+                    "validate.build_from: 'classifier' needs db.kraken2 (the classifier DB dir) "
+                    "so the BLAST DB can be built from its genomes + seqid2taxid.map. A "
+                    "prebuilt/fetched index ships no genomes — then point validate.build_from at "
+                    "the genome FASTA(s) you used, or set db.blast / validate.remote.")
     elif not remote and not db.get("blast"):
         raise registry.ValidationError(
             "validate needs a BLAST database: set db.blast to a local BLAST+ db, or "

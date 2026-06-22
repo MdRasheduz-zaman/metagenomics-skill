@@ -91,6 +91,53 @@ def test_assess_falls_back_to_stitle_when_sscinames_na():
     assert a["per_query"][0]["blast"].startswith("Yellow fever")
 
 
+def test_normalize_seqid2taxid_strips_kraken_cruft(tmp_path):
+    m = tmp_path / "seqid2taxid.map"
+    m.write_text("NC_001477.1|kraken:taxid|1001\t1001\nNC_012532.1|kraken:taxid|1002\t1002\n")
+    got = validate.normalize_seqid2taxid(str(m))
+    assert got == {"NC_001477.1": "1001", "NC_012532.1": "1002"}  # bare accession keys
+
+
+def test_parse_names_dmp_uses_name_txt_not_unique_name(tmp_path):
+    # regression: name is column 2 (name_txt), not column 3 (unique_name, usually empty)
+    n = tmp_path / "names.dmp"
+    n.write_text("1004\t|\tYellow fever virus\t|\t\t|\tscientific name\t|\n"
+                 "1004\t|\tYFV\t|\t\t|\tsynonym\t|\n")
+    names = validate.parse_names_dmp(str(n))
+    assert names["1004"] == "Yellow fever virus"  # scientific name only, real text
+
+
+def test_kraken2_db_sources_finds_custom_library(tmp_path):
+    d = tmp_path / "k2"
+    (d / "taxonomy").mkdir(parents=True)
+    (d / "custom_library.fasta").write_text(">NC_1|kraken:taxid|1001 x\nACGT\n")
+    (d / "seqid2taxid.map").write_text("NC_1|kraken:taxid|1001\t1001\n")
+    (d / "taxonomy" / "names.dmp").write_text("1001\t|\tX\t|\t\t|\tscientific name\t|\n")
+    src = validate.kraken2_db_sources(str(d))
+    assert src["fastas"] and src["fastas"][0].endswith("custom_library.fasta")
+    assert src["seqid2taxid"] and src["names_dmp"]
+
+
+def test_kraken2_db_sources_raises_for_prebuilt_or_cleaned(tmp_path):
+    # a prebuilt/fetched (or --clean'd) index has only the opaque *.k2d hash, no genomes
+    d = tmp_path / "prebuilt"
+    d.mkdir()
+    for f in ("hash.k2d", "opts.k2d", "taxo.k2d"):
+        (d / f).write_bytes(b"\x00\x01")
+    with pytest.raises(ValueError) as e:
+        validate.kraken2_db_sources(str(d))
+    assert "no source genomes" in str(e.value)
+
+
+def test_assess_uses_name_resolver_for_in_sync_taxonomy():
+    # BLAST hit carries kraken2's taxid in staxids; resolver (names.dmp) gives the in-sync name
+    rows = validate.parse_blast6("r1\tNC_1\t99.0\t150\t1e-50\t280\t1004\tN/A\tsome title\n")
+    best = validate.best_hit_per_query(rows)
+    resolver = {"1004": "Yellow fever virus"}.get
+    a = validate.assess({"r1": "Yellow fever virus"}, best, level="genus", name_resolver=resolver)
+    assert a["n_agree"] == 1 and a["per_query"][0]["blast"] == "Yellow fever virus"
+
+
 def test_verdict_bands():
     assert validate.verdict(0.9, 0.8) == "corroborated"
     assert validate.verdict(0.6, 0.8) == "partial"
@@ -135,21 +182,30 @@ def test_validate_build_from_fasta_satisfies_db_requirement():
     assert cfg["validate"]["build_from"] == "refs.fasta"
 
 
-def test_validate_build_from_classifier_requires_custom_db_build():
-    # "classifier" only works when db.build has a local source (custom-fasta/folder/spike-in)
+def test_validate_build_from_classifier_requires_kraken2_db_path():
+    # "classifier" resolves the BLAST DB from the kraken2 DB dir, so a config with no kraken2
+    # DB at all is rejected (the classify gate fires first; either way it points at db.kraken2).
     with pytest.raises(registry.ValidationError) as e:
-        cb.build_config(samples=SAMPLES, db={"kraken2": "DB"},
-                        modules={"validate": True}, validate={"build_from": "classifier"})
-    assert "classifier" in str(e.value)
+        cb.build_config(samples=SAMPLES, db={},
+                        modules={"validate": True, "classify": True},
+                        validate={"build_from": "classifier"})
+    assert "db.kraken2" in str(e.value)
 
 
-def test_validate_build_from_classifier_ok_with_custom_fasta_build():
+def test_validate_build_from_classifier_ok_with_kraken2_db():
+    cfg = cb.build_config(samples=SAMPLES, db={"kraken2": "/my/k2db"},
+                          modules={"validate": True}, validate={"build_from": "classifier"})
+    assert cfg["validate"]["build_from"] == "classifier"
+
+
+def test_validate_build_from_classifier_ok_via_db_build():
+    # a db.build defaults db.kraken2 to the build output dir, satisfying "classifier"
     cfg = cb.build_config(
         samples=SAMPLES,
         db={"build": {"strategy": "custom-fasta", "source": "genomes.fasta", "taxonomy": "synthetic"}},
         modules={"validate": True}, validate={"build_from": "classifier"})
     assert cfg["validate"]["build_from"] == "classifier"
-    assert cfg["db"]["build"]["source"] == "genomes.fasta"
+    assert cfg["db"]["kraken2"]  # defaulted from db.build
 
 
 def test_build_from_drops_blast_from_needed_dbs():
@@ -209,3 +265,24 @@ def test_build_blast_db_from_fixture_is_in_scope_and_idempotent(tmp_path):
     assert validate.blast_db_present(prefix)
     again = validate.build_blast_db(os.path.join(_FIXTURE, "genomes.fasta"), prefix)
     assert again["ok"] and again.get("ran") is False  # skipped — already present
+
+
+@pytest.mark.skipif(not (shutil.which("makeblastdb") and shutil.which("blastdbcmd")
+                         and os.path.isdir(_FIXTURE)),
+                    reason="needs BLAST+ (makeblastdb/blastdbcmd) and the viral fixture")
+def test_taxid_map_attaches_taxids_to_blast_subjects(tmp_path):
+    """A normalized acc->taxid map makes the BLAST subjects carry those exact taxids — the
+    bridge that lets validation compare taxid-to-taxid instead of fuzzy strings."""
+    fasta = tmp_path / "g.fasta"
+    fasta.write_text(">NC_001477.1 Dengue virus 1\nACGTACGTACGTACGTACGTACGTACGT\n"
+                     ">NC_002031.1 Yellow fever virus\nTTTTGGGGCCCCAAAATTTTGGGGCCCC\n")
+    tmap = tmp_path / "acc2taxid.tsv"
+    tmap.write_text("NC_001477.1\t1001\nNC_002031.1\t1004\n")
+    prefix = str(tmp_path / "db")
+    res = validate.build_blast_db(str(fasta), prefix, taxid_map=str(tmap))
+    assert res["ok"] and res.get("taxid_mapped")
+    out = subprocess.run(["blastdbcmd", "-db", prefix, "-entry", "all", "-outfmt", "%a %T"],
+                         capture_output=True, text=True).stdout
+    pairs = dict(line.split()[:2] for line in out.splitlines() if line.split())
+    # accession -> taxid carried through (note: -parse_seqids may keep version in %a)
+    assert any(t == "1001" for t in pairs.values()) and any(t == "1004" for t in pairs.values())

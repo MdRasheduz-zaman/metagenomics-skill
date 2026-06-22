@@ -15,19 +15,15 @@ _BUILD_FROM = VALIDATE.get("build_from")
 _INSYNC_PREFIX = f"{OUT}/validation/blastdb/insync"
 
 
-def _blast_source():
-    if _BUILD_FROM == "classifier":
-        return config.get("db", {}).get("build", {}).get("source", "")
-    return _BUILD_FROM or ""
-
-
 if _BUILD_FROM:
     rule build_validate_blast_db:
         # Build an in-scope BLAST DB from the classifier's own genomes (idempotent via makeblastdb).
+        # For build_from: classifier, also tag subjects with kraken2's taxids (taxid-vs-taxid).
         output:
             sentinel=f"{_INSYNC_PREFIX}.done",
         params:
-            source=lambda wc: _blast_source(),
+            build_from=_BUILD_FROM,
+            kraken_db=DB.get("kraken2", ""),
             prefix=_INSYNC_PREFIX,
         script:
             "../scripts/build_blast_db.py"
@@ -35,6 +31,12 @@ if _BUILD_FROM:
 
 def _blast_db_for_validate():
     return _INSYNC_PREFIX if _BUILD_FROM else DB.get("blast", "")
+
+
+def _names_dmp():
+    # kraken2's own names.dmp -> in-sync taxid->name resolution for the agreement check
+    cand = os.path.join(DB.get("kraken2", ""), "taxonomy", "names.dmp") if DB.get("kraken2") else ""
+    return cand if cand and os.path.isfile(cand) else ""
 
 
 rule blast_validate:
@@ -52,6 +54,7 @@ rule blast_validate:
         validate=VALIDATE,
         blastn=config.get("blastn", {}),
         blast_db=_blast_db_for_validate(),
+        names_dmp=_names_dmp(),
         sample=lambda wc: wc.sample,
     script:
         "../scripts/blast_validate.py"

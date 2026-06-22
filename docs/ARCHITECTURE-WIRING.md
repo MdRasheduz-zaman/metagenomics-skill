@@ -106,85 +106,130 @@ flowchart LR
 
 ## Part 2 — How blastn validates against the *same references* as kraken2
 
-**Short answer:** they don't share a database file — they share the **source genomes**. kraken2's
-built DB is an opaque k-mer hash you cannot BLAST. But kraken2-build leaves the genomes it ingested
-on disk as plain FASTA, and we run `makeblastdb` on **that same FASTA**. Same input genomes ⇒ both
-tools cover the same organism set ⇒ the BLAST cross-check is a fair, in-scope benchmark.
+**kraken2 and blastn are separate tools with incompatible DB formats. kraken2 does NOT keep a
+BLAST-ready database, and it makes no promise to.** A kraken2 DB is an opaque k-mer hash
+(`hash.k2d`/`opts.k2d`/`taxo.k2d`) — `file hash.k2d` → `data`. It stores *k-mers → taxon*, not
+retrievable sequences, so **blastn cannot read it at all**. They can only be kept *in sync* by
+sharing the **source genomes** and the **same taxid mapping** — and that is only possible when those
+inputs are still on disk.
+
+### Two things blastn needs that kraken2 does not hand over for free
+
+**(a) The genomes — and they're not always there.** Whether the source FASTAs survive depends on how
+the kraken2 DB was made:
+
+| How the kraken2 DB was built | genomes on disk? | in-sync BLAST DB? |
+|---|---|---|
+| metagx `db.build` custom-fasta/folder/spike-in | **yes** — `custom_library.fasta` | ✅ build from it |
+| `kraken2-build --download-library …` (standard), **not** `--clean`'d | **yes** — `library/**/library.fna` | ✅ build from it |
+| `kraken2-build … --clean` (space-saving) | **no** — only `*.k2d` | ❌ supply genomes yourself |
+| prebuilt index from `fetch-db` (the compact tarball) | **no** — only `*.k2d`(+map) | ❌ supply genomes yourself |
+
+So "build blastn from kraken2's library" works for the first two and **fails for the rest** —
+`validation.kraken2_db_sources()` raises a clear error telling you to pass the genome FASTAs.
+
+**(b) The taxonomy — blastn is taxid-blind unless you tell it.** A plain `makeblastdb` DB has **no
+taxids**; `blastn`'s `staxids`/`sscinames` come up empty (`N/A`) unless you both (i) pass a
+`-taxid_map` (`accession → taxid`) at build time, and (ii) install NCBI's `taxdb` for name lookup.
+kraken2 already holds the mapping in **`seqid2taxid.map`** and the names/tree in **`taxonomy/names.dmp`
++ `nodes.dmp`** (its own — synthetic for a custom build, real NCBI for a standard one). The in-sync
+trick is to **reuse kraken2's own taxonomy**: feed its `seqid2taxid.map` to `makeblastdb` so the BLAST
+subjects carry kraken2's *exact* taxids, then resolve names through kraken2's *own* `names.dmp` — so
+the agreement check is **taxid → name in one taxonomy**, with no dependency on NCBI's `taxdb`.
+
+> ⚠️ **Gotcha (empirically found):** kraken2's `seqid2taxid.map` does **not** work verbatim — its keys
+> are the full internal seqid `ACC|kraken:taxid|N`, but `makeblastdb -taxid_map` matches the *bare*
+> accession, so it errors *"No sequences matched any of the taxids provided."* It must be normalized
+> to `ACC → taxid` first (`validation.normalize_seqid2taxid`).
 
 ### What kraken2 actually writes (verified on `local_databases/viral_custom`)
 
 ```
 viral_custom/
-├── hash.k2d              ← OPAQUE binary: minimizer → LCA taxon hash  (you CANNOT BLAST this)
+├── hash.k2d              ← OPAQUE: minimizer → taxon hash   (file → "data"; NOT BLASTable)
 ├── opts.k2d  taxo.k2d    ← build options + taxonomy tree (binary)
-├── custom_library.fasta  ← the GENOMES kraken2 ingested  (>acc|kraken:taxid|N …)  ← shareable
-├── library/added/*.fna   ← (same sequences, as added)                              ← shareable
-├── seqid2taxid.map       ← accession → taxid
-└── taxonomy/{names,nodes}.dmp
+├── custom_library.fasta  ← the GENOMES kraken2 ingested  (>NC_…|kraken:taxid|N …)   ← shareable
+├── library/added/*.fna   ← same sequences (only present if not --clean'd)            ← shareable
+├── seqid2taxid.map       ← "NC_001477.1|kraken:taxid|1001 ⇥ 1001"  (NORMALIZE before makeblastdb)
+└── taxonomy/names.dmp,nodes.dmp  ← taxid → name + tree (in-sync name source; no NCBI taxdb needed)
 ```
-
-`file hash.k2d` → `data` (binary). It stores *k-mers → taxon*, not retrievable sequences — so blastn
-has nothing to align against in `.k2d`. The **sequences** live only in `custom_library.fasta` /
-`library/`. That FASTA is exactly what `makeblastdb` needs.
 
 ```mermaid
 flowchart TD
-    SRC["Source genomes (FASTA)<br/>e.g. genomes.fasta / db.build source"]
-    SRC -->|"kraken2-build --add-to-library → --build"| K2LIB["custom_library.fasta + library/<br/>(kept on disk)"]
-    K2LIB -->|"kraken2-build hashes k-mers"| K2["hash.k2d / taxo.k2d<br/>(opaque — classify only)"]
-    K2 -->|"kraken2 classify reads"| CALLS["per-read taxon calls (.kraken)"]
+    SRC["Source genomes (FASTA)"]
+    SRC -->|"kraken2-build --add-to-library → --build"| K2LIB["custom_library.fasta / library/<br/>(only if not --clean'd / not a prebuilt index)"]
+    K2LIB -->|"k-mer hashing"| K2["hash.k2d / taxo.k2d<br/>OPAQUE — classify only, NOT BLASTable"]
+    K2 -->|"classify reads"| CALLS["per-read taxon calls (.kraken)<br/>read → taxid"]
 
-    K2LIB -->|"makeblastdb -dbtype nucl -parse_seqids<br/>(metagx build-blast-db / validate.build_from)"| BDB["BLAST nucl DB<br/>(*.nin/.nhr/.nsq)"]
+    K2LIB -->|"makeblastdb -dbtype nucl -parse_seqids -taxid_map"| BDB["BLAST nucl DB<br/>(subjects carry kraken2's taxids)"]
+    MAP["seqid2taxid.map<br/>normalize → ACC↦taxid"] -->|"-taxid_map"| BDB
+    NAMES["taxonomy/names.dmp<br/>taxid → name"]
+
     CALLS -->|"top taxa → read subsample"| Q["query reads"]
-    Q -->|"blastn vs SAME genomes"| AGREE["per-taxon agreement + verdict<br/>(in scope ✓)"]
-    BDB --> AGREE
+    Q --> BL["blastn"]
+    BDB --> BL
+    BL -->|"best hit → staxids"| RES["taxid"]
+    RES -->|"resolve via kraken2's names.dmp"| CMP["compare to classifier call<br/>same taxonomy ⇒ in scope ✓"]
+    NAMES --> CMP
 
-    NT["full NCBI nt (~200 GB)"] -.->|"different organism set"| WARN["⚠ different benchmark<br/>(false 'disagreements')"]
+    NOGEN["prebuilt / --clean'd DB<br/>(only *.k2d)"] -.->|"no genomes → kraken2_db_sources raises"| FIX["supply genome FASTAs:<br/>validate.build_from: refs.fasta"]
+    NT["full NCBI nt"] -.->|"different organism set"| WARN["⚠ different benchmark"]
 
     classDef opaque fill:#6e7681,stroke:#30363d,color:#fff;
     classDef share fill:#1a7f37,stroke:#116329,color:#fff;
-    class K2 opaque;
-    class K2LIB,SRC,BDB share;
+    class K2,NOGEN opaque;
+    class K2LIB,SRC,BDB,MAP,NAMES share;
 ```
 
 ### Empirical validation (what I ran — you can re-run it)
 
 ```bash
-# kraken2's own ingested library:
-grep -c '^>' local_databases/viral_custom/custom_library.fasta          # → 30 genomes
+K2=local_databases/viral_custom
 
-# build the BLAST validation DB from that SAME file:
-metagx build-blast-db --from local_databases/viral_custom/custom_library.fasta --out /tmp/insync
-#   → makeblastdb "added 30 sequences"
+# (1) the genomes kraken2 ingested are on disk as FASTA (custom build):
+grep -c '^>' $K2/custom_library.fasta                 # → 30 genomes
 
-# both DBs hold the same 30 accessions:
-grep '^>' local_databases/viral_custom/custom_library.fasta | sed 's/|.*//;s/>//' | sort      # 30
-blastdbcmd -db /tmp/insync -entry all -outfmt '%a' | sed 's/\..*//' | sort -u                 # 30  (identical set)
+# (2) kraken2's map does NOT work verbatim:
+makeblastdb -in $K2/custom_library.fasta -dbtype nucl -parse_seqids \
+            -taxid_map $K2/seqid2taxid.map -out /tmp/db1
+#   → Error: [makeblastdb] No sequences matched any of the taxids provided
+
+# (3) normalized ACC→taxid works → subjects carry kraken2's EXACT taxids:
+awk -F'\t' '{split($1,a,"|"); print a[1]"\t"$2}' $K2/seqid2taxid.map > /tmp/acc2taxid.tsv
+makeblastdb -in $K2/custom_library.fasta -dbtype nucl -parse_seqids \
+            -taxid_map /tmp/acc2taxid.tsv -out /tmp/db2
+blastdbcmd -db /tmp/db2 -entry all -outfmt '%a %T' | head -1   # → NC_001477.1|… 1001
+
+# (4) a real read returns kraken2's taxid, resolved by kraken2's OWN names.dmp:
+#   blastn … -outfmt '6 … staxids …'  → staxids = 1004
+grep -P '^1004\t' $K2/taxonomy/names.dmp              # → 1004 | Yellow fever virus | … | scientific name
 ```
 
-Result: **30 ⇄ 30, same accessions** — the BLAST reference is exactly the classifier's organism set.
+Result: `staxids = 1004` (kraken2's synthetic taxid) → `names.dmp` → *Yellow fever virus* — a
+**taxid-to-taxid** match in one taxonomy, no NCBI `taxdb` involved.
 
 ### How metagx wires this for you
 
-- `validate.build_from: <FASTA|folder>` — the genomes you used for the classifier; the
-  `build_validate_blast_db` rule runs `makeblastdb` on them before validating (no separate `db.blast`).
-- `validate.build_from: classifier` — reuse the `db.build` **source** automatically, for
-  `custom-fasta` / `custom-folder` / `spike-in` builds (where a local source FASTA exists).
+- `validate.build_from: classifier` — resolve the genomes **and** `seqid2taxid.map` **and**
+  `names.dmp` from the **kraken2 DB dir** (`db.kraken2`); `build_validate_blast_db` runs `makeblastdb`
+  with the normalized taxid map, and `blast_validate` resolves hits through `names.dmp`. Works for any
+  kraken2 DB whose genomes are on disk (custom or standard-not-cleaned).
+- `validate.build_from: <FASTA|folder>` — you supply the genomes (required for a prebuilt/`--clean`'d
+  index, since it ships none). Organism comparison falls back to the subject title.
 - `db.blast: <path>` / `validate.remote: true` — only when you *deliberately* want a broader
   reference (e.g. nt). That is a different benchmark, by design.
 
 ```mermaid
 flowchart LR
-    Q{"how is the classifier DB built?"}
-    Q -->|"db.build custom-fasta/folder/spike-in"| A["validate.build_from: classifier<br/>(auto-reuses db.build source)"]
-    Q -->|"your own genomes FASTA"| B["validate.build_from: refs.fasta<br/>(or metagx build-blast-db)"]
-    Q -->|"standard / prebuilt index (fetch-db)"| C["point build_from at the genome FASTAs you used<br/>⏳ auto-derive from index library/ = future pass"]
-    Q -->|"want a broader benchmark on purpose"| D["db.blast: nt  /  validate.remote: true"]
+    Q{"is the kraken2 DB's source<br/>genomes on disk?"}
+    Q -->|"yes (custom / standard not --clean'd)"| A["validate.build_from: classifier<br/>(genomes + seqid2taxid.map + names.dmp,<br/>taxid-tagged, in sync)"]
+    Q -->|"no (prebuilt fetch-db / --clean'd)"| B["validate.build_from: refs.fasta<br/>(supply the genomes you used)"]
+    Q -->|"broader benchmark on purpose"| C["db.blast: nt  /  validate.remote: true"]
 ```
 
-> **Limit (next pass):** for a *standard* or *prebuilt-downloaded* kraken2 index, metagx does not yet
-> auto-derive the BLAST DB from the index's `library/*/library.fna`. Until then, set `build_from` to
-> the genome FASTA(s) you classified against. Tracked in the ROADMAP.
+> **Limit (next pass):** for a *standard* download build, `build_from: classifier` reads the retained
+> `library/**/library.fna`; there is no auto **re-download** of genomes for a `--clean`'d or
+> prebuilt-fetched index (you must supply them). Tracked in the ROADMAP.
 
 ---
 

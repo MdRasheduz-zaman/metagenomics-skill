@@ -122,11 +122,13 @@ that matches their goal.
 - `validate` (needs classify) — **BLAST cross-check that a kraken2/Bracken call is real**, not a
   k-mer artifact: BLASTs a seeded read subsample for the top taxa and reports per-taxon
   agreement + a verdict. **Keep the reference in scope with the classifier** — validating a
-  virus+bacteria DB's calls against full nt is a different benchmark. Prefer
-  `validate: {build_from: <same genomes FASTA/folder>}` (or `build_from: classifier` to reuse a
-  custom `db.build` source) so the pipeline builds the BLAST DB from the same organisms; else set
-  `db.blast` (e.g. nt, ~200 GB, never auto-fetched) or `validate: {remote: true}` (a few seqs).
-  Tune via the `blastn` params (evalue/perc_identity).
+  virus+bacteria DB's calls against full nt is a different benchmark (kraken2's `.k2d` is not
+  BLASTable; they sync via shared genomes+taxids). Prefer `validate: {build_from: classifier}` —
+  builds the BLAST DB from the kraken2 DB's own genomes + `seqid2taxid.map` + `names.dmp`
+  (taxid-tagged, in sync), when those are on disk (custom or standard not-`--clean`'d). For a
+  **prebuilt `fetch-db` index or a `--clean`'d DB** (only `.k2d` on disk) that fails — give
+  `build_from: <the genome FASTA(s) you used>` instead. Else `db.blast` / `validate: {remote: true}`
+  for a deliberately broader benchmark. Tune via the `blastn` params (evalue/perc_identity).
 - `host_removal: {genome: <fasta>}` — deplete host reads before the whole pipeline (clinical/
   host-pathogen samples; pair with high kraken2 confidence + the consensus cross-check).
 

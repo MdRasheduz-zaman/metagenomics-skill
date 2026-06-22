@@ -19,6 +19,7 @@ blastn_cfg = dict(snk.params.blastn or {})
 sample = snk.params.sample
 threads = int(snk.threads)
 db = snk.params.blast_db          # local BLAST db path/prefix (or remote db name when remote)
+names_dmp = getattr(snk.params, "names_dmp", "")  # kraken2 names.dmp -> in-sync taxid->name
 remote = bool(cfg.get("remote"))
 seed = int(cfg.get("seed", 42))
 rng = random.Random(seed)
@@ -77,13 +78,21 @@ else:
 with open(blast_out) as fh:
     hits = validate.best_hit_per_query(validate.parse_blast6(fh.read()))
 
+# in-sync name resolution: when the BLAST DB carries kraken2's taxids, resolve them through
+# kraken2's OWN names.dmp so the comparison uses the same taxonomy (no NCBI taxdb needed).
+name_resolver = None
+if names_dmp and os.path.isfile(names_dmp):
+    _names = validate.parse_names_dmp(names_dmp)
+    name_resolver = _names.get
+
 per_taxon = []
 rows_tsv = ["taxon\ttaxid\tn_queries\tn_with_hits\tn_agree\thit_rate\tagreement_rate\tverdict"]
 for t in taxa:
     qt = {rid: name for rid, name in query_taxon.items() if name == t["name"]}
     if not qt:
         continue
-    a = validate.assess(qt, {q: hits[q] for q in qt if q in hits}, level=cfg["level"])
+    a = validate.assess(qt, {q: hits[q] for q in qt if q in hits}, level=cfg["level"],
+                        name_resolver=name_resolver)
     a.update(taxon=t["name"], taxid=t["taxid"], reads_classified=t["reads"],
              verdict=validate.verdict(a["agreement_rate"], a["hit_rate"]))
     per_taxon.append(a)
