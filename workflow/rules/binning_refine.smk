@@ -109,7 +109,7 @@ rule drep:
         done=f"{OUT}/binning/drep/drep.done",
     threads: THREADS
     conda:
-        "../envs/drep.yaml"
+        "../envs/magqc.yaml"
     params:
         outdir=f"{OUT}/binning/drep/dereplicated",
         bins=" ".join(

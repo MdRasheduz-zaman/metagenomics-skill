@@ -59,7 +59,7 @@ rule gtdbtk:
         done=f"{OUT}/prok/{{sample}}/gtdbtk.done",
     threads: THREADS
     conda:
-        "../envs/prok.yaml"
+        "../envs/magqc.yaml"
     params:
         bindir=lambda wc: f"{OUT}/binning/{wc.sample}/bins",
         outdir=lambda wc: f"{OUT}/prok/{wc.sample}/gtdbtk",
@@ -81,7 +81,7 @@ rule checkm2:
         report=f"{OUT}/prok/{{sample}}/checkm2/quality_report.tsv",
     threads: THREADS
     conda:
-        "../envs/prok.yaml"
+        "../envs/magqc.yaml"
     params:
         bindir=lambda wc: f"{OUT}/binning/{wc.sample}/bins",
         outdir=lambda wc: f"{OUT}/prok/{wc.sample}/checkm2",

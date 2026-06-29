@@ -1,9 +1,0 @@
-# Isolated conda env for cross-sample genome dereplication (dRep + its ANI/quality deps).
-# Created by `--use-conda`.
-name: metagx-drep
-channels: [conda-forge, bioconda]
-dependencies:
-  - drep >=3.5
-  - checkm2 >=1.0
-  - mash >=2.3
-  - fastani >=1.34

@@ -1,0 +1,12 @@
+# Isolated conda env for MAG quality + taxonomy + dereplication. Merged from the former
+# prok.yaml (gtdbtk+checkm2) and drep.yaml (drep+checkm2+mash+fastani): all five solve
+# together cleanly, and sharing one env avoids installing CheckM2's heavy TensorFlow stack
+# twice. Shared by the gtdbtk, checkm2, and drep rules. Created by `--use-conda`.
+name: metagx-magqc
+channels: [conda-forge, bioconda]
+dependencies:
+  - gtdbtk >=2.4
+  - checkm2 >=1.0
+  - drep >=3.5
+  - mash >=2.3
+  - fastani >=1.34
