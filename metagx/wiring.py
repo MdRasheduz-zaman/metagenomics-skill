@@ -135,6 +135,20 @@ def audit() -> Dict[str, Any]:
         if t not in report.CITATIONS:
             gaps.append(f"active tool '{t}' has no report.CITATIONS entry")
 
+    # I. every tool ANY config can activate is provisioned by SOME conda env — the core
+    # environment.yml (tools that coexist) OR a per-rule workflow/envs/*.yaml (isolated for
+    # size/collision, provisioned by `metagx run --use-conda`). A tool in neither means the
+    # end-user's generated scripts would die with "command not found" for that module. This is
+    # the collision-/dependency-safety guarantee: every config's tools have a home.
+    provisioned = _conda_provisioned_packages()
+    for t in sorted(actives):
+        if t == "snakemake":
+            continue
+        pkg = report.conda_package(t)
+        if pkg not in provisioned:
+            gaps.append(f"active tool '{t}' (conda pkg '{pkg}') is provisioned by NO env — not in "
+                        f"environment.yml and not in any workflow/envs/*.yaml; its module can't run")
+
     parts = {
         "registry_tools": sorted(tools),
         "user_tools": sorted(user_tools),
@@ -142,6 +156,34 @@ def audit() -> Dict[str, Any]:
         "db_extra_keys": list(config_builder.DB_EXTRA_KEYS),
         "dbprovision_specs": sorted(dbprovision.SPECS),
         "active_tools_kitchen_sink": sorted(actives),
+        "conda_provisioned_packages": sorted(provisioned),
         "mcp_build_config_known": bool(mcp_params),
     }
     return {"parts": parts, "gaps": gaps, "ok": not gaps}
+
+
+def _conda_provisioned_packages() -> set:
+    """Package bases across the core environment.yml + every per-rule workflow/envs/*.yaml —
+    i.e. everything the pipeline can put on PATH (core env) or provision via --use-conda."""
+    import glob
+    import yaml as _yaml
+
+    def bases(path: str) -> set:
+        out: set = set()
+        try:
+            with open(path) as fh:
+                data = _yaml.safe_load(fh) or {}
+        except OSError:
+            return out
+        for dep in data.get("dependencies", []) or []:
+            if isinstance(dep, str):
+                out.add(dep.split()[0].split("=")[0].split(">")[0].split("<")[0].strip())
+            elif isinstance(dep, dict):  # e.g. a nested pip: list
+                for sub in dep.get("pip", []) or []:
+                    out.add(str(sub).split("=")[0].split(">")[0].strip())
+        return out
+
+    found = bases(os.path.join(_ROOT, "environment.yml"))
+    for env in glob.glob(os.path.join(_ROOT, "workflow", "envs", "*.yaml")):
+        found |= bases(env)
+    return found

@@ -1,8 +1,7 @@
 # metagx
 
 A flexible, **interview-driven metagenomics pipeline** that runs the same way whether
-it's driven by Claude, Cursor, ChatGPT/Codex, Gemini, Perplexity, Ollama, or a plain
-terminal. An LLM interviews the user about what they want, then generates a validated
+it's driven by Claude, Cursor, Codex, Gemini, Ollama, or a plain terminal. An LLM interviews the user about what they want, then generates a validated
 `config.yaml` for a Snakemake workflow that runs read QC, taxonomic classification,
 abundance estimation, and optional assembly + binning, etc.
 
@@ -359,13 +358,39 @@ The index must fit in RAM for fast classification, so size to your machine — s
 
 ## Driving it from each client
 
-| Client | How |
-| --- | --- |
-| Claude Code / Claude.ai | the `SKILL.md` skill |
-| Claude Desktop, Cursor (MCP) | `python mcp_server.py` |
-| ChatGPT Actions, Gemini, Perplexity | `uvicorn mcp_server:app --port 8000` (HTTP) |
-| Codex, terminal agents | the `metagx` CLI |
-| Ollama / plain chat | paste `prompts/INTERVIEW.md` |
+metagx exposes one logic core through four local surfaces, so every supported client has a
+concrete, no-hosting path: the **skill** (`SKILL.md`), a **stdio MCP** server
+(`python mcp_server.py`), the **`metagx` CLI**, and a **paste-in prompt**
+(`prompts/INTERVIEW.md`) that works in *any* chat model with no integration at all.
+
+| Client | Surface | Set it up |
+| --- | --- | --- |
+| **Claude** (Code / claude.ai) | skill | Use the repo as a skill (`SKILL.md`). In Claude Code you can also add the MCP server: `claude mcp add metagx -- python /abs/path/mcp_server.py`. |
+| **Claude Desktop** | stdio MCP | Add to `claude_desktop_config.json` (see snippet). |
+| **Cursor** | stdio MCP | Add to `.cursor/mcp.json` (see snippet). |
+| **Gemini** (Gemini CLI) | stdio MCP | Add to `~/.gemini/settings.json` under `mcpServers` (see snippet) — Gemini speaks MCP natively; no HTTP needed. |
+| **Codex** | stdio MCP, or CLI | Add the stdio server to `~/.codex/config.toml`, or just call the `metagx` CLI directly. |
+| **Ollama / any plain chat** | paste-in prompt | No tool protocol — paste `prompts/INTERVIEW.md` as the system prompt. The model interviews you and emits a `config.yaml` you run with `metagx run`. |
+
+**MCP client config** (Claude Desktop, Cursor, Gemini CLI all use the same shape — put it in
+that client's config file). Use an absolute path; from a `pip install` use
+`python -m metagx.mcp_server` instead of the file path:
+
+```json
+{
+  "mcpServers": {
+    "metagx": { "command": "python", "args": ["/abs/path/to/mcp_server.py"] }
+  }
+}
+```
+
+**Universal fallback:** if a client has none of the above (or you just want zero setup), paste
+`prompts/INTERVIEW.md` into any model — it's a self-contained interview that emits a valid config.
+
+> _Remote/hosted clients (ChatGPT Custom GPT Actions, Perplexity connectors) are out of scope
+> for now — they require a public HTTPS URL (and, for Perplexity, a paid tier). The server does
+> still expose an MCP-over-HTTP endpoint (`uvicorn mcp_server:app` → `/mcp`) and an OpenAPI schema
+> (`/openapi.json`) if you want to self-host one later, but they aren't a supported setup path._
 
 ## Flexible inputs: FASTA, FASTQ, custom DBs, subsampling
 

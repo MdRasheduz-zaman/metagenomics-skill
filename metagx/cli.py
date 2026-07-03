@@ -38,6 +38,7 @@ from . import (
     plan,
     presets,
     probe,
+    project,
     refresh,
     registry,
     report,
@@ -114,18 +115,29 @@ def cmd_lock(args) -> int:
 
 
 def cmd_env_file(args) -> int:
-    """Print (or --write) the bundled environment.yml — so a wheel-only user can create the env."""
+    """Print (or --write) a conda env spec. With --config, emit a MINIMAL env tailored to that
+    config's active tools (post-interview); otherwise surface the full bundled environment.yml."""
     path = runner.environment_file_path()
     if not path:
         print("bundled environment.yml not found in this install", file=sys.stderr)
         return 1
-    if args.write:
-        import shutil as _sh
-        dest = os.path.join(os.getcwd(), "environment.yml")
-        _sh.copyfile(path, dest)
-        print(f"wrote {dest}\nNow: conda env create -f environment.yml  (or mamba), then activate it.")
+    if args.config:
+        with open(args.config) as fh:
+            cfg = yaml.safe_load(fh)
+        body = report.config_env_yaml(cfg, path, name=args.name)
+        default_dest = "env.yaml"
     else:
-        print(path)
+        with open(path) as fh:
+            body = fh.read()
+        default_dest = "environment.yml"
+    if args.write:
+        dest = os.path.join(os.getcwd(), default_dest)
+        with open(dest, "w") as fh:
+            fh.write(body)
+        print(f"wrote {dest}\nNow: conda env create -f {default_dest}  (or mamba), then activate it.",
+              file=sys.stderr)
+    else:
+        sys.stdout.write(body)
     return 0
 
 
@@ -475,6 +487,28 @@ def cmd_refresh(args) -> int:
     return 0
 
 
+def cmd_project(args) -> int:
+    """Scaffold a complete, runnable analysis folder from a config (config + tailored env + scripts
+    + optional HPC profile), with a collision-safe per-config environment split."""
+    with open(args.config) as fh:
+        cfg = yaml.safe_load(fh)
+    if os.path.exists(args.dir) and os.listdir(args.dir):
+        print(f"refusing to write into non-empty {args.dir} (use a fresh --dir)", file=sys.stderr)
+        return 1
+    res = project.scaffold(cfg, args.dir, executor=args.executor, platform=args.platform)
+    plan = res["plan"]
+    print(f"wrote {len(res['files'])} files to {res['dir']}/", file=sys.stderr)
+    for f in res["files"]:
+        print(f"  {f}", file=sys.stderr)
+    print(f"\ntailored env '{plan['env_name']}': "
+          f"{', '.join(p.split()[0] for p in plan['core_packages']) or '(none)'}", file=sys.stderr)
+    print(f"--use-conda tools (isolated): {', '.join(plan['per_rule_tools']) or '(none)'}",
+          file=sys.stderr)
+    print(f"use-conda for this config: {plan['use_conda']}", file=sys.stderr)
+    print(f"\nNext: cd {res['dir']} && bash 00_setup.sh && bash run.sh", file=sys.stderr)
+    return 0
+
+
 def cmd_catalog(_args) -> int:
     _print_json(catalog.build_catalog())
     return 0
@@ -536,9 +570,13 @@ def build_parser() -> argparse.ArgumentParser:
                     help="print just the context dict (for piping into `interview --probe`)")
     sp.set_defaults(func=cmd_probe)
 
-    sp = sub.add_parser("env-file", help="print (or --write) the bundled environment.yml for the "
-                                         "core conda env (handy on a wheel-only install)")
-    sp.add_argument("--write", action="store_true", help="copy it into the current directory")
+    sp = sub.add_parser("env-file", help="conda env spec: --config emits a MINIMAL env for that "
+                                         "config's tools; otherwise the full bundled environment.yml")
+    sp.add_argument("--config", default=None,
+                    help="a config.yaml — emit only the tools its enabled modules actually need")
+    sp.add_argument("--name", default=None, help="conda env name (default: metagx-<project>)")
+    sp.add_argument("--write", action="store_true",
+                    help="write to ./env.yaml (with --config) or ./environment.yml, instead of stdout")
     sp.set_defaults(func=cmd_env_file)
 
     sp = sub.add_parser("wiring", help="cross-part wiring audit (registry/config/Snakefile/doctor/"
@@ -652,6 +690,18 @@ def build_parser() -> argparse.ArgumentParser:
                     help="also print the paste-ready proposed YAML block to stdout")
     sp.add_argument("--json", action="store_true", help="emit the full proposal as JSON")
     sp.set_defaults(func=cmd_refresh)
+
+    sp = sub.add_parser("project", help="scaffold a complete runnable analysis folder from a "
+                                        "config (tailored collision-safe env + scripts + profile)")
+    sp.add_argument("--config", required=True, help="a validated config.yaml")
+    sp.add_argument("--dir", required=True, help="output folder to create (must be empty/new)")
+    sp.add_argument("--executor", default=None, metavar="NAME",
+                    help=f"HPC scheduler for the profile: {'|'.join(schedulers.list_schedulers())} "
+                         "(omit for a local run)")
+    sp.add_argument("--platform", default="illumina",
+                    help="sequencing platform for the sample-sheet template + tool selection "
+                         "(illumina|ont|pacbio_hifi|...)")
+    sp.set_defaults(func=cmd_project)
 
     sub.add_parser("catalog", help="index of tools, evidence, and workflow scripts").set_defaults(
         func=cmd_catalog

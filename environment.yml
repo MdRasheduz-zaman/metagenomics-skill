@@ -17,6 +17,9 @@ dependencies:
   # classification + abundance
   - kraken2 >=2.1
   - bracken >=2.9
+  # validation (modules.validate): blastn + makeblastdb — validate.smk runs these from PATH
+  # (no per-rule conda: env), so the core env must carry BLAST+ or the module can't run.
+  - blast >=2.12
   # QC (short + long read)
   - fastp >=0.23
   - porechop_abi >=0.5

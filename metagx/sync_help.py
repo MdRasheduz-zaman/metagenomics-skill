@@ -104,6 +104,10 @@ def capture_help(command: str, timeout: int = 30,
     }
 
 
+_USAGE_RE = re.compile(r"^\s*usage\b", re.IGNORECASE)
+_SYNOPSIS_FLAG_RE = re.compile(r"(?<![\w-])(-{1,2}[A-Za-z][\w-]*)")
+
+
 def parse_help_flags(help_text: str) -> List[Dict[str, str]]:
     """Best-effort parse of CLI flags from help output."""
     flags: List[Dict[str, str]] = []
@@ -117,6 +121,18 @@ def parse_help_flags(help_text: str) -> List[Dict[str, str]]:
                 continue
             seen.add(g)
             flags.append({"flag": g, "description": (m.group(3) or "").strip()})
+    # Also harvest flags from a `Usage:` synopsis line. Getopt-style tools (e.g. bracken:
+    # "Usage: bracken -v -d MY_DB -i INPUT ... -r READ_LEN -l LEVEL -t THRESHOLD") only list each
+    # option in the synopsis and then describe it by metavar (READ_LEN) on its own line — so
+    # without this the tool looks like it accepts just the one flag that has an indented line,
+    # and a config-flag check (toollock) false-fails on the rest.
+    for line in help_text.splitlines():
+        if not _USAGE_RE.match(line):
+            continue
+        for tok in _SYNOPSIS_FLAG_RE.findall(line):
+            if tok not in seen:
+                seen.add(tok)
+                flags.append({"flag": tok, "description": "(from usage synopsis)"})
     return flags
 
 

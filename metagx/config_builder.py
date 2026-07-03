@@ -403,6 +403,9 @@ def _validate_db_build(build: Dict[str, Any] | None, samples: Any) -> Dict[str, 
     download_on = str(build.pop("download_on", "rule"))
     if download_on not in {"rule", "login"}:
         raise registry.ValidationError("db.build.download_on must be 'rule' or 'login'")
+    # emitted by this builder (locked to kmer_len below), not a kraken2-build flag — pop it so a
+    # config we generated round-trips back through validation idempotently (metagx validate).
+    build.pop("bracken_kmer_len", None)
 
     params = registry.validate("kraken2-build", build)  # strategy/taxonomy/libraries + tuning
     strategy = params.get("strategy", "standard")

@@ -8,6 +8,18 @@ import json
 from metagx import registry, sync_help, toollock
 
 
+def test_parse_help_flags_harvests_usage_synopsis():
+    """Getopt-style tools (bracken) list flags only in the Usage: synopsis and describe them by
+    metavar; the parser must still capture -r/-l/-t so a config-flag check doesn't false-fail."""
+    help_text = (
+        "Usage: bracken -v -d MY_DB -i INPUT -o OUTPUT -w OUTREPORT -r READ_LEN -l LEVEL -t THRESHOLD\n"
+        "  -v             Echoes the current software version and exits\n"
+        "  READ_LEN       read length (default: 100)\n"
+        "  LEVEL          level to estimate abundance at (default: S)\n")
+    flags = {f["flag"] for f in sync_help.parse_help_flags(help_text)}
+    assert {"-r", "-l", "-t", "-d", "-i", "-o", "-w", "-v"} <= flags
+
+
 def test_conda_version_reads_owning_package(tmp_path):
     """conda_version resolves a binary's version from the conda-meta record that owns it — the
     fallback for tools with no usable --version flag (FastTree/Kaiju/Krona/vsearch)."""

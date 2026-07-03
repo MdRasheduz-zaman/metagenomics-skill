@@ -10,6 +10,8 @@ __pycache__/
 
 # Large / regeneratable outputs
 results/
+# End-user analysis workspaces (config/scripts live here alongside their reads/DBs/results)
+analysis/
 graphify-out/
 data/
 local_databases/

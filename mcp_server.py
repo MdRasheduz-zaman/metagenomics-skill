@@ -40,6 +40,7 @@ from metagx import (
     plan,
     presets,
     probe,
+    project,
     registry,
     report,
     runner,
@@ -523,6 +524,21 @@ def sync_tool_help(tool: str = "") -> str:
     if tool:
         return json.dumps(sync_help.diff_registry(tool), indent=2)
     return json.dumps(sync_help.sync_all(), indent=2)
+
+
+@mcp.tool()
+def scaffold_project(config_path: str, outdir: str, executor: str = "",
+                     platform: str = "illumina") -> str:
+    """Generate a complete, runnable analysis folder from a validated config: the config, a
+    sample-sheet template, a COLLISION-SAFE per-config conda env (env.yaml), an install/env-making
+    script, a run script, an optional HPC profile, and a README. The tool splits the config's tools
+    into a tailored core env (coexisting tools) and isolated --use-conda envs (colliders/heavy), and
+    sets use-conda automatically. Use after build_config. Returns the manifest (files + env plan)."""
+    import yaml
+    with open(config_path) as fh:
+        cfg = yaml.safe_load(fh)
+    res = project.scaffold(cfg, outdir, executor=(executor or None), platform=platform)
+    return json.dumps(res, indent=2)
 
 
 @mcp.tool()

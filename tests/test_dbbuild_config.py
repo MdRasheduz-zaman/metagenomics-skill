@@ -214,6 +214,18 @@ def test_db_build_auto_false_skips_autobuild_dependency():
     assert cfg_manual["db"]["build"]["auto"] is False
 
 
+def test_db_build_config_round_trips_idempotently():
+    """A generated config must re-validate: build_config emits db.build.bracken_kmer_len, so
+    feeding its own output back in (what `metagx validate` does) must not reject that key."""
+    c1 = cb.build_config(project="p", samples=SAMPLES,
+                         db={"kraken2": "d", "build": {"strategy": "standard", "libraries": "viral",
+                                                       "taxonomy": "real"}})
+    assert c1["db"]["build"]["bracken_kmer_len"] == 35
+    # re-feed the emitted db block (bracken_kmer_len included) — must not raise
+    c2 = cb.build_config(project="p", samples=SAMPLES, db=c1["db"])
+    assert c2["db"]["build"]["bracken_kmer_len"] == 35
+
+
 def test_doctor_warns_blast_cost_for_big_standard_library():
     # db.build.blast on a big standard library => makeblastdb is heavy; doctor should warn.
     checks = doctor.check_db_build({"kraken2": "x", "build": {
