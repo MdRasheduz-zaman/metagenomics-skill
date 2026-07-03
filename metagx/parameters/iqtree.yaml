@@ -6,8 +6,8 @@ command: iqtree2
 # so the installed one is detected — the workflow already resolves the same list at run time
 # (workflow/scripts/phylogenetics.py:_iqtree_binary). Don't hardcode a single versioned binary.
 command_candidates: [iqtree3, iqtree]
-source_repo: https://github.com/iqtree/iqtree2
-docs_url: http://www.iqtree.org/
+source_repo: https://github.com/iqtree/iqtree3
+docs_url: http://www.iqtree.org/doc
 description: >
   Maximum likelihood tree inference with automatic model selection (TEST) and ultrafast
   bootstrap. Default phylogenetics backend for <~2000 sequences.
