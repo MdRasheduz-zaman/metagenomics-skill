@@ -2,6 +2,9 @@
 # Used as the second, independent classifier for a kraken2-vs-marker consensus check.
 tool: metaphlan
 command: metaphlan
+source_repo: https://github.com/biobakery/MetaPhlAn
+docs_url: https://huttenhower.sph.harvard.edu/metaphlan/
+version_probe: metaphlan --version
 description: >
   Profiles community composition from shotgun reads using clade-specific marker genes.
   Independent of kraken2's k-mer/DB approach, so agreement between the two is a strong

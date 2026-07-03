@@ -1,6 +1,11 @@
 # Parameter registry for VSEARCH (short-read amplicon OTU clustering). See kraken2.yaml.
 tool: vsearch
 command: vsearch
+source_repo: https://github.com/torognes/vsearch
+docs_url: https://github.com/torognes/vsearch
+# no version_probe: vsearch prints its version to stderr and a citation to stdout, and the help
+# capture prefers stdout — so no probe yields a parseable version here. Left absent (falls back
+# to --help for flag capture) rather than recording a misleading one.
 description: >
   Dereplicates, clusters, and chimera-filters short-read amplicon reads into OTUs (the
   appropriate analysis for marker-gene/amplicon data, where assembly does not apply).

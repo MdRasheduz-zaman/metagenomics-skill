@@ -1,6 +1,9 @@
 # Parameter registry for antiSMASH (biosynthetic gene cluster mining). See kraken2.yaml.
 tool: antismash
 command: antismash
+source_repo: https://github.com/antismash/antismash
+docs_url: https://docs.antismash.secondarymetabolites.org/
+version_probe: antismash --version
 description: >
   Genome-mining of assembled contigs for biosynthetic gene clusters (BGCs) — the loci that
   encode secondary metabolites (antibiotics, siderophores, NRPS/PKS products). Detects and

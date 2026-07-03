@@ -118,6 +118,11 @@ def test_every_registry_is_well_formed(tool):
     reg = registry.load_registry(tool)
     assert reg.get("command"), f"{tool}: missing command"
     for name, spec in reg["params"].items():
+        # `_status: proposed` params are un-reviewed drafts emitted by `metagx refresh` with
+        # guessed fields; they are inert (never interviewed/rendered/settable) so they are exempt
+        # from the strict schema checks until a human curates + promotes them.
+        if spec.get("_status") == "proposed":
+            continue
         assert spec.get("type") in VALID_TYPES, f"{tool}.{name}: bad type {spec.get('type')}"
         if spec.get("type") == "enum":
             assert spec.get("choices"), f"{tool}.{name}: enum needs choices"
@@ -139,6 +144,11 @@ def test_every_registry_is_well_formed(tool):
     # interview + render must not raise for any registry
     registry.interview_spec(tool, max_tier=3)
     registry.render_args(tool, {})
+    # every `conflicts:` rule must be well-formed (structure + module/param references), or it
+    # silently never fires — a false sense of safety worse than no rule.
+    from metagx.config_builder import DEFAULT_MODULES
+    problems = registry.check_conflicts_wellformed(tool, known_modules=list(DEFAULT_MODULES))
+    assert not problems, "\n".join(problems)
 
 
 def test_interpreted_params_are_never_rendered():
@@ -183,3 +193,76 @@ def test_flye_read_type_flags_are_managed():
 def test_new_gap_closing_registries_present():
     tools = registry.list_tools()
     assert "antismash" in tools and "dada2" in tools
+
+
+def test_proposed_param_is_inert(monkeypatch):
+    """A `_status: proposed` draft must never be interviewed, rendered, or settable."""
+    params = {
+        "real": {"type": "bool", "flag": "--real"},
+        "draft": {"type": "int", "flag": "--draft", "ask": True, "tier": 1,
+                  "_status": "proposed", "question": "should not appear"},
+    }
+    monkeypatch.setattr(registry, "_params", lambda tool: params)
+    # not interviewed
+    assert all(p["name"] != "draft" for p in registry.interview_spec("x", max_tier=3))
+    # not rendered even if a value sneaks in
+    assert registry.render_args("x", {"real": True, "draft": 5}) == ["--real"]
+    # rejected on validate
+    import pytest as _pytest
+    with _pytest.raises(registry.ValidationError):
+        registry.validate("x", {"draft": 5})
+
+
+def test_version_info_reads_optional_keys():
+    info = registry.version_info("kraken2")
+    assert set(info) == {"tested_version", "min_version"}
+
+
+def test_resolve_command_finds_alternate_binary(monkeypatch):
+    """A tool shipped under version-suffixed names (iqtree2/iqtree3/iqtree) is resolved to whichever
+    binary is actually on PATH, not the hardcoded primary."""
+    assert registry.command_candidates("iqtree") == ["iqtree2", "iqtree3", "iqtree"]
+    # only iqtree3 installed -> resolve picks it
+    monkeypatch.setattr(registry.shutil, "which",
+                        lambda c: f"/usr/bin/{c}" if c == "iqtree3" else None)
+    assert registry.resolve_command("iqtree") == "iqtree3"
+    # nothing installed -> falls back to the primary
+    monkeypatch.setattr(registry.shutil, "which", lambda c: None)
+    assert registry.resolve_command("iqtree") == "iqtree2"
+
+
+@pytest.mark.parametrize("tool", registry.list_tools())
+def test_every_registry_has_doc_links(tool):
+    """Every registry must carry source_repo + docs_url so `refresh`/curators have the official
+    reference (version_probe stays optional — some tools have no clean version flag)."""
+    meta = registry.tool_metadata(tool)
+    assert meta.get("source_repo"), f"{tool}: missing source_repo"
+    assert meta.get("docs_url"), f"{tool}: missing docs_url"
+
+
+def test_conflicts_wellformed_accepts_kraken2_rules():
+    """The real kraken2 use_mpa_style conflicts are well-formed against the module set."""
+    from metagx.config_builder import DEFAULT_MODULES
+    assert registry.check_conflicts_wellformed(
+        "kraken2", known_modules=list(DEFAULT_MODULES)) == []
+
+
+def test_conflicts_wellformed_flags_bad_rules(monkeypatch):
+    """A rule with a typo'd module, an empty when, or a missing message is reported — not silent."""
+    bad = {
+        "params": {
+            "flagA": {"type": "bool", "flag": "--a", "conflicts": [
+                {"when": {"module_abundanace": True}, "message": "typo'd module"},  # unknown module
+                {"when": {}, "message": "never fires"},                             # empty when
+                {"when": {"module_abundance": True}, "message": ""},                # empty message
+                {"when": {"nope": True}, "message": "unknown sibling key"},         # unknown key
+            ]},
+        }
+    }
+    monkeypatch.setattr(registry, "_params", lambda tool: bad["params"])
+    problems = registry.check_conflicts_wellformed("x", known_modules=["abundance"])
+    assert len(problems) == 4
+    assert any("unknown module 'abundanace'" in p for p in problems)
+    assert any("missing/empty when" in p for p in problems)
+    assert any("missing/empty message" in p for p in problems)
+    assert any("unknown key 'nope'" in p for p in problems)

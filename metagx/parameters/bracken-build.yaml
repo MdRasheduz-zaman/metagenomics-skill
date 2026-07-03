@@ -6,7 +6,7 @@ tool: bracken-build
 command: bracken-build
 source_repo: https://github.com/jenniferlu717/Bracken
 docs_url: https://github.com/jenniferlu717/Bracken#step-1-generate-the-bracken-database-file-databasexmerskmer_distrib
-version_probe: bracken --version
+version_probe: bracken -v   # `bracken --version` prints usage; `-v` reports 'Bracken v3.0.1'
 description: >
   Generates the Bracken database (databaseLmers.kmer_distrib) for a built kraken2 DB, one
   per read length. Requires the kraken2 DB to exist first.

@@ -1,6 +1,9 @@
 # Parameter registry for EukCC (eukaryotic genome/bin completeness). See kraken2.yaml.
 tool: eukcc
 command: eukcc
+source_repo: https://github.com/EBI-Metagenomics/EukCC
+docs_url: https://eukcc.readthedocs.io/
+version_probe: eukcc --version
 description: >
   Estimates completeness and contamination of eukaryotic genomes/bins recovered from
   metagenomes (eukcc single) — the eukaryotic analogue of CheckM/CheckV. The reference DB

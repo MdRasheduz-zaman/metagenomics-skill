@@ -1,6 +1,9 @@
 # Parameter registry for CheckV (viral genome completeness/contamination). See kraken2.yaml.
 tool: checkv
 command: checkv
+source_repo: https://bitbucket.org/berkeleylab/checkv
+docs_url: https://bitbucket.org/berkeleylab/checkv/src/master/
+version_probe: checkv --version
 description: >
   Assesses quality, completeness, and contamination of metagenome-assembled viral genomes
   (the viral analogue of CheckM). Run on viral contigs from geNomad. CheckV's `end_to_end`

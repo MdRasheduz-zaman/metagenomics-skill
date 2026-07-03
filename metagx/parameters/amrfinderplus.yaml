@@ -1,6 +1,9 @@
 # Parameter registry for AMRFinderPlus (acquired AMR + stress/virulence genes). See kraken2.yaml.
 tool: amrfinderplus
 command: amrfinder
+source_repo: https://github.com/ncbi/amr
+docs_url: https://github.com/ncbi/amr/wiki
+version_probe: amrfinder --version
 description: >
   Identifies acquired antimicrobial-resistance genes (and, with --plus, stress/biocide and
   virulence genes) on assembled contigs using NCBI's curated AMR reference gene catalog + HMMs.

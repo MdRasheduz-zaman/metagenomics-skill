@@ -1,6 +1,8 @@
 # Parameter registry for MetaBAT2 (genome binning, optional). See kraken2.yaml.
 tool: metabat2
 command: metabat2
+source_repo: https://bitbucket.org/berkeleylab/metabat
+docs_url: https://bitbucket.org/berkeleylab/metabat/wiki/Home
 version_probe: "metabat2 --help"   # prints 'version 2:2.18' (no --version flag)
 description: >
   Groups assembled contigs into draft genome bins (MAGs) using tetranucleotide

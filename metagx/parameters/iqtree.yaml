@@ -1,6 +1,11 @@
 # Parameter registry for IQ-TREE 2 (maximum likelihood phylogeny). See kraken2.yaml.
 tool: iqtree
 command: iqtree2
+# IQ-TREE ships under version-suffixed binaries: v2 as `iqtree2`, v3 as `iqtree3`, and some builds
+# as plain `iqtree`. Version/drift/provenance probing resolves across these (registry.resolve_command)
+# so the installed one is detected — the workflow already resolves the same list at run time
+# (workflow/scripts/phylogenetics.py:_iqtree_binary). Don't hardcode a single versioned binary.
+command_candidates: [iqtree3, iqtree]
 source_repo: https://github.com/iqtree/iqtree2
 docs_url: http://www.iqtree.org/
 description: >

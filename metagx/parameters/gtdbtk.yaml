@@ -1,6 +1,9 @@
 # Parameter registry for GTDB-Tk (prokaryotic bin/MAG taxonomy). See kraken2.yaml.
 tool: gtdbtk
 command: gtdbtk
+source_repo: https://github.com/Ecogenomics/GTDBTk
+docs_url: https://ecogenomics.github.io/GTDBTk/
+version_probe: gtdbtk --version
 description: >
   Genome-level taxonomic classification of bacterial/archaeal bins against the Genome
   Taxonomy Database (GTDB) using marker genes (classify_wf). Run on MetaBAT2 bins. The

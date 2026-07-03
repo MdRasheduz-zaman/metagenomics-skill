@@ -1,6 +1,9 @@
 # Parameter registry for DAS_Tool (consensus bin selection across binners). See kraken2.yaml.
 tool: das_tool
 command: DAS_Tool
+source_repo: https://github.com/cmks/DAS_Tool
+docs_url: https://github.com/cmks/DAS_Tool
+version_probe: DAS_Tool --version
 description: >
   Integrates the bin sets from MetaBAT2, MaxBin2 and CONCOCT and selects a single,
   non-redundant set of the highest-scoring bins per contig (dereplication, aggregation

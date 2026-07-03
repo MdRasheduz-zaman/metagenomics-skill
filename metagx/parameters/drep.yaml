@@ -1,6 +1,9 @@
 # Parameter registry for dRep (cross-sample genome dereplication). See kraken2.yaml.
 tool: drep
 command: dRep
+source_repo: https://github.com/MrOlm/drep
+docs_url: https://drep.readthedocs.io/
+version_probe: dRep --version
 description: >
   Dereplicates MAGs across samples into a non-redundant set of representative genomes by
   clustering on ANI, keeping the best genome per cluster. The multi-sample step that turns

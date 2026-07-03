@@ -1,6 +1,9 @@
 # Parameter registry for MEGAHIT (metagenomic assembly, optional). See kraken2.yaml.
 tool: megahit
 command: megahit
+source_repo: https://github.com/voutcn/megahit
+docs_url: https://github.com/voutcn/megahit
+version_probe: megahit --version
 description: >
   Memory-efficient de novo assembler for metagenomes, building contigs from QC'd reads
   using a succinct de Bruijn graph over multiple k-mer sizes.

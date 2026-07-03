@@ -1,6 +1,9 @@
 # Parameter registry for HUMAnN 3 (read-based functional/pathway profiling). See kraken2.yaml.
 tool: humann
 command: humann
+source_repo: https://github.com/biobakery/humann
+docs_url: https://huttenhower.sph.harvard.edu/humann/
+version_probe: humann --version
 description: >
   Profiles the functional potential of a shotgun metagenome — gene families (UniRef),
   reactions, and MetaCyc pathways — directly from QC'd reads (no assembly required).

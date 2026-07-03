@@ -1,6 +1,9 @@
 # Parameter registry for mapDamage2 (ancient-DNA damage authentication). See kraken2.yaml.
 tool: mapdamage
 command: mapDamage
+source_repo: https://github.com/ginolhac/mapDamage
+docs_url: https://ginolhac.github.io/mapDamage/
+version_probe: mapDamage --version
 description: >
   Quantifies post-mortem DNA damage from reads mapped to a reference: C→T at 5' ends and
   G→A at 3' ends (cytosine deamination) plus fragment-length and base-misincorporation

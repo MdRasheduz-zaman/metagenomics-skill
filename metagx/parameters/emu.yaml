@@ -1,6 +1,9 @@
 # Parameter registry for Emu (long-read amplicon abundance). See kraken2.yaml for fields.
 tool: emu
 command: emu
+source_repo: https://github.com/treangenlab/emu
+docs_url: https://github.com/treangenlab/emu
+version_probe: emu --version
 description: >
   Relative abundance estimation for long-read (ONT/PacBio) full-length 16S amplicons using
   expectation-maximization against a marker-gene database — the long-read amplicon analogue

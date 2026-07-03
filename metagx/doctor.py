@@ -26,7 +26,7 @@ import subprocess
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-from . import report, runner
+from . import registry, report, runner
 
 # Minimum acceptable (major, minor) per load-bearing tool — the single source of truth,
 # mirrored from environment.yml. tests/test_tool_versions.py imports this so the floors
@@ -380,6 +380,61 @@ def check_config_flags(cfg: Optional[Dict] = None) -> List[Check]:
     return out
 
 
+def check_param_conflicts(cfg: Optional[Dict] = None) -> List[Check]:
+    """Catch flag combinations that each validate fine in isolation but are jointly broken — e.g.
+    kraken2 ``use_mpa_style`` set while the Bracken/abundance module is on (the mpa report format
+    breaks the kreport parser). Registry-driven: a param declares ``conflicts: [{when:, message:}]``
+    and this evaluates them against the run context (module toggles + the tool's set params)."""
+    out: List[Check] = []
+    if not cfg:
+        return out
+    # Evaluate against the *effective* module map, not the literal `modules:` block. Several
+    # modules (abundance, classify, qc) default ON and run whether or not the config lists them,
+    # so a hand-written config that omits `modules:` must still trip a conflict against a
+    # default-on module — otherwise the guard misses the very case it exists for.
+    from .config_builder import DEFAULT_MODULES
+    mods = {**DEFAULT_MODULES, **(cfg.get("modules", {}) or {})}
+    ctx = {f"module_{name}": bool(on) for name, on in mods.items()}
+    for tool in registry.list_tools():
+        section = cfg.get(tool)
+        if not isinstance(section, dict) or not section:
+            continue
+        try:
+            conflicts = registry.param_conflicts(tool, section, context=ctx)
+        except registry.ValidationError:
+            continue  # a malformed section is config-validation's job, not ours
+        for c in conflicts:
+            out.append(Check(f"conflict:{tool}.{c['param']}", _FAIL, c["message"],
+                             remedy="resolve the conflict: unset the flag, or turn off the "
+                                    "module it is incompatible with."))
+    return out
+
+
+def check_registry_version_drift(probe=None) -> List[Check]:
+    """INFO when an installed tool's version differs from the ``tested_version`` its registry was
+    curated against — a nudge to run ``metagx refresh <tool>``. Only fires for tools that both
+    record a ``tested_version`` and are installed; a missing/uninstalled tool is silent (other
+    checks own PATH). ``probe`` is injectable for tests (default: ``toollock.probe_tool``)."""
+    from . import refresh, toollock
+    probe = probe or toollock.probe_tool
+    out: List[Check] = []
+    for tool in registry.list_tools():
+        tested = registry.version_info(tool).get("tested_version")
+        if not tested:
+            continue
+        info = probe(tool)
+        if not info.get("installed") or not info.get("version"):
+            continue
+        inst_tok = refresh.version_token(info["version"])
+        test_tok = refresh.version_token(tested)
+        if inst_tok and test_tok and inst_tok != test_tok:
+            out.append(Check(
+                f"version-drift:{tool}", _INFO,
+                f"{tool} installed {inst_tok}, registry curated for {test_tok}.",
+                remedy=f"run `metagx refresh {tool}` to review flag changes, then bump tested_version."))
+    return out
+
+
 def check_validate_alignment(cfg: Optional[Dict] = None) -> List[Check]:
     """STRONG guard on kraken2↔blastn alignment for the `validate` module. The validation is
     only meaningful if the BLAST reference covers the SAME organisms as the classifier — best
@@ -437,6 +492,8 @@ def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -
     checks += check_db_build(db_paths)
     checks += check_module_dbs(cfg)
     checks += check_config_flags(cfg)
+    checks += check_param_conflicts(cfg)
+    checks += check_registry_version_drift()
     checks += check_validate_alignment(cfg)
     return checks
 

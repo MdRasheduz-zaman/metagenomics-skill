@@ -3,6 +3,9 @@
 # shell redirection in the workflow, not as flags. Only --threads is a managed flag.
 tool: chopper
 command: chopper
+source_repo: https://github.com/wdecoster/chopper
+docs_url: https://github.com/wdecoster/chopper
+version_probe: chopper --version
 description: >
   Quality and length filtering for long reads (ONT / PacBio). Successor to NanoFilt;
   streams FASTQ from stdin to stdout.

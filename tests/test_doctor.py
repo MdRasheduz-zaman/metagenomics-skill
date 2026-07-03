@@ -86,6 +86,50 @@ def test_database_ok_for_built_db(tmp_path):
     assert c.status == "ok"
 
 
+def test_param_conflict_mpa_style_with_abundance_fails():
+    """use_mpa_style + abundance(Bracken) on is individually-valid but jointly broken (3.3)."""
+    cfg = {"modules": {"abundance": True}, "kraken2": {"use_mpa_style": True}}
+    checks = doctor.check_param_conflicts(cfg)
+    assert any(c.name == "conflict:kraken2.use_mpa_style" and c.status == "fail" for c in checks)
+
+
+def test_param_conflict_silent_when_module_off():
+    """No conflict when the incompatible module is disabled."""
+    assert doctor.check_param_conflicts(
+        {"modules": {"abundance": False}, "kraken2": {"use_mpa_style": True}}) == []
+
+
+def test_param_conflict_fires_on_default_on_module(tmp_path):
+    """abundance defaults ON; a config that omits `modules:` entirely but sets use_mpa_style
+    must still trip the conflict — the effective module map, not the literal block (F1)."""
+    cfg = {"kraken2": {"use_mpa_style": True}}  # no `modules:` block at all
+    checks = doctor.check_param_conflicts(cfg)
+    assert any(c.name == "conflict:kraken2.use_mpa_style" and c.status == "fail" for c in checks)
+
+
+def test_param_conflict_silent_when_flag_unset():
+    """No conflict when the flag itself isn't set, even with the module on."""
+    assert doctor.check_param_conflicts(
+        {"modules": {"abundance": True}, "kraken2": {"confidence": 0.1}}) == []
+
+
+def test_version_drift_info_when_installed_differs_from_tested():
+    """kraken2 registry records tested_version 2.17.1; a probe reporting a different installed
+    version yields an INFO drift check pointing at `metagx refresh`."""
+    def probe(tool):
+        return {"installed": True, "version": "Kraken version 2.18.0"}
+    checks = doctor.check_registry_version_drift(probe=probe)
+    assert any(c.name == "version-drift:kraken2" and c.status == "info" for c in checks)
+
+
+def test_version_drift_silent_when_matching_or_absent():
+    assert doctor.check_registry_version_drift(
+        probe=lambda t: {"installed": True, "version": "Kraken version 2.17.1"}) == []
+    # uninstalled tool is silent (PATH is another check's job)
+    assert doctor.check_registry_version_drift(
+        probe=lambda t: {"installed": False, "version": None}) == []
+
+
 def test_format_report_summarizes_failures(monkeypatch):
     checks = [doctor.Check("a", "fail", "broke", remedy="fix it"),
               doctor.Check("b", "ok", "fine")]

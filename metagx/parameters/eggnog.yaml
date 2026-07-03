@@ -1,6 +1,9 @@
 # Parameter registry for eggNOG-mapper (functional annotation of MAG proteins). See kraken2.yaml.
 tool: eggnog
 command: emapper.py
+source_repo: https://github.com/eggnogdb/eggnog-mapper
+docs_url: https://github.com/eggnogdb/eggnog-mapper/wiki
+version_probe: emapper.py --version
 description: >
   Assigns orthology-based functional annotation — COG categories, KEGG KOs/pathways, GO
   terms, CAZy, EC numbers — to predicted proteins from a MAG/genome via eggNOG orthologs.

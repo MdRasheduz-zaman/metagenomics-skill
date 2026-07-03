@@ -255,8 +255,11 @@ def tool_versions(tools: List[str]) -> Dict[str, str]:
     """
     versions = {}
     for tool in tools:
-        reg = registry.load_registry(tool) if tool in registry.list_tools() else {}
-        cmd = reg.get("command", tool)
+        known = tool in registry.list_tools()
+        reg = registry.load_registry(tool) if known else {}
+        # resolve across candidate binaries (e.g. iqtree2/iqtree3/iqtree) so the manifest captures
+        # the version of whichever IQ-TREE is installed, not a null for the hardcoded name.
+        cmd = registry.resolve_command(tool) if known else tool
         exe = shutil.which(cmd)
         if not exe:
             versions[tool] = "not found on PATH"

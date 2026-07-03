@@ -1,6 +1,9 @@
 # Parameter registry for Bracken (abundance re-estimation). See kraken2.yaml for fields.
 tool: bracken
 command: bracken
+source_repo: https://github.com/jenniferlu717/Bracken
+docs_url: https://ccb.jhu.edu/software/bracken/
+version_probe: bracken -v
 description: >
   Bayesian re-estimation of species/genus abundance from a kraken2 report, redistributing
   reads assigned to higher ranks down to the chosen level.

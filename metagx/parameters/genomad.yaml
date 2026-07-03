@@ -1,6 +1,9 @@
 # Parameter registry for geNomad (viral/plasmid identification + taxonomy). See kraken2.yaml.
 tool: genomad
 command: genomad
+source_repo: https://github.com/apcamargo/genomad
+docs_url: https://portal.nersc.gov/genomad/
+version_probe: genomad --version
 description: >
   Identifies viral and plasmid contigs in an assembly and assigns viral taxonomy (ICTV)
   via marker genes and a neural-network classifier. Used as the viral contig router.

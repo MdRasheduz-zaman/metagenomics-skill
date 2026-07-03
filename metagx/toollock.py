@@ -27,9 +27,10 @@ from . import registry, sync_help
 def probe_tool(tool: str, capture: Optional[Callable[[str], Dict]] = None) -> Dict[str, Any]:
     """Resolve + version + accepted flags for one registry tool's command."""
     reg = registry.load_registry(tool)
-    command = reg.get("command", tool)
-    exe = command.split()[0]
-    resolved = shutil.which(exe)
+    # resolve across candidate binaries (iqtree2/iqtree3/iqtree) so a tool installed under an
+    # alternate name is probed, not reported absent.
+    command = registry.resolve_command(tool)
+    resolved = shutil.which(command)
     if capture:
         cap = capture(command)
     else:

@@ -1,6 +1,9 @@
 # Parameter registry for Bakta (rapid, standardized bacterial genome/MAG annotation). See kraken2.yaml.
 tool: bakta
 command: bakta
+source_repo: https://github.com/oschwengers/bakta
+docs_url: https://github.com/oschwengers/bakta
+version_probe: bakta --version
 description: >
   Annotates prokaryotic genomes and MAGs — CDS, rRNA/tRNA, ncRNA, CRISPR — with stable,
   database-backed identifiers. Run per recovered bin to give MAGs a gene catalog.

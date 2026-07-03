@@ -1,6 +1,8 @@
 # Parameter registry for EukRep (eukaryotic vs prokaryotic contig separation). See kraken2.yaml.
 tool: eukrep
 command: EukRep
+source_repo: https://github.com/patrickwest/EukRep
+docs_url: https://github.com/patrickwest/EukRep
 description: >
   Classifies assembled contigs as eukaryotic or prokaryotic, used to split a mixed
   metagenome before eukaryote-specific downstream analysis.

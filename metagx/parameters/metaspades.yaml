@@ -1,6 +1,9 @@
 # Parameter registry for metaSPAdes (paired-end short-read / hybrid assembler). See kraken2.yaml.
 tool: metaspades
 command: spades.py
+source_repo: https://github.com/ablab/spades
+docs_url: https://ablab.github.io/spades/
+version_probe: spades.py --version
 description: >
   De novo metagenome assembler (SPAdes in --meta mode) for paired-end short reads, with
   optional hybrid assembly when long reads are also supplied for a sample. An accuracy-

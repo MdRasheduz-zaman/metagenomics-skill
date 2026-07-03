@@ -1,6 +1,8 @@
 # Parameter registry for Krona (interactive taxonomy charts from kraken2 reports). See kraken2.yaml.
 tool: krona
 command: ktImportText
+source_repo: https://github.com/marbl/Krona
+docs_url: https://github.com/marbl/Krona/wiki
 description: >
   Renders kraken2 reports as an interactive, zoomable multi-layered pie chart (one HTML file,
   all samples) for exploring community composition by clade. Fed via kreport2krona text (the

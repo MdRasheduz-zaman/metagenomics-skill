@@ -3,6 +3,7 @@ tool: mafft
 command: mafft
 source_repo: https://github.com/GSLBiotech/mafft
 docs_url: https://mafft.cbrc.jp/alignment/software/
+version_probe: mafft --version
 description: >
   Multiple sequence alignment for phylogenetics. Method presets are applied in the
   phylogenetics workflow script (not all MAFFT modes map to a single CLI flag).

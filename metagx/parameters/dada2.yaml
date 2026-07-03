@@ -3,6 +3,8 @@
 # workflow/scripts/dada2_asv.R (one tiny arg parser); I/O is injected by the rule.
 tool: dada2
 command: Rscript
+source_repo: https://github.com/benjjneb/dada2
+docs_url: https://benjjneb.github.io/dada2/
 description: >
   Resolves amplicon (16S/18S/ITS) reads into exact amplicon sequence variants (ASVs) by
   modelling and correcting sequencing error, rather than clustering into 97% OTUs. ASVs are

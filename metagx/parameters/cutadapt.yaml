@@ -1,6 +1,9 @@
 # Parameter registry for cutadapt (amplicon primer removal). See kraken2.yaml for fields.
 tool: cutadapt
 command: cutadapt
+source_repo: https://github.com/marcelm/cutadapt
+docs_url: https://cutadapt.readthedocs.io/
+version_probe: cutadapt --version
 description: >
   Removes PCR primers (and adapters) from amplicon reads before OTU/ASV inference or
   abundance estimation. Primer sequences come from the `amplicon` config block.

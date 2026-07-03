@@ -1,6 +1,9 @@
 # Parameter registry for inStrain (strain-level microdiversity / SNV profiling). See kraken2.yaml.
 tool: instrain
 command: inStrain
+source_repo: https://github.com/MrOlm/inStrain
+docs_url: https://instrain.readthedocs.io/
+version_probe: inStrain --version
 description: >
   Profiles within-population microdiversity from reads mapped to contigs/MAGs: per-position
   SNVs, nucleotide diversity (π), coverage, and breadth — enabling strain-level comparison

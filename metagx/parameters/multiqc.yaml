@@ -1,6 +1,9 @@
 # Parameter registry for MultiQC (aggregate QC + tool reports into one HTML). See kraken2.yaml.
 tool: multiqc
 command: multiqc
+source_repo: https://github.com/MultiQC/MultiQC
+docs_url: https://multiqc.info/docs/
+version_probe: multiqc --version
 description: >
   Scans the results directory and aggregates per-sample reports (fastp, kraken2, and more)
   into a single interactive HTML report with read-flow accounting across all samples.

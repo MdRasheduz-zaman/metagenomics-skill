@@ -38,6 +38,7 @@ from . import (
     plan,
     presets,
     probe,
+    refresh,
     registry,
     report,
     runner,
@@ -447,6 +448,33 @@ def cmd_scaffold(args) -> int:
     return 0
 
 
+def cmd_refresh(args) -> int:
+    """Propose registry updates for a tool from its installed binary (advisory; no auto-edit)."""
+    proposal = refresh.plan_refresh(args.tool)
+    if args.json:
+        _print_json(proposal)
+        return 0
+    print(proposal["summary"], file=sys.stderr)
+    if not proposal["capture_ok"]:
+        print(f"  {proposal['error']}", file=sys.stderr)
+        return 0
+    v = proposal["version"]
+    if v["differs"]:
+        print(f"  version: registry curated for {v['tested']}, installed {v['installed']} "
+              f"— bump tested_version after re-checking flags.", file=sys.stderr)
+    for f in proposal["removed_flags"]:
+        print(f"  drift: registry flag '{f}' not in installed --help (renamed/removed?)",
+              file=sys.stderr)
+    if proposal["new_params"]:
+        path = refresh.write_proposal(proposal, root=args.root)
+        print(f"  wrote {len(proposal['new_params'])} proposed stub(s) to {path}", file=sys.stderr)
+        print("  review + paste curated entries into the registry, then remove `_status: proposed`.",
+              file=sys.stderr)
+        if args.inline:
+            sys.stdout.write(refresh.render_sidecar(proposal))
+    return 0
+
+
 def cmd_catalog(_args) -> int:
     _print_json(catalog.build_catalog())
     return 0
@@ -613,6 +641,17 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--out", default=None,
                     help="write YAML to this path (refuses to overwrite); default: stdout")
     sp.set_defaults(func=cmd_scaffold)
+
+    sp = sub.add_parser("refresh",
+                        help="propose registry updates for a tool from its installed binary "
+                             "(new flags + version drift; advisory, never auto-edits)")
+    sp.add_argument("tool", help="registry tool name (e.g. kraken2)")
+    sp.add_argument("--root", default=".",
+                    help="where to write the refresh/<tool>.proposed.yaml sidecar (default: cwd)")
+    sp.add_argument("--inline", action="store_true",
+                    help="also print the paste-ready proposed YAML block to stdout")
+    sp.add_argument("--json", action="store_true", help="emit the full proposal as JSON")
+    sp.set_defaults(func=cmd_refresh)
 
     sub.add_parser("catalog", help="index of tools, evidence, and workflow scripts").set_defaults(
         func=cmd_catalog

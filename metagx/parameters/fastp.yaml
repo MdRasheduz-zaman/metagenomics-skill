@@ -1,6 +1,9 @@
 # Parameter registry for fastp (read QC / trimming). See kraken2.yaml for field docs.
 tool: fastp
 command: fastp
+source_repo: https://github.com/OpenGene/fastp
+docs_url: https://github.com/OpenGene/fastp
+version_probe: fastp --version
 description: >
   Fast all-in-one FASTQ preprocessor: adapter trimming, quality filtering, length
   filtering, optional deduplication and low-complexity filtering.

@@ -1,6 +1,9 @@
 # Parameter registry for CONCOCT (a third binner, for DAS_Tool consensus). See kraken2.yaml.
 tool: concoct
 command: concoct
+source_repo: https://github.com/BinPro/CONCOCT
+docs_url: https://concoct.readthedocs.io/
+version_probe: concoct --version
 description: >
   Bins contigs by clustering on sequence composition + coverage across samples using
   Gaussian mixture models. Run alongside MetaBAT2 and MaxBin2 to feed DAS_Tool.

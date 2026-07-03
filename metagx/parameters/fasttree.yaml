@@ -1,6 +1,8 @@
 # Parameter registry for FastTree (fast approximate ML phylogeny). See kraken2.yaml.
 tool: fasttree
 command: FastTree
+source_repo: http://www.microbesonline.org/fasttree/
+docs_url: http://www.microbesonline.org/fasttree/
 description: >
   Fast approximate maximum-likelihood trees for large alignments (>500–1000 sequences).
   Used when phylogenetics.method is fasttree or sequence count exceeds iqtree threshold.

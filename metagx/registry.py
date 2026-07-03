@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import functools
 import shlex
+import shutil
 from importlib import resources
 from typing import Any, Dict, List, Tuple
 
@@ -46,6 +47,55 @@ def tool_metadata(tool: str) -> Dict[str, Any]:
         for k in ("source_repo", "docs_url", "version_probe")
         if reg.get(k)
     }
+
+
+def version_info(tool: str) -> Dict[str, Any]:
+    """Version provenance for a registry (optional keys, mirrors ``tool_metadata``).
+
+    ``tested_version`` records the tool version the params were last curated against;
+    ``min_version`` is an advisory floor. Both are *curation provenance* — distinct from
+    doctor's runtime minimum-version enforcement (``doctor._MIN``, from environment.yml).
+    Missing keys come back as ``None`` so callers can compare without a KeyError.
+    """
+    reg = load_registry(tool)
+    return {
+        "tested_version": reg.get("tested_version"),
+        "min_version": reg.get("min_version"),
+    }
+
+
+def command_candidates(tool: str) -> List[str]:
+    """Executable names to try for a tool, in order: its declared ``command`` exe first, then any
+    ``command_candidates`` from the registry. Pure (just the declared names). Tools that ship under
+    version-suffixed binaries (IQ-TREE: ``iqtree2`` / ``iqtree3`` / ``iqtree``) declare the
+    alternates here so probing can find whichever is installed instead of hardcoding one."""
+    reg = load_registry(tool)
+    prim = (reg.get("command") or tool).split()[0]
+    out = [prim]
+    for c in reg.get("command_candidates") or []:
+        exe = str(c).split()[0]
+        if exe and exe not in out:
+            out.append(exe)
+    return out
+
+
+def resolve_command(tool: str) -> str:
+    """The first ``command_candidates`` name found on PATH, else the primary. Impure (looks at the
+    live PATH): lets version/drift/provenance probing detect a tool installed under an alternate
+    binary name — mirroring the workflow's IQ-TREE resolution — rather than reporting it absent
+    because only the primary name is hardcoded. Used by toollock/report/refresh, not by rendering."""
+    cands = command_candidates(tool)
+    for c in cands:
+        if shutil.which(c):
+            return c
+    return cands[0]
+
+
+def _is_proposed(spec: Dict[str, Any]) -> bool:
+    """A ``_status: proposed`` param is an un-reviewed draft (emitted by ``metagx refresh``).
+    It is inert everywhere — never interviewed, rendered, or settable — until a human removes
+    the marker. This is the safety gate that keeps a guessed flag out of a real command line."""
+    return spec.get("_status") == "proposed"
 
 
 def _params(tool: str) -> Dict[str, Any]:
@@ -120,7 +170,7 @@ def interview_spec(tool: str, max_tier: int = 2,
     """
     out: List[Dict[str, Any]] = []
     for name, spec in _params(tool).items():
-        if spec.get("managed"):
+        if spec.get("managed") or _is_proposed(spec):
             continue
         promo = _promotion(spec, context)
         ask = spec.get("ask", False) or promo is not None
@@ -149,6 +199,92 @@ def interview_spec(tool: str, max_tier: int = 2,
         out.append(entry)
     out.sort(key=lambda p: p["tier"])
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Cross-cutting semantic conflicts                                             #
+# --------------------------------------------------------------------------- #
+def param_conflicts(tool: str, values: Dict[str, Any],
+                    context: Dict[str, Any] | None = None) -> List[Dict[str, str]]:
+    """Conflicts a per-param ``validate`` can't see: a flag that is *individually* legal but
+    incompatible with another set param or an enabled module.
+
+    ``validate`` checks each value in isolation (bounds/enum/type), so it cannot catch a
+    combination like kraken2 ``--use-mpa-style`` set while the Bracken/abundance module is on
+    (the mpa report format breaks the kreport parser). A registry param declares such cases:
+
+        conflicts:
+          - when: { module_abundance: true }      # same when: semantics as warn_if/promote_when
+            message: ...
+
+    A conflict fires only when the param is *active* (a truthy bool, or a non-empty value) AND its
+    ``when:`` matches ``context``. The caller supplies ``context`` from the whole config — module
+    toggles as ``module_<name>`` plus anything else worth cross-checking; sibling params of the same
+    tool are folded in automatically so a param can also conflict with another param. Pure (no IO);
+    returns ``[{"param", "message"}, ...]``.
+    """
+    params = _params(tool)
+    ctx = dict(context or {})
+    for sib, sval in (values or {}).items():   # let a param conflict with sibling params
+        ctx.setdefault(sib, sval)
+    out: List[Dict[str, str]] = []
+    for name, value in (values or {}).items():
+        spec = params.get(name)
+        if not spec:
+            continue
+        active = bool(value) if spec.get("type") == "bool" else value not in (None, "")
+        if not active:
+            continue
+        for rule in spec.get("conflicts") or []:
+            if when_matches(rule.get("when") or {}, ctx):
+                out.append({"param": name,
+                            "message": " ".join(str(rule.get("message", "")).split())})
+    return out
+
+
+def check_conflicts_wellformed(tool: str, known_modules: List[str] | None = None) -> List[str]:
+    """Structural + reference validation for a tool's ``conflicts:`` rules — returns a list of
+    problems (empty == well-formed). Wired into the registry well-formedness test.
+
+    A conflict rule that is malformed or that references something that doesn't exist
+    **silently never fires**, which is worse than no rule: the registry *looks* like it guards a
+    dangerous combination. So we check that each rule is a dict carrying a non-empty ``message``
+    and a non-empty ``when``, and that every ``when`` key either names a real sibling param of
+    this tool or is ``module_<name>`` naming a real module. ``known_modules`` is supplied by the
+    caller (config_builder owns the module list) to keep this module dependency-light; when it is
+    ``None`` the ``module_*`` reference check is skipped (structure is still validated).
+    """
+    params = _params(tool)
+    modset = set(known_modules) if known_modules is not None else None
+    problems: List[str] = []
+    for name, spec in params.items():
+        rules = spec.get("conflicts")
+        if rules is None:
+            continue
+        if not isinstance(rules, list):
+            problems.append(f"{tool}.{name}: conflicts must be a list, got {type(rules).__name__}")
+            continue
+        for i, rule in enumerate(rules):
+            where = f"{tool}.{name}.conflicts[{i}]"
+            if not isinstance(rule, dict):
+                problems.append(f"{where}: each conflict must be a mapping")
+                continue
+            if not str(rule.get("message", "")).strip():
+                problems.append(f"{where}: missing/empty message")
+            when = rule.get("when")
+            if not isinstance(when, dict) or not when:
+                problems.append(f"{where}: missing/empty when (rule would never fire)")
+                continue
+            for key in when:
+                base = next((key[: -len(s)] for s in _CMP if key.endswith(s)), key)
+                if base.startswith("module_"):
+                    mod = base[len("module_"):]
+                    if modset is not None and mod not in modset:
+                        problems.append(f"{where}: when references unknown module '{mod}'")
+                elif base not in params:
+                    problems.append(f"{where}: when references unknown key '{base}' "
+                                    f"(not a {tool} param or module_<name>)")
+    return problems
 
 
 # --------------------------------------------------------------------------- #
@@ -205,6 +341,11 @@ def validate(tool: str, values: Dict[str, Any]) -> Dict[str, Any]:
             raise ValidationError(
                 f"'{name}' is managed by the workflow and cannot be set manually."
             )
+        if _is_proposed(spec):
+            raise ValidationError(
+                f"'{name}' is a proposed/uncurated {tool} param (drafted by `metagx refresh`); "
+                f"review and remove its `_status: proposed` marker before setting it."
+            )
         if isinstance(value, list):
             if not spec.get("sweepable"):
                 raise ValidationError(f"'{name}' is not sweepable; give a single value.")
@@ -250,7 +391,8 @@ def render_args(tool: str, values: Dict[str, Any], managed: Dict[str, Any] | Non
         spec = params[name]
         # `interpreted` params are user-facing (asked + validated) but consumed by a
         # workflow script, not emitted as a CLI flag — never render them here.
-        if spec.get("interpreted"):
+        # `_status: proposed` params are un-reviewed drafts — never let one reach a command line.
+        if spec.get("interpreted") or _is_proposed(spec):
             continue
         if value is None or value == "":
             continue

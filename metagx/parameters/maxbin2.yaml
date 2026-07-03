@@ -1,6 +1,8 @@
 # Parameter registry for MaxBin2 (a second binner, for DAS_Tool consensus). See kraken2.yaml.
 tool: maxbin2
 command: run_MaxBin.pl
+source_repo: https://sourceforge.net/projects/maxbin2/
+docs_url: https://sourceforge.net/projects/maxbin2/
 description: >
   Bins assembled contigs into MAGs using tetranucleotide frequency + coverage with an
   Expectation-Maximization algorithm. Run alongside MetaBAT2 and CONCOCT so DAS_Tool can

@@ -17,3 +17,6 @@ tmp/
 .metagx/
 # Pasted CI logs (triage scratch)
 e2e_error.txt
+# `metagx refresh` proposal sidecars (paste-ready drafts, not committed as-is)
+refresh/
+*.proposed.yaml

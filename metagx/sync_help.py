@@ -46,7 +46,10 @@ def capture_help(command: str, timeout: int = 30,
 
     version = None
     vargs = version_cmd.split()[1:] if version_cmd else ["--version"]
-    vtext = _run([exe] + vargs, 10)
+    # Heavy Python CLIs (genomad, checkm2, gtdbtk, metaphlan, humann, …) can take >10s just to
+    # import before printing --version; use the same budget as the help capture so their probe
+    # doesn't spuriously time out to a null version.
+    vtext = _run([exe] + vargs, timeout)
     if vtext:
         version = vtext.strip().split("\n")[0]
 

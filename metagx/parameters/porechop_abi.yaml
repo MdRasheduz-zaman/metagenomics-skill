@@ -1,6 +1,9 @@
 # Parameter registry for Porechop_ABI (ONT adapter removal). See kraken2.yaml for fields.
 tool: porechop_abi
 command: porechop_abi
+source_repo: https://github.com/bonsai-team/Porechop_ABI
+docs_url: https://github.com/bonsai-team/Porechop_ABI
+version_probe: porechop_abi --version
 description: >
   Removes adapters from Oxford Nanopore reads. The ABI mode infers adapter sequences ab
   initio from the data rather than relying only on a known-adapter database.

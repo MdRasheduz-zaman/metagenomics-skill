@@ -2,6 +2,8 @@
 # Used as the second, independent classifier for a kraken2-vs-protein consensus check.
 tool: kaiju
 command: kaiju
+source_repo: https://github.com/bioinformatics-centre/kaiju
+docs_url: https://bioinformatics-centre.github.io/kaiju/
 description: >
   Classifies reads by translated-protein matches (BWT/FM-index over a protein reference),
   which is more robust to novel/divergent organisms than nucleotide k-mers. A protein-space

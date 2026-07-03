@@ -1,6 +1,9 @@
 # Parameter registry for ABRicate (mass screening of contigs for AMR / virulence). See kraken2.yaml.
 tool: abricate
 command: abricate
+source_repo: https://github.com/tseemann/abricate
+docs_url: https://github.com/tseemann/abricate
+version_probe: abricate --version
 description: >
   Mass-screens assembled contigs against a chosen resistance/virulence database
   (NCBI, CARD, ResFinder, ARG-ANNOT, VFDB, PlasmidFinder) by BLAST. A fast,

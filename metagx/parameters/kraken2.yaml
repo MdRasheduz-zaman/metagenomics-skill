@@ -15,11 +15,29 @@
 #   tier        1 core / 2 common / 3 advanced  (controls how eagerly to ask)
 #   ask         whether the interview should raise it at all
 #   question    natural-language prompt the LLM uses during the interview
+#   _status     `proposed` => an un-reviewed draft entry emitted by `metagx refresh` (guessed
+#               fields). Inert everywhere — never interviewed, rendered, settable, or schema-
+#               checked — until a human curates it and removes the marker.
+#   conflicts   list of {when:, message:} — when this param is set (active) AND `when:` matches
+#               the run context (module toggles `module_<name>` + sibling params), `metagx doctor`
+#               fails with `message`. Catches individually-valid-but-jointly-broken flag
+#               combinations that per-param validation can't see (same `when:` semantics as
+#               warn_if). doctor evaluates `when:` against the *effective* module map (defaults
+#               merged with the config), so a rule may reference a default-on module. NOTE: a rule
+#               only fires when the *declaring* param is active — for a param↔param conflict,
+#               declare it on the param you expect to be set. `when:` keys are checked for
+#               existence at test time (typo'd module/param → test failure, not a silent no-op).
 tool: kraken2
 command: kraken2
 source_repo: https://github.com/DerrickWood/kraken2
 docs_url: https://github.com/DerrickWood/kraken2/wiki/Manual
 version_probe: kraken2 --version
+# tested_version: the tool version these params were last curated against (curation provenance,
+#   read by registry.version_info). `metagx refresh` / `metagx doctor` flag drift when the
+#   installed version differs. min_version is an optional advisory floor. Distinct from doctor's
+#   runtime version floor (doctor._MIN, from environment.yml) — that's minimum-supported, not
+#   curated-against.
+tested_version: "2.17.1"
 description: >
   Taxonomic classifier that assigns reads to taxa via exact k-mer matches against a
   reference database.
@@ -143,6 +161,18 @@ params:
     question: >
       Emit the report in MetaPhlAn (mpa) style. Note: changes the report format and will
       break the default kreport/Bracken parsing — only for standalone kraken2 output.
+    conflicts:
+      - when: { module_abundance: true }
+        message: >
+          kraken2.use_mpa_style emits the MetaPhlAn report format, which the abundance
+          (Bracken) module cannot parse — Bracken reads the standard kreport layout and
+          will fail or produce empty estimates. Unset use_mpa_style, or disable
+          modules.abundance if you only want standalone mpa-style kraken2 output.
+      - when: { module_classify_consensus: true }
+        message: >
+          kraken2.use_mpa_style changes the report format that the classifier-consensus
+          step reads via formats.kreport_row; unset it, or disable
+          modules.classify_consensus.
   memory_mapping:
     flag: "--memory-mapping"
     type: bool
