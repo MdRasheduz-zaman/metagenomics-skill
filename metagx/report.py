@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional
 
 import yaml
 
-from . import __version__, registry
+from . import __version__, registry, sync_help
 
 # Citations keyed by tool. Kept here so the Methods section is publication-ready.
 CITATIONS: Dict[str, str] = {
@@ -236,7 +236,10 @@ def active_tools(cfg: Dict[str, Any]) -> List[str]:
 
 def _scan_for_version(text: str) -> str:
     """First short, non-usage line carrying a dotted version, or 'unknown'."""
-    junk = ("usage", "unrecognized", "error", "command not found", "must specify", "recommend")
+    # "doi"/"http" reject citation/URL lines (e.g. vsearch prints a PeerJ DOI whose 10.7717 looks
+    # version-shaped) so we don't mistake a citation for a version — falls through to conda instead.
+    junk = ("usage", "unrecognized", "error", "command not found", "must specify", "recommend",
+            "doi", "http")
     for line in (text or "").strip().splitlines():
         line = line.strip()
         if (line and len(line) < 160 and re.search(r"\d+\.\d+", line)
@@ -248,10 +251,13 @@ def _scan_for_version(text: str) -> str:
 def tool_versions(tools: List[str]) -> Dict[str, str]:
     """Best-effort version capture; records 'not found' if a tool isn't on PATH.
 
-    Prefers a registry's ``version_probe`` (the canonical command for that tool) when present —
-    several bioinformatics tools print their version only via an idiosyncratic command (e.g.
-    ``metabat2 --help`` carries ``version 2:2.18``), so the generic ``--version`` probe misreads
-    or misses them. Falls back to trying ``--version``/``version``/``-v``/``-V``.
+    Order of sources: (1) a registry ``version_probe`` (the canonical command when a tool prints
+    its version only via an idiosyncratic call, e.g. ``metabat2 --help`` carries ``version
+    2:2.18``); (2) for a tool with NO ``version_probe`` — meaning its CLI has no clean version flag
+    — the **conda package version** from ``conda-meta`` (authoritative for bioconda installs, and
+    it sidesteps the generic scan tripping on citations / dependency versions, e.g. vsearch prints
+    a PeerJ DOI and its zlib version); (3) the generic ``--version``/``version``/``-v``/``-V``
+    scan for anything still unknown (non-conda installs).
     """
     versions = {}
     for tool in tools:
@@ -273,7 +279,14 @@ def tool_versions(tools: List[str]) -> Dict[str, str]:
                 ver = _scan_for_version((p.stdout or "") + "\n" + (p.stderr or ""))
             except (subprocess.SubprocessError, OSError):
                 ver = "unknown"
-        # 2) generic fallbacks
+        # 2) conda package version — for a tool with no version_probe, this is the reliable source
+        # (its CLI has no clean version flag, which is why the probe was left absent). Preferred
+        # over the fragile generic scan below, which mistakes citations/dep versions for the version.
+        if ver == "unknown" and not probe:
+            cv = sync_help.conda_version(exe)
+            if cv:
+                ver = cv
+        # 3) generic CLI fallbacks (non-conda installs, or tools whose probe came up empty)
         if ver == "unknown":
             for flag in ("--version", "version", "-v", "-V"):
                 try:
@@ -283,6 +296,11 @@ def tool_versions(tools: List[str]) -> Dict[str, str]:
                         break
                 except (subprocess.SubprocessError, OSError):
                     continue
+        # 4) last-ditch conda lookup (probe was declared but came up empty, and CLI too)
+        if ver == "unknown":
+            cv = sync_help.conda_version(exe)
+            if cv:
+                ver = cv
         versions[tool] = ver
     return versions
 

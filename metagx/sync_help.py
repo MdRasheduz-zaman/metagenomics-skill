@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
 import shutil
 import subprocess
@@ -10,6 +12,38 @@ from typing import Any, Dict, List, Optional
 from . import registry
 
 FLAG_RE = re.compile(r"^\s+(-{1,2}[\w-]+)(?:[,\s]+(-{1,2}[\w-]+))?\s+(.*)$")
+_VERSION_NUM = re.compile(r"\d+\.\d+")   # a dotted version number, e.g. 2.31.0
+
+
+def conda_version(exe_path: Optional[str]) -> Optional[str]:
+    """Version of the conda package that owns an installed binary, read from ``conda-meta``.
+
+    A uniform fallback for tools whose CLI has no usable ``--version`` flag (FastTree, Kaiju,
+    Krona, …) but which are installed from bioconda: given the resolved binary path
+    ``<prefix>/bin/<exe>``, find the ``conda-meta/*.json`` record whose ``files`` list owns that
+    binary and return its ``version``. Returns ``None`` when the tool isn't a conda install (no
+    ``conda-meta`` in the prefix) or can't be matched — callers keep whatever they had."""
+    if not exe_path:
+        return None
+    bindir = os.path.dirname(exe_path)          # <prefix>/bin
+    prefix = os.path.dirname(bindir)            # <prefix>
+    meta = os.path.join(prefix, "conda-meta")
+    if not os.path.isdir(meta):
+        return None
+    name = os.path.basename(exe_path)
+    want = os.path.join("bin", name)            # conda-meta files are prefix-relative, e.g. bin/FastTree
+    for fn in os.listdir(meta):
+        if not fn.endswith(".json"):
+            continue
+        try:
+            with open(os.path.join(meta, fn)) as fh:
+                data = json.load(fh)
+        except (OSError, ValueError):
+            continue
+        files = data.get("files") or []
+        if want in files or any(os.path.basename(f) == name for f in files):
+            return data.get("version")
+    return None
 
 
 def _run(argv: List[str], timeout: int) -> str:
@@ -52,6 +86,14 @@ def capture_help(command: str, timeout: int = 30,
     vtext = _run([exe] + vargs, timeout)
     if vtext:
         version = vtext.strip().split("\n")[0]
+
+    # Fall back to the conda package version when the CLI gave us nothing version-shaped — covers
+    # tools with no usable --version flag (FastTree/Kaiju/Krona) and ones that print a citation
+    # instead of a version (vsearch), as long as they're a bioconda install.
+    if not version or not _VERSION_NUM.search(version):
+        cv = conda_version(shutil.which(exe))
+        if cv:
+            version = cv
 
     return {
         "command": command,
