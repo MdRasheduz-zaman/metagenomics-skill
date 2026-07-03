@@ -44,7 +44,8 @@ def test_print_version_table():
 def test_tool_meets_version_floor(tool):
     raw = _CAPTURED[tool]
     if raw == "not found on PATH":
-        pytest.skip(f"{tool} not installed on this machine")
+        pytest.skip(f"{tool} not on PATH in this shell — activate the bio env "
+                    f"(e.g. `conda activate metagx-bio` or append its bin) before running")
     got = _parse_xy(raw)
     if got is None:
         # present but exposes no parseable version (e.g. bracken has no --version) — can't
