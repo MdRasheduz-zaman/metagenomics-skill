@@ -4,7 +4,7 @@ A flexible, **interview-driven metagenomics pipeline** that runs the same way wh
 it's driven by Claude, Cursor, ChatGPT/Codex, Gemini, Perplexity, Ollama, or a plain
 terminal. An LLM interviews the user about what they want, then generates a validated
 `config.yaml` for a Snakemake workflow that runs read QC, taxonomic classification,
-abundance estimation, and optional assembly + binning.
+abundance estimation, and optional assembly + binning, etc.
 
 ## The idea: one registry drives everything
 
