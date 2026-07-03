@@ -114,6 +114,16 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    - write an `answers.json` and run `metagx build-config answers.json`, or
    - construct `config.yaml` directly following `config/config.example.yaml`,
    then verify with `metagx validate config.yaml`.
+4b. **Scaffold the runnable project (the end-user deliverable).** Package the config into a
+   self-contained folder with **`metagx project --config config.yaml --dir <name>
+   [--executor <sched>] [--platform <plat>]`**. It writes the config, a sample-sheet template,
+   a **collision-safe per-config `env.yaml`** (only the tools this config's modules call — tools
+   that coexist go in one env; colliders/heavy ones like abricate/GTDB-Tk are left to isolated
+   `--use-conda` envs, and `use-conda` is set automatically), plus `00_setup.sh` (installs metagx
+   from GitHub + builds that env — works on a laptop or an HPC login node), `run.sh`, an HPC
+   `profile/`, and a README. The user then just runs `bash 00_setup.sh && bash run.sh` from the
+   folder. This is how metagx hands a *novel* laptop/HPC user a working pipeline without a global
+   tool install. (MCP clients: the `scaffold_project` tool.)
 5. **Dry run, then run:** `metagx run --config config.yaml --dry-run`, then drop
    `--dry-run`. (Database not present? `metagx fetch-db <name> --dir <dir>` — see step 2;
    only download when the user agrees, the index is large.)
@@ -388,7 +398,8 @@ conda ≥ 24.7.1; metagx tells the user if neither is present. The `functional` 
 ## Other clients
 - **MCP** (Claude Desktop, Cursor, any MCP client): `python mcp_server.py`. Tools:
   `list_pipeline_tools`, `list_presets`, `get_preset`, `list_schedulers`, `get_parameters`,
-  `get_interview`, `build_config`, `run_pipeline` (with `executor`), `get_results`,
+  `get_interview`, `build_config`, `scaffold_project` (writes the full runnable folder +
+  collision-safe env), `run_pipeline` (with `executor`), `get_results`,
   `generate_report`, `generate_paper`, `compare_platforms`.
 - **Web agents** (ChatGPT Actions, Gemini, Perplexity): `uvicorn mcp_server:app` exposes
   `/api/v1/tools`, `/api/v1/interview/{tool}`, `/api/v1/build-and-run`.

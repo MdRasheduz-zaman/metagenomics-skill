@@ -74,7 +74,10 @@ def run_trimal(input_fasta: str, output_fasta: str, method: str = "automated1") 
     try:
         subprocess.run(cmd, check=True, capture_output=True, text=True)
         return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, OSError):
+        # trimming is OPTIONAL — fall back to the untrimmed alignment on ANY failure to run trimal
+        # (absent => FileNotFoundError, present-but-not-executable => PermissionError, etc.). OSError
+        # is the shared parent, so a broken/missing trimal degrades gracefully instead of crashing.
         shutil.copy(input_fasta, output_fasta)
         return False
 

@@ -132,9 +132,12 @@ that matches their goal.
 - `host_removal: {genome: <fasta>}` — deplete host reads before the whole pipeline (clinical/
   host-pathogen samples; pair with high kraken2 confidence + the consensus cross-check).
 
-**G. HPC / cluster** — if the user runs on a cluster, the same config submits via a scheduler:
-`metagx run --config config.yaml --executor slurm|lsf|sge|pbs|generic` (or `local`). Tell them
-to edit the bundled `workflow/profiles/<name>/config.yaml` (partition/account/queue) once first.
+**G. HPC / cluster** — if the user runs on a cluster, the same config submits via a scheduler.
+Best: `metagx project --config config.yaml --dir my_run --executor slurm|lsf|sge|pbs|generic`
+scaffolds a local `my_run/profile/config.yaml` for them to edit (partition/account/queue) — plus
+the tailored env + install script the cluster's login node needs. Or run directly with
+`metagx run --config config.yaml --executor <name>` and edit the bundled
+`workflow/profiles/<name>/config.yaml` once first.
 
 ## Output schema (emit exactly this shape)
 ```yaml
@@ -156,6 +159,13 @@ bracken: {read_length: 150, level: S, threshold: 10}
 If a preset was chosen, add `preset: <name>` at the top of the config (the user's values
 still override it). Then print:
 ```
+# BEST for a fresh laptop/HPC user — scaffold a self-contained runnable folder:
+metagx project --config config.yaml --dir my_run   # add --executor slurm|lsf|sge|pbs|generic on a cluster
+#   Writes: the config, a sample-sheet template, a COLLISION-SAFE per-config env.yaml (only the
+#   tools this config needs; colliders/heavy tools stay in isolated --use-conda envs), 00_setup.sh
+#   (installs metagx from GitHub + builds that env), run.sh, an HPC profile/, and a README.
+#   Then the user just runs:   cd my_run && bash 00_setup.sh && bash run.sh
+# Or, if metagx + the tools are already installed, run directly:
 metagx run --config config.yaml        # add --executor slurm|lsf|sge|pbs|generic on a cluster
 metagx report --config config.yaml     # provenance manifest + paste-ready Methods + report
 metagx paper  --config config.yaml      # full IMRaD manuscript (LaTeX → PDF via pdflatex)
