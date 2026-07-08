@@ -47,8 +47,8 @@ def test_build_db_recovers_from_kraken2_build_sigpipe(tmp_path, monkeypatch):
     DBs, yet writes a valid database. build_db must trust the artifacts over the exit code.
 
     This is the exact failure that broke the CI e2e job (the build step returned 64 with
-    "xargs: cat: terminated by signal 13") while the same DB built fine on macOS where the
-    prebuilt DB meant the build never ran. Regression guard for that false negative.
+    "xargs: cat: terminated by signal 13") while elsewhere a prebuilt DB meant the build never
+    ran. Regression guard for that false negative.
     """
     g = _write_genomes(tmp_path / "g.fasta")
     db_dir = tmp_path / "db"

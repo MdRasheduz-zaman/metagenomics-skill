@@ -1,7 +1,6 @@
 """metagx doctor — environment preflight.
 
-Turns the macOS/arm64 + bioconda landmines that used to live as tribal knowledge
-(Rosetta / CONDA_SUBDIR scoping, the broken Bracken osx-64 build, the abricate
+Turns the bioconda landmines that used to live as tribal knowledge (the abricate
 samtools-0.1.x downgrade, missing tools, a missing database) into machine-checked
 diagnostics. Each check yields a ``Check`` with a status and, when something is wrong, the
 *exact* remedy — so a stranger on their own machine gets steered, not stranded.
@@ -9,7 +8,7 @@ diagnostics. Each check yields a ``Check`` with a status and, when something is 
 Statuses:
   ok    — verified good.
   info  — context, no action needed.
-  warn  — works, but a known footgun is armed (e.g. CONDA_SUBDIR leaking to base).
+  warn  — works, but a known footgun is armed (e.g. a tool present but below its version floor).
   fail  — will break a real run; remedy provided.
 
 `run()` returns a list of Checks; `cli()` prints them and exits non-zero if any failed
@@ -78,33 +77,7 @@ def _parse_xy(version_str: Optional[str]):
 def check_platform() -> List[Check]:
     sys_name, machine = platform.system(), platform.machine()
     out = [Check("platform", _INFO, f"{sys_name} / {machine} / Python {platform.python_version()}")]
-    if sys_name == "Darwin" and machine == "arm64":
-        out.append(Check(
-            "apple-silicon", _INFO,
-            "Apple Silicon (arm64): bioconda lacks native builds for several tools, so the "
-            "supported install runs them x86_64 under Rosetta (CONDA_SUBDIR=osx-64).",
-            remedy="The most reliable path on this machine is Docker or a Linux box. If you "
-                   "install natively, follow scripts/install_bio_macos_arm64.sh and scope "
-                   "CONDA_SUBDIR to that single command — never export it into your base shell.",
-        ))
     return out
-
-
-def check_conda_subdir_leak() -> Check:
-    """A globally-exported CONDA_SUBDIR=osx-64 will pull x86_64 packages into the arm64 base
-    env and corrupt it — the single nastiest documented footgun."""
-    val = os.environ.get("CONDA_SUBDIR")
-    if not val:
-        return Check("conda-subdir", _OK, "CONDA_SUBDIR is not exported globally.")
-    if val == "osx-64" and platform.machine() == "arm64":
-        return Check(
-            "conda-subdir", _WARN,
-            f"CONDA_SUBDIR={val} is exported in this shell.",
-            remedy="On Apple Silicon this can drag x86_64 packages into your arm64 base env and "
-                   "break conda. Unset it (`unset CONDA_SUBDIR`) and scope it inline only to the "
-                   "specific bioconda install command that needs it.",
-        )
-    return Check("conda-subdir", _INFO, f"CONDA_SUBDIR={val} is exported.")
 
 
 def check_workflow() -> Check:
@@ -162,8 +135,8 @@ def check_tools(floors: Optional[Dict[str, tuple]] = None,
 
 
 def check_bracken_runs() -> Optional[Check]:
-    """Bracken's osx-64 conda build is known-broken; a present-but-unrunnable binary is worse
-    than a missing one because it passes a naive `which` check. Actually invoke it."""
+    """A present-but-unrunnable bracken binary is worse than a missing one because it passes a
+    naive `which` check. Actually invoke it."""
     exe = shutil.which("bracken")
     if not exe:
         return None  # absence is already reported by check_tools
@@ -171,14 +144,12 @@ def check_bracken_runs() -> Optional[Check]:
         p = subprocess.run(["bracken", "-h"], capture_output=True, text=True, timeout=20)
     except (subprocess.SubprocessError, OSError) as e:
         return Check("bracken-runs", _FAIL, f"bracken is on PATH but failed to execute: {e}",
-                     remedy="On Apple Silicon the osx-64 Bracken conda build is broken — "
-                            "see scripts/install_bio_macos_arm64.sh, or use Docker/Linux.")
+                     remedy="Reinstall bracken (e.g. from environment.yml / bioconda), or use Docker.")
     blob = (p.stdout or "") + (p.stderr or "")
     if p.returncode != 0 and "usage" not in blob.lower() and "bracken" not in blob.lower():
         return Check("bracken-runs", _FAIL,
                      f"bracken is on PATH but `bracken -h` exited {p.returncode} with no usage text.",
-                     remedy="Likely the broken osx-64 build. Reinstall per "
-                            "scripts/install_bio_macos_arm64.sh, or use Docker/Linux.")
+                     remedy="Reinstall bracken (e.g. from environment.yml / bioconda), or use Docker.")
     return Check("bracken-runs", _OK, "bracken executes.")
 
 
@@ -481,7 +452,6 @@ def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -
     """Run every preflight check and return the results in display order."""
     checks: List[Check] = []
     checks += check_platform()
-    checks.append(check_conda_subdir_leak())
     checks.append(check_workflow())
     checks += check_tools()
     b = check_bracken_runs()

@@ -22,8 +22,8 @@ container when you need the *same* versions months later.
 ```bash
 pip install conda-lock
 
-# core env -> conda-lock.yml (linux-64 + osx-64 + osx-arm64)
-conda-lock lock -f environment.yml -p linux-64 -p osx-64 -p osx-arm64 --lockfile conda-lock.yml
+# core env -> conda-lock.yml (linux-64)
+conda-lock lock -f environment.yml -p linux-64 --lockfile conda-lock.yml
 
 # (optional) lock every per-rule env too
 for e in workflow/envs/*.yaml; do

@@ -52,9 +52,8 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
    manual step. `metagx doctor --config` is still the fail-fast backstop once a config exists.
 
 1. **One-time setup** (if not done): `bash setup.sh`, then `uv pip install -e .`. The bio
-   tools install via conda/mamba (on Apple-Silicon macOS use
-   `bash scripts/install_bio_macos_arm64.sh`). **Then run `metagx doctor`** — it preflights
-   arch/conda/tool/DB hazards and prints the exact remedy for anything wrong. If `doctor`
+   tools install via conda/mamba (linux-64). **Then run `metagx doctor`** — it preflights
+   tool/DB hazards and prints the exact remedy for anything wrong. If `doctor`
    reports failures (missing/old core tools, broken Bracken, samtools downgrade), fix those
    before continuing; relay the remedies to the user.
 2. **Get a database** (the #1 real blocker — don't skip). Check with `metagx doctor --config
@@ -319,7 +318,7 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   (Illumina) only in practice** — inStrain's default `--min_read_ani 0.95` rejects most
   ONT/PacBio reads (~5–15% error), so the advisor warns when `strain` is on with long-read
   samples. Provision inStrain via `--use-conda` (bioconda), not pip — it pins an ancient
-  biopython that won't build on modern arm64/Python.
+  biopython that won't build on a modern Python.
 - **Per-sample Bracken length**: kmer_distrib is length-specific. Priority for `-r`: sample
   sheet `bracken_read_length` column > `bracken_read_length_by_platform: {illumina: 150,
   ont: 1000}` > global `bracken.read_length`. The DB must have that `databaseXmers` built.

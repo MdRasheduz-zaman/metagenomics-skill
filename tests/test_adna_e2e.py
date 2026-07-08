@@ -3,10 +3,9 @@
 The damage module's science is: map reads to a reference, quantify post-mortem cytosine
 deamination with mapDamage2 (elevated C→T at 5' read ends, G→A at 3' ends), and emit an
 authenticity verdict (`workflow/scripts/damage_authenticate.py`). The full Snakemake module
-maps to a *de novo assembly*, but MEGAHIT segfaults on this Apple-Silicon/Rosetta env, so here
-we exercise the aDNA-specific steps directly against the viral reference genomes — which is
-exactly what the workflow's mapdamage→authenticate rules do, minus the (shared, arch-broken)
-assembly step.
+maps to a *de novo assembly*, but the assembler is not exercised here (it may be unavailable in
+this env), so we run the aDNA-specific steps directly against the viral reference genomes — which
+is exactly what the workflow's mapdamage→authenticate rules do, minus the assembly step.
 
 We simulate two libraries from the 30 viral genomes:
   * a damaged library (terminal C→T / G→A deamination applied) -> must authenticate as aDNA,

@@ -553,7 +553,7 @@ def test_provided_contigs_skip_assembly(tmp_path, viral_db):
     """A sample can supply pre-assembled contigs; the assembler is skipped and downstream
     modules consume them. Here the 30 viral genomes are fed as `contigs` and reconciled
     against ONT reads — proving the staging rule wires contigs into the contig-consuming path
-    without running MEGAHIT/Flye (which also dodges the MEGAHIT-on-osx-64 segfault)."""
+    without running MEGAHIT/Flye (also useful where an assembler isn't installed)."""
     ont = DATA / "simulated_metagenomic_reads.fasta"
     if not ont.is_file():
         ont = FIXTURE_ONT

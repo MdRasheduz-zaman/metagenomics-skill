@@ -20,11 +20,8 @@ if ! command -v conda-lock >/dev/null 2>&1; then
   exit 1
 fi
 
-# Lock linux-64 only — the CI/Docker/HPC target, where bioconda has native builds for the
-# whole stack so the env solves cleanly and reproducibly. macOS/arm64 is intentionally not
-# locked: bioconda lacks native arm64 builds and the osx-64 (Rosetta) stack doesn't solve as a
-# unit (broken Bracken build, etc.), so Mac users follow scripts/install_bio_macos_arm64.sh or
-# use the Docker image. Add `--platform osx-64` here only if/when that stack becomes solvable.
+# Lock linux-64 — the CI/Docker/HPC target, where bioconda has native builds for the whole
+# stack so the env solves cleanly and reproducibly.
 conda-lock lock \
   --file environment.yml \
   --platform linux-64 \

@@ -35,3 +35,7 @@ config/*
 config/**/
 !config/config.example.yaml
 !config/cross_platform.manifest.tsv
+scripts/install_bio_macos_arm64.sh
+scripts/run_platform_assemblies.sh
+scripts/simulate_pacbio.sh
+scripts/simulate_illumina_wgsim.sh

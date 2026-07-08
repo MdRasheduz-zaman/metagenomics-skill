@@ -290,9 +290,9 @@ def build_config(
 def check_environment(config_path: str = "") -> str:
     """Preflight the environment: detect arch/conda/tool/DB hazards and return remedies.
 
-    Run this BEFORE a real pipeline run to catch the macOS/arm64 + bioconda landmines (broken
-    Bracken build, samtools 0.1.x downgrade, CONDA_SUBDIR leakage, missing core tools, a
-    missing kraken2 DB). Pass a config_path to also verify that config's kraken2 database.
+    Run this BEFORE a real pipeline run to catch the bioconda landmines (broken/unrunnable
+    Bracken binary, samtools 0.1.x downgrade, missing core tools, a missing kraken2 DB). Pass
+    a config_path to also verify that config's kraken2 database.
     Returns a JSON list of checks with status (ok/info/warn/fail) and a remedy for each problem.
     """
     import yaml

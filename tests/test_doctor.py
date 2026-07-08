@@ -1,8 +1,8 @@
 """`metagx doctor` preflight (metagx/doctor.py).
 
-Turns the macOS/arm64 + bioconda landmines into machine-checked diagnostics. These tests
-drive the checks with controlled inputs (monkeypatched tool versions / env) so they run the
-same everywhere, with no bio tools installed.
+Turns the bioconda landmines into machine-checked diagnostics. These tests drive the checks
+with controlled inputs (monkeypatched tool versions / env) so they run the same everywhere,
+with no bio tools installed.
 """
 import os
 
@@ -19,26 +19,6 @@ def test_workflow_check_ok_in_repo():
     c = doctor.check_workflow()
     assert c.status == "ok"
     assert "Snakefile" in c.message
-
-
-def test_conda_subdir_leak_warns_on_arm64(monkeypatch):
-    monkeypatch.setenv("CONDA_SUBDIR", "osx-64")
-    monkeypatch.setattr(doctor.platform, "machine", lambda: "arm64")
-    c = doctor.check_conda_subdir_leak()
-    assert c.status == "warn"
-    assert "base env" in (c.remedy or "")
-
-
-def test_conda_subdir_clean_when_unset(monkeypatch):
-    monkeypatch.delenv("CONDA_SUBDIR", raising=False)
-    assert doctor.check_conda_subdir_leak().status == "ok"
-
-
-def test_apple_silicon_info_emitted(monkeypatch):
-    monkeypatch.setattr(doctor.platform, "system", lambda: "Darwin")
-    monkeypatch.setattr(doctor.platform, "machine", lambda: "arm64")
-    names = {c.name for c in doctor.check_platform()}
-    assert "apple-silicon" in names
 
 
 def test_core_tool_missing_is_fail(monkeypatch):

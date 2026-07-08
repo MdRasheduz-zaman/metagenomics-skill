@@ -312,20 +312,20 @@ everything. The two supported paths:
 git clone <repo> && cd metagenomics-skill
 bash setup.sh                 # uv venv + editable install + dirs
 
-# 2. Docker (the most reliable path on Apple Silicon — no Rosetta dance)
+# 2. Docker (portable, reproducible build)
 docker build -t metagx .
 docker run --rm -v "$PWD:/data" metagx metagx run --config /data/config.yaml
 ```
 
 The bioinformatics tools (kraken2, fastp, …) are installed separately via conda — see
 [Requirements](#requirements). After installing, **run `metagx doctor`** — it preflights your
-environment (arch/conda hazards, tool versions, the broken-Bracken / samtools-downgrade traps,
-and whether a database is present) and prints the exact remedy for anything wrong.
+environment (tool versions, the unrunnable-Bracken / samtools-downgrade traps, and whether a
+database is present) and prints the exact remedy for anything wrong.
 
 ## Quick start
 
 ```bash
-metagx doctor                 # preflight: arch/tool/DB hazards + remedies (run this first)
+metagx doctor                 # preflight: tool/DB hazards + remedies (run this first)
 metagx plan                   # intent-first opener: hint of what to mention in your goal
 metagx plan --preset gut-profiling   # a goal -> modules + the DB checklist to ask up front
 metagx tools                  # list pipeline steps
@@ -419,11 +419,11 @@ that client's config file). Use an absolute path; from a `pip install` use
   reproducible 20% of reads (faster/cheaper). Format-aware and dependency-free
   (single-end for now). Subsampling feeds QC/classification automatically.
 
-### Worked example (bundled `data/`)
+### Worked example (bundled viral fixture)
 
 ```bash
-# 30 viral reference genomes -> custom kraken2 + Bracken DB
-metagx build-db --genomes data/genomes.fasta --db local_databases/viral_custom --read-length 150
+# 30 viral reference genomes (bundled at tests/fixtures/viral/) -> custom kraken2 + Bracken DB
+metagx build-db --genomes tests/fixtures/viral/genomes.fasta --db local_databases/viral_custom --read-length 150
 
 # Classify 20% of 20,000 FASTA reads across a confidence sweep, with abundance + report
 metagx build-config answers.json --out config.yaml   # answers.json comes from the interview
@@ -435,22 +435,23 @@ confidence 0.0 / 0.1 / 0.5), Bracken abundances, and a paste-ready Methods parag
 
 ## Requirements
 
-Python ≥3.10 and these bioinformatics tools on `PATH` for the steps you enable:
-`kraken2`, `bracken`, `fastp`, and (for assembly/binning) `megahit`, `minimap2`,
-`samtools`, `metabat2`. Install the whole core stack from the pinned spec:
-`conda env create -f environment.yml` (or `mamba env create -f environment.yml`), then
-`conda activate metagx`. `metagx doctor` verifies the tools are present **and** meet their
-version floors (it catches the silent samtools 0.1.x downgrade that breaks the pipeline).
+Runs on **linux-64**; Python ≥3.10. You don't pick the bioinformatics tools by hand — the
+**interview → config decides them**, and the exact tool set for a run falls out of the modules it
+enables. There are two ways to get those tools onto a machine:
 
-The heavier optional layers — `metaspades`; `humann`/`amrfinderplus`/`abricate`/`bakta`/
-`eggnog-mapper`; `maxbin2`/`concoct`/`das_tool`/`drep`; `metaphlan`/`kaiju`; `multiqc`/`krona` —
-each have an isolated env under `workflow/envs/` and are provisioned automatically by
-`metagx run --use-conda` (Snakemake creates each env on first use), so you only install what
-the modules you enable actually need. They also need their own reference DBs (see
-`db.*` in `config/config.example.yaml`).
+- **Generated project (recommended for real runs).** `metagx project --config config.yaml --dir D`
+  writes a self-contained folder whose `00_setup.sh` builds an environment with **only the tools
+  that config needs** — coexisting ones in one conda env, heavy/conflicting ones left to isolated
+  `--use-conda` envs Snakemake provisions per-rule on first use. Nothing to guess or over-install.
+- **Run it yourself / development.** Install the core stack from the pinned spec:
+  `conda env create -f environment.yml` (or `mamba env create -f environment.yml`), then
+  `conda activate metagx`. This covers QC, classification, abundance, assembly, binning, and
+  reconciliation. The heavier optional layers — `metaspades`; `humann`/`amrfinderplus`/`abricate`/
+  `bakta`/`eggnog-mapper`; `maxbin2`/`concoct`/`das_tool`/`drep`; `metaphlan`/`kaiju`;
+  `multiqc`/`krona` — each have an isolated env under `workflow/envs/` and are provisioned
+  automatically by `metagx run --use-conda`, so you only install what your enabled modules actually
+  need. They also need their own reference DBs (see `db.*` in `config/config.example.yaml`).
 
-**Apple Silicon (arm64) macOS:** bioconda has no native arm64 builds for kraken2/bracken,
-and its osx-64 `bracken` package is a broken placeholder. Run
-`bash scripts/install_bio_macos_arm64.sh`, which creates an osx-64 (Rosetta) conda env for
-kraken2/fastp/seqtk and builds Bracken from source (with Homebrew `libomp`), including a
-fix for an upstream `bracken` wrapper bug. Then put the env on `PATH` before running metagx.
+Either way, **run `metagx doctor`** — it verifies the tools are present **and** meet their version
+floors (it catches the silent samtools 0.1.x downgrade that breaks the pipeline) and that a
+database is present.
