@@ -22,3 +22,16 @@ e2e_error.txt
 # `metagx refresh` proposal sidecars (paste-ready drafts, not committed as-is)
 refresh/
 *.proposed.yaml
+
+# Maintainer-only / dev-local — kept on disk but out of the public repo
+CLAUDE.md
+docs/internal/
+tools.lock.json
+/config.yaml
+scripts/run_experiments_and_papers.sh
+scripts/REMOVE-*.md
+# dev test/experiment fixtures — keep only the two curated examples
+config/*
+config/**/
+!config/config.example.yaml
+!config/cross_platform.manifest.tsv

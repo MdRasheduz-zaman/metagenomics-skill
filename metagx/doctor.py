@@ -1,7 +1,7 @@
 """metagx doctor — environment preflight.
 
-Turns the macOS/arm64 + bioconda landmines that used to live as tribal knowledge in
-CLAUDE.md (Rosetta / CONDA_SUBDIR scoping, the broken Bracken osx-64 build, the abricate
+Turns the macOS/arm64 + bioconda landmines that used to live as tribal knowledge
+(Rosetta / CONDA_SUBDIR scoping, the broken Bracken osx-64 build, the abricate
 samtools-0.1.x downgrade, missing tools, a missing database) into machine-checked
 diagnostics. Each check yields a ``Check`` with a status and, when something is wrong, the
 *exact* remedy — so a stranger on their own machine gets steered, not stranded.

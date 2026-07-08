@@ -38,8 +38,8 @@ layers" below.
 
 **Already have a genome or assembly?** Give a sample a `contigs:` column (a FASTA) and the
 assembler is skipped — the contigs feed AMR screening, BGC mining, binning, domain taxonomy, and
-reconciliation directly. E.g. screen an isolate for resistance genes:
-`metagx run --config config/amr-genome.yaml --use-conda` (ABRicate ships CARD/ResFinder/NCBI DBs).
+reconciliation directly. E.g. screen an isolate for resistance genes by giving its assembly as a
+sample's `contigs:` column and running with `--use-conda` (ABRicate ships CARD/ResFinder/NCBI DBs).
 
 **Heavy / version-conflicting tools come via `--use-conda`.** GTDB-Tk, CheckM2, ABRicate,
 AMRFinderPlus, antiSMASH, inStrain, DAS_Tool/dRep are not in the core env — `metagx run
@@ -110,8 +110,7 @@ per domain (set `domains: [viral, prokaryote, eukaryote]`):
 | eukaryote | EukRep (separate euk contigs) → EukCC (completeness) | assembly + `db.eukcc` |
 
 It also adds **horizontal coverage (breadth)** per contig to `reconcile` — at large reference
-scale, breadth is a better "is it really present?" signal than depth. See
-`docs/internal/DESIGN-multidomain-and-db-scaling.md` for the full rationale + references.
+scale, breadth is a better "is it really present?" signal than depth.
 
 ## Filtered assembly: deplete/target reads, then compare (`modules.filtered_assembly`)
 
@@ -148,8 +147,8 @@ Read-level kraken2/Bracken still runs on amplicon reads (with a warning to prefe
 marker-gene DB + OTU/Emu). An all-amplicon run with assembly modules enabled errors out.
 Mixed WGS+amplicon runs are fine — each sample is routed by its `library`. A third value,
 `library: ancient`, routes degraded/ancient samples through read-merging + damage
-authentication (see "Ancient DNA, decontamination & strain-level" above). See
-`docs/internal/DESIGN-multidomain-and-db-scaling.md` for the rationale + references (DADA2/QIIME2, Emu, SILVA).
+authentication (see "Ancient DNA, decontamination & strain-level" above). Routing follows
+established DADA2/QIIME2, Emu, and SILVA conventions.
 
 ## Cross-sample statistics & host removal
 
@@ -233,8 +232,7 @@ provision their own tools under `--use-conda` and appear in the Methods/citation
 diversity, formats, subsampling, and read-filter logic. CI runs them on every push
 (`.github/workflows/ci.yml`): a tool-free `test` job (unit suite + the workflow dry-run DAG
 gate) and an `e2e` job that installs the bio stack **from `environment.yml`** (parity is
-enforced by `tests/test_ci_env_parity.py`) and runs the real pipeline. See `docs/internal/history/`
-for past gap analyses and `docs/internal/ROADMAP.md` for what's next.
+enforced by `tests/test_ci_env_parity.py`) and runs the real pipeline.
 
 ### What's actually verified (honest coverage matrix)
 
@@ -270,7 +268,7 @@ registry/config validation). "~20 modules exist" ≠ "~20 modules run in CI" —
 ¹ AMR (ABRicate) runs in CI at the DAG level; its real execution needs `--use-conda`
 (samtools-pin isolation) and is exercised locally. Domain-taxonomy and amplicon need large
 external reference DBs, so they are DAG/config-verified rather than executed — building tiny
-fixtures for them is tracked in `docs/internal/ROADMAP.md`.
+fixtures for them is planned.
 
 ## Self-provisioning tools (conda)
 
@@ -428,7 +426,7 @@ that client's config file). Use an absolute path; from a `pip install` use
 metagx build-db --genomes data/genomes.fasta --db local_databases/viral_custom --read-length 150
 
 # Classify 20% of 20,000 FASTA reads across a confidence sweep, with abundance + report
-metagx build-config config/viral-test.answers.json --out config.yaml
+metagx build-config answers.json --out config.yaml   # answers.json comes from the interview
 metagx run    --config config.yaml --cores 4
 metagx report --config config.yaml
 ```
