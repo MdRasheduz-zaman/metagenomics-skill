@@ -28,17 +28,25 @@ os.makedirs(os.path.dirname(snk.output.json), exist_ok=True)
 workdir = os.path.dirname(snk.output.json)
 
 # 1) top taxa + per-read assignments
+level = cfg["level"]                   # 'genus' | 'species' — the rank NAME for nodes.dmp roll-up
 taxa = validate.top_taxa(snk.input.kreport, level=cfg["rank"], top_n=int(cfg["top_n"]))
 with open(snk.input.kraken) as fh:
     assignments = validate.parse_kraken_assignments(fh.read())
 
-# invert: taxid -> [read ids], then subsample per taxon
+# kraken2's own taxonomy tree (nodes.dmp) lets us roll each read's LEAF assignment up to the
+# validation rank, so a genus clade collects the reads assigned at species beneath it (and the
+# agreement can be taxid-vs-taxid, robust to non-binomial names). Absent -> group by the leaf,
+# which is correct when reads are assigned at this rank (e.g. species-level validation).
+nodes_dmp = getattr(snk.params, "nodes_dmp", "")
+tree = validate.parse_nodes_dmp(nodes_dmp) if nodes_dmp and os.path.isfile(nodes_dmp) else {}
+
 by_taxid = {}
 for rid, tid in assignments.items():
-    by_taxid.setdefault(tid, []).append(rid)
+    key = (validate.ancestor_at_rank(tid, level, tree) or tid) if tree else tid
+    by_taxid.setdefault(key, []).append(rid)
 
-query_taxon = {}      # read id -> classifier taxon name
-taxon_of_taxid = {t["taxid"]: t["name"] for t in taxa}
+query_taxon = {}      # read id -> classifier taxon NAME (name-fallback agreement)
+query_taxid = {}      # read id -> classifier clade TAXID at this rank (taxid agreement)
 n_per = int(cfg["reads_per_taxon"])
 for t in taxa:
     ids = by_taxid.get(t["taxid"], [])
@@ -46,6 +54,7 @@ for t in taxa:
         ids = rng.sample(ids, n_per)
     for rid in ids:
         query_taxon[rid] = t["name"]
+        query_taxid[rid] = t["taxid"]
 
 # 2) pull the sequences and write the query FASTA
 seqs = validate.extract_sequences([str(r) for r in snk.input.reads], set(query_taxon))
@@ -59,7 +68,15 @@ outfmt = "6 " + " ".join(validate.BLAST6_FIELDS)
 # 3) run blastn (subprocess argv — keeps the multi-token -outfmt intact, no shell quoting)
 if n_written == 0:
     open(blast_out, "w").close()
-    blast_note = "no classified reads to validate (empty query)"
+    if not taxa:
+        # No taxa at the requested rank — the usual cause is a synthetic-taxonomy DB (flat,
+        # species-only) validated at genus. Name the mismatch so it's fixable, not opaque.
+        present = validate.ranks_present(snk.input.kreport)
+        blast_note = (f"no taxa at rank '{cfg['rank']}' in the kreport (ranks present: "
+                      f"{', '.join(present) or 'none'}). If this is a synthetic-taxonomy DB, set "
+                      f"validate.level: species (rank S); otherwise check validate.rank.")
+    else:
+        blast_note = "no classified reads to validate (top taxa had no assigned reads)"
 else:
     base = dict(blastn_cfg)
     managed = {"query": query_fa, "out": blast_out, "outfmt": outfmt}
@@ -91,8 +108,9 @@ for t in taxa:
     qt = {rid: name for rid, name in query_taxon.items() if name == t["name"]}
     if not qt:
         continue
-    a = validate.assess(qt, {q: hits[q] for q in qt if q in hits}, level=cfg["level"],
-                        name_resolver=name_resolver)
+    a = validate.assess(qt, {q: hits[q] for q in qt if q in hits}, level=level,
+                        name_resolver=name_resolver,
+                        query_taxids={rid: query_taxid[rid] for rid in qt}, tree=tree)
     a.update(taxon=t["name"], taxid=t["taxid"], reads_classified=t["reads"],
              verdict=validate.verdict(a["agreement_rate"], a["hit_rate"]))
     per_taxon.append(a)

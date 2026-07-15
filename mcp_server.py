@@ -46,6 +46,7 @@ from metagx import (
     runner,
     schedulers,
     sync_help,
+    taxid_tag,
     tool_advisor,
 )
 
@@ -338,6 +339,39 @@ def build_database(genomes: str, db_dir: str, read_length: int = 150, threads: i
 
 
 @mcp.tool()
+def tag_reference_taxids(fasta: str, out: str, map_tsv: str = "", online: bool = False,
+                         email: str = "", api_key: str = "", allow_missing: bool = False) -> str:
+    """Tag a reference FASTA's headers with NCBI taxids for a `taxonomy: real` kraken2 build.
+
+    The real-taxonomy path (full lineage — genus/family, so validation/Krona/domain behave like a
+    standard DB) needs `>seqid|kraken:taxid|<taxid>` headers. This resolves each accession -> taxid
+    from a `map_tsv` (accession<TAB>taxid, offline) and/or NCBI E-utilities (`online=True`), then
+    rewrites the headers. Fails if any accession is unresolved unless `allow_missing`. Then build
+    with db.build.taxonomy: real, source: <out>. (Synthetic taxonomy stays the flat, offline,
+    detection-only escape hatch.)
+    """
+    mapping = dict(taxid_tag.load_map(map_tsv)) if map_tsv else {}
+    if online:
+        accs = []
+        with open(fasta, encoding="utf-8-sig") as fh:
+            for line in fh:
+                if line.startswith(">") and not taxid_tag.already_tagged(line):
+                    acc = taxid_tag.parse_accession(line)
+                    if acc and taxid_tag._lookup(acc, mapping) is None:
+                        accs.append(acc)
+        if accs:
+            resolved, _ = taxid_tag.resolve_online(accs, email=email or None, api_key=api_key or None)
+            mapping.update(resolved)
+    if not mapping:
+        return json.dumps({"ok": False, "error": "no taxid source — pass map_tsv and/or online=True"})
+    try:
+        summary = taxid_tag.tag_fasta(fasta, out, mapping, allow_missing=allow_missing)
+    except ValueError as e:
+        return json.dumps({"ok": False, "error": str(e)})
+    return json.dumps({"ok": True, "out": out, **summary}, indent=2)
+
+
+@mcp.tool()
 def build_kaiju_database(genomes: str, db_dir: str, taxonomy_dir: str, threads: int = 4,
                          dry_run: bool = False) -> str:
     """Build a custom Kaiju (protein) database from reference genomes — no NCBI download.
@@ -355,14 +389,18 @@ def build_kaiju_database(genomes: str, db_dir: str, taxonomy_dir: str, threads: 
 
 @mcp.tool()
 def run_pipeline(config_path: str = "config.yaml", cores: str = "all", dry_run: bool = False,
-                 use_conda: bool = False, executor: str | None = None) -> str:
+                 use_conda: bool = False, executor: str | None = None,
+                 background: bool | None = None) -> str:
     """Run the Snakemake workflow against a config. Set dry_run to preview the plan.
+
+    A real run is minutes-to-hours, so it is launched in the BACKGROUND by default (blocking would
+    time out this call and lose all but the log tail). You get a ``job_id`` back immediately; poll
+    ``get_run_status(job_id)`` for status + log tail. A ``dry_run`` is quick and returns
+    synchronously. Set ``background=False`` to force a blocking run (only for short jobs).
 
     use_conda lets Snakemake auto-provision per-rule tools (workflow/envs/) — needed for the
     domain-taxonomy tools (geNomad/CheckV, GTDB-Tk/CheckM2, EukRep/EukCC) if not installed.
-
-    executor submits to an HPC scheduler via a bundled profile (local/slurm/lsf/sge/pbs/
-    generic — see list_schedulers). The bundled profile must be edited for your site first.
+    executor submits to an HPC scheduler via a bundled profile (see list_schedulers).
     """
     profile = None
     if executor:
@@ -370,11 +408,30 @@ def run_pipeline(config_path: str = "config.yaml", cores: str = "all", dry_run: 
             profile = schedulers.profile_path(executor)
         except (KeyError, FileNotFoundError) as e:
             return json.dumps({"ok": False, "error": str(e)}, indent=2)
+    if background is None:
+        background = not dry_run          # real runs background by default; dry-runs stay sync
+    if background and not dry_run:
+        try:
+            job = runner.start_run(config=config_path, cores=cores, use_conda=use_conda,
+                                   profile=profile)
+        except runner.CondaFrontendError as e:
+            return json.dumps({"ok": False, "error": str(e)}, indent=2)
+        return json.dumps({"ok": True, "background": True, "job_id": job["job_id"],
+                           "log": job["log"],
+                           "note": "run started in the background; poll get_run_status(job_id)"},
+                          indent=2)
     proc = runner.run(config=config_path, cores=cores, dry_run=dry_run,
                       use_conda=use_conda, profile=profile)
     ok = proc.returncode == 0
     tail = (proc.stdout or "")[-3000:] + "\n" + (proc.stderr or "")[-3000:]
     return json.dumps({"ok": ok, "returncode": proc.returncode, "log": tail}, indent=2)
+
+
+@mcp.tool()
+def get_run_status(job_id: str) -> str:
+    """Status of a backgrounded `run_pipeline` job: running | done (with returncode) | stopped,
+    plus the tail of its log. Poll this after a background run_pipeline call."""
+    return json.dumps(runner.run_status(job_id), indent=2)
 
 
 @mcp.tool()
@@ -617,12 +674,18 @@ if _HAVE_FASTAPI:
                 profile = schedulers.profile_path(req.executor)
             except (KeyError, FileNotFoundError) as e:
                 return {"status": "error", "error": str(e)}
-        proc = runner.run(config=path, profile=profile)
-        return {
-            "status": "success" if proc.returncode == 0 else "error",
-            "returncode": proc.returncode,
-            "log": (proc.stdout or "")[-3000:] + (proc.stderr or "")[-3000:],
-        }
+        # Background the run so the HTTP request returns immediately (a real run outlasts any
+        # request timeout); poll GET /api/v1/run-status/{job_id}.
+        try:
+            job = runner.start_run(config=path, profile=profile)
+        except runner.CondaFrontendError as e:
+            return {"status": "error", "error": str(e)}
+        return {"status": "started", "job_id": job["job_id"], "config": path, "log": job["log"],
+                "note": "run started in the background; poll /api/v1/run-status/{job_id}"}
+
+    @app.get("/api/v1/run-status/{job_id}")
+    def http_run_status(job_id: str):
+        return runner.run_status(job_id)
 
     app.mount("/mcp", mcp.streamable_http_app())
 

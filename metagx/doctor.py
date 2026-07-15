@@ -134,6 +134,37 @@ def check_tools(floors: Optional[Dict[str, tuple]] = None,
     return checks
 
 
+def check_active_tools(cfg: Optional[Dict] = None) -> List[Check]:
+    """Presence-check the tools THIS config actually activates that aren't in VERSION_FLOORS
+    (blastn/spades/vsearch/genomad/...). ``check_tools`` only covers the fixed floor list, so a
+    config that enables e.g. validation but lacks blastn used to sail through preflight and fail
+    mid-run. A tool that lives in the core env is a fail when missing; one that is provisioned via
+    ``--use-conda`` (not in the core env) is an info, not a failure."""
+    out: List[Check] = []
+    if not cfg:
+        return out
+    active = set(report.active_tools(cfg)) - set(VERSION_FLOORS) - {"snakemake"}
+    if not active:
+        return out
+    core_pkgs = set(report._env_yaml_packages(runner.environment_file_path()))  # noqa: PLC2701
+    for tool in sorted(active):
+        exe = registry.resolve_command(tool)
+        if shutil.which(exe):
+            checks_msg = f"{tool} present ({exe})." if exe == tool else f"{tool} present (as {exe})."
+            out.append(Check(f"tool:{tool}", _OK, checks_msg))
+        elif report.conda_package(tool) in core_pkgs:
+            out.append(Check(
+                f"tool:{tool}", _FAIL, f"{tool} (enabled by this config, core env) not on PATH.",
+                remedy="install the core stack: `metagx env-file --write` then "
+                       "`conda env create -f environment.yml` (or mamba), and activate it."))
+        else:
+            out.append(Check(
+                f"tool:{tool}", _INFO,
+                f"{tool} not on PATH (enabled by this config; provisioned on first use via "
+                f"`metagx run --use-conda`)."))
+    return out
+
+
 def check_bracken_runs() -> Optional[Check]:
     """A present-but-unrunnable bracken binary is worse than a missing one because it passes a
     naive `which` check. Actually invoke it."""
@@ -454,6 +485,7 @@ def run(db_paths: Optional[Dict[str, str]] = None, cfg: Optional[Dict] = None) -
     checks += check_platform()
     checks.append(check_workflow())
     checks += check_tools()
+    checks += check_active_tools(cfg)
     b = check_bracken_runs()
     if b:
         checks.append(b)

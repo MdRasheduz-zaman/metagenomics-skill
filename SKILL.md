@@ -73,6 +73,16 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
      = hours). Use `db.build` for `viral`/custom/spike-in; for a big standard DB prefer the
      **prebuilt index** (`fetch-db`) instead. `metagx doctor` warns when a slow build is
      configured and flags the air-gapped-cluster download caveat.
+     - **Custom taxonomy — ask real vs synthetic (it's a tier-1 question).** For
+       `custom-fasta`/`custom-folder`, `db.build.taxonomy` decides how each reference is placed
+       in the tree: **`real`** (recommended) resolves each sequence to its NCBI taxid, so you get
+       a full lineage (genus/family) and validation/Krona/domain behave like a standard DB — but
+       the FASTA must carry `>seqid|kraken:taxid|<taxid>` headers; run
+       **`metagx tag-taxids --fasta <ref> --out <tagged> [--map acc2taxid.tsv | --online]`** to
+       add them, then set `db.build.source` to the tagged file. **`synthetic`** fabricates a flat
+       species-only taxonomy (fully offline, zero NCBI dependency) — right for novel sequences
+       with no NCBI taxid or an air-gapped box, but there is **no genus/family**, so validation
+       auto-defaults to species. Pick `real` for known organisms; `synthetic` only when you must.
    - **Module reference DBs (genomad/checkv/checkm2/gtdbtk/bakta/amrfinderplus):** each ships
      its own downloader — `metagx fetch-db --tool <name> --dir <dir>` runs it (idempotent;
      skipped if present). Add the tool to `db.provision: [...]` to auto-fetch at run time, or
@@ -167,6 +177,10 @@ Do **not** guess kraken2 flags. Drive the interview from the registries.
   FastTree on `phylogenetics.input` (or skip alignment with `aligned_input`). Registries:
   `mafft`, `iqtree`, `fasttree`. Outputs: `results/<project>/phylogenetics/` (aligned FASTA,
   Newick, JSON stats, tree figure). Use `method: auto` to pick FastTree when >500 sequences.
+  **`phylogenetics.input` must be HOMOLOGOUS sequences** — a single gene/marker family or a set of
+  related genomes. Aligning unrelated whole genomes (e.g. a mixed viral panel) is biologically
+  meaningless and makes IQ-TREE crawl (model search over a garbage alignment); pick one marker or
+  a related clade instead.
 - **Validate (BLAST cross-check):** `modules.validate` answers "is this classifier call
   real?" — a kraken2/Bracken assignment is a k-mer call, not proof. For each WGS sample it
   takes the top taxa from the read kraken2 report, pulls a **seeded subsample** of the reads

@@ -37,10 +37,16 @@ params:
     ask: true
     question: >
       Taxonomy for custom/spike-in sequences. 'real' = resolve each sequence to its NCBI
-      taxid (real names + genus/family rollups + required to mix with a standard library);
-      'synthetic' = fabricate a flat species-per-genome taxonomy (zero NCBI dependency,
-      good for closed-set detection/simulation, but no rank rollups). Standard libraries
-      always use real taxonomy.
+      taxid (real names + genus/family rollups + validation/Krona/domain behave like a standard
+      DB + required to mix with a standard library); the reference FASTA must carry
+      '>seqid|kraken:taxid|<taxid>' headers — run `metagx tag-taxids --fasta <ref> --out <tagged>
+      [--map acc2taxid.tsv | --online]` to add them, then point db.build.source at the tagged
+      file. 'synthetic' = fabricate a flat species-per-genome taxonomy (zero NCBI dependency,
+      fully offline, good for closed-set detection/simulation or novel sequences with no NCBI
+      taxid — but no genus/family rollups). Standard libraries always use real taxonomy.
+    recommend: >
+      Prefer 'real' for known organisms (consistent lineage + validation); use 'synthetic' only
+      for novel sequences with no NCBI taxid or an air-gapped box (no taxdump download).
     warn_if:
       - when: { strategy: spike-in, taxonomy: synthetic }
         message: >

@@ -46,6 +46,7 @@ from . import (
     scaffold,
     schedulers,
     sync_help,
+    taxid_tag,
     tool_advisor,
     toollock,
     wiring,
@@ -214,6 +215,43 @@ def cmd_build_blast_db(args) -> int:
     return 0 if result.get("ok", not result.get("ran", True)) else 1
 
 
+def cmd_tag_taxids(args) -> int:
+    """Tag a reference FASTA's headers with NCBI taxids for a ``taxonomy: real`` custom build."""
+    mapping: dict = {}
+    if args.map:
+        mapping.update(taxid_tag.load_map(args.map))
+    if args.online:
+        # resolve only the accessions not already covered by --map
+        accs = []
+        with open(args.fasta, encoding="utf-8-sig") as fh:
+            for line in fh:
+                if line.startswith(">") and not taxid_tag.already_tagged(line):
+                    acc = taxid_tag.parse_accession(line)
+                    if acc and taxid_tag._lookup(acc, mapping) is None:
+                        accs.append(acc)
+        if accs:
+            resolved, failures = taxid_tag.resolve_online(
+                accs, email=args.email, api_key=args.api_key)
+            mapping.update(resolved)
+            if failures:
+                print(f"note: {len(failures)} accession(s) failed to resolve online "
+                      f"(network/unknown): {', '.join(failures[:5])}", file=sys.stderr)
+    if not mapping:
+        print("error: no taxid source — pass --map <tsv> and/or --online", file=sys.stderr)
+        return 1
+    try:
+        summary = taxid_tag.tag_fasta(args.fasta, args.out, mapping,
+                                      allow_missing=args.allow_missing)
+    except ValueError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+    _print_json(summary)
+    print(f"wrote {args.out} — {summary['n_tagged']} tagged, {summary['n_already']} already tagged, "
+          f"{summary['n_missing']} unresolved. Build with db.build.taxonomy: real, source: {args.out}",
+          file=sys.stderr)
+    return 0
+
+
 def cmd_fetch_db(args) -> int:
     if args.tool:  # provision a per-tool module DB (genomad/checkv/checkm2/gtdbtk/bakta/...)
         from metagx import dbprovision
@@ -315,11 +353,22 @@ def cmd_doctor(args) -> int:
     """Environment preflight: detect arch/env hazards and missing tools/DB, print remedies."""
     db_paths = None
     cfg = None
-    if args.config and os.path.isfile(args.config):
-        with open(args.config) as fh:
-            cfg = yaml.safe_load(fh) or {}
-        db_paths = cfg.get("db") or None
+    config_missing = False
+    if args.config:
+        if os.path.isfile(args.config):
+            with open(args.config) as fh:
+                cfg = yaml.safe_load(fh) or {}
+            db_paths = cfg.get("db") or None
+        else:
+            # The user asked doctor to check a specific config; a missing path must FAIL, not
+            # silently fall through to a config-less run that looks fine and validates nothing.
+            config_missing = True
     checks = doctor.run(db_paths=db_paths, cfg=cfg)
+    if config_missing:
+        checks.insert(0, doctor.Check(
+            "config", "fail", f"--config path not found: {args.config}",
+            remedy="check the path (pass an existing config.yaml), or omit --config for an "
+                   "environment-only check."))
     if args.json:
         _print_json([c.as_dict() for c in checks])
     else:
@@ -363,13 +412,17 @@ def _resolve_profile(args) -> str | None:
 def cmd_run(args) -> int:
     profile = _resolve_profile(args)
     try:
+        # Stream Snakemake's output live — a real run is minutes-to-hours; a captured run looks
+        # hung and discards everything on Ctrl-C. proc.stdout/stderr are None when streaming.
         proc = runner.run(config=args.config, cores=args.cores, dry_run=args.dry_run,
-                          use_conda=args.use_conda, profile=profile)
+                          use_conda=args.use_conda, profile=profile, stream=True)
     except runner.CondaFrontendError as e:
         sys.stderr.write(f"error: {e}\n")
         return 1
-    sys.stdout.write(proc.stdout)
-    sys.stderr.write(proc.stderr)
+    if proc.stdout:
+        sys.stdout.write(proc.stdout)
+    if proc.stderr:
+        sys.stderr.write(proc.stderr)
     if proc.returncode == 0 and not args.dry_run and not args.no_history:
         try:
             with open(args.config) as fh:
@@ -537,6 +590,8 @@ def cmd_compare(args) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="metagx", description="Schema-driven metagenomics pipeline.")
+    p.add_argument("--debug", action="store_true",
+                   help="show full tracebacks instead of a one-line error (also METAGX_DEBUG=1)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("tools", help="list tools with a parameter registry").set_defaults(func=cmd_tools)
@@ -742,6 +797,19 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--dry-run", action="store_true", help="write taxonomy/library, print commands, don't build")
     sp.set_defaults(func=cmd_build_db, use_ftp=True, with_blast=False)
 
+    sp = sub.add_parser("tag-taxids",
+                        help="tag reference FASTA headers with NCBI taxids for a taxonomy: real build")
+    sp.add_argument("--fasta", required=True, help="input reference FASTA")
+    sp.add_argument("--out", required=True, help="output FASTA with |kraken:taxid|<taxid> headers")
+    sp.add_argument("--map", help="TSV of 'accession<TAB>taxid' (offline resolution)")
+    sp.add_argument("--online", action="store_true",
+                    help="resolve missing accessions via NCBI E-utilities (needs internet)")
+    sp.add_argument("--email", help="contact email for NCBI E-utilities (courtesy)")
+    sp.add_argument("--api-key", help="NCBI API key (raises the rate limit to 10 req/s)")
+    sp.add_argument("--allow-missing", action="store_true",
+                    help="skip (don't fail on) sequences with no resolvable taxid")
+    sp.set_defaults(func=cmd_tag_taxids)
+
     sp = sub.add_parser("fetch-db",
                         help="download a prebuilt standard kraken2+Bracken index (onboarding)")
     sp.add_argument("name", nargs="?", default=dbfetch.DEFAULT,
@@ -811,7 +879,16 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = build_parser().parse_args(argv)
-    return args.func(args)
+    debug = getattr(args, "debug", False) or os.environ.get("METAGX_DEBUG")
+    try:
+        return args.func(args)
+    except (FileNotFoundError, OSError, yaml.YAMLError) as e:
+        # A stranger's first mistake is usually a wrong path or a malformed YAML. Turn the raw
+        # traceback into a one-line error (tracebacks stay available via --debug/METAGX_DEBUG).
+        if debug:
+            raise
+        print(f"error: {e}", file=sys.stderr)
+        return 1
 
 
 if __name__ == "__main__":

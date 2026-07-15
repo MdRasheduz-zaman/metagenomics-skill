@@ -14,7 +14,6 @@ local temp file that is deleted immediately; the persisted output stays aggregat
 
 from __future__ import annotations
 
-import csv
 import gzip
 import os
 import shutil
@@ -23,7 +22,7 @@ import tempfile
 from typing import Any, Dict, List, Optional
 
 from . import consent
-from .formats import is_gzipped, read_format
+from .formats import is_gzipped, read_format, read_tsv_dicts
 
 # Inference thresholds — defaults; overridden by evidence/platform_inference.yaml when present,
 # so the cutoffs are tunable as data accrues rather than buried as magic numbers in code.
@@ -85,11 +84,8 @@ def load_sheet(samples: Any) -> List[Dict[str, str]]:
     """Accept a TSV path or an inline list of records -> [{sample, r1, r2?, platform?}]."""
     if isinstance(samples, list):
         return samples
-    rows: List[Dict[str, str]] = []
-    with open(samples) as fh:
-        for rec in csv.DictReader(fh, delimiter="\t"):
-            rows.append({k: (v or "").strip() for k, v in rec.items()})
-    return rows
+    return [{k: (v or "").strip() for k, v in rec.items()}
+            for rec in read_tsv_dicts(samples)]
 
 
 def _declared_class(platform: str) -> str:
@@ -393,22 +389,44 @@ def run(samples: Any, max_reads: int = 100_000, max_samples: Optional[int] = Non
     if max_samples is not None:
         rows = rows[:max_samples]
     profiles: Dict[str, Dict[str, Any]] = {}
+    unreadable: List[str] = []
     for rec in rows:
         name = rec.get("sample") or rec.get("name")
         r1 = rec.get("r1")
-        if not name or not r1 or not os.path.exists(r1):
+        if not name or not r1:
+            continue
+        if not os.path.exists(r1):
+            unreadable.append(f"{name} (file not found: {r1})")
             continue
         prof = profile_file(r1, max_reads=max_reads)
+        if not prof.get("n_sampled"):
+            # empty / unreadable / not a FASTA-FASTQ — don't infer a platform from zero reads
+            # (that used to silently yield "illumina"); record it and move on.
+            unreadable.append(f"{name} (0 reads read from {r1})")
+            continue
         prof["declared_platform"] = rec.get("platform", "illumina")
         if host_index:
             preset = _MM2_PRESET.get(prof["inferred_platform_class"], "sr")
             prof["host_fraction"] = measure_host_fraction(r1, host_index, preset, max_reads=max_reads)
         profiles[name] = prof
 
+    # spec §3.3: consent granted but nothing readable (wrong paths / non-local server / empty
+    # files) must DEGRADE to advisory — not report a successful, empty measurement.
+    if not profiles:
+        return {"ok": True, "measured": False, "consent": "local",
+                "reason": "no readable samples at the given paths — staying advisory. "
+                          "Check the read paths, and that the probe runs where the data is.",
+                "unreadable": unreadable, "context": {"measured": False}}
+
     project = reconcile(profiles)
+    if unreadable:
+        project.setdefault("warnings", []).insert(
+            0, f"{len(unreadable)} sample(s) could not be profiled and were skipped: "
+               f"{', '.join(unreadable[:5])}")
     context = to_context(profiles, project)
     report = {"ok": True, "measured": True, "consent": "local",
-              "samples": profiles, "project": project, "context": context}
+              "samples": profiles, "project": project, "context": context,
+              "unreadable": unreadable}
 
     if out:
         os.makedirs(out, exist_ok=True)

@@ -39,6 +39,13 @@ def _names_dmp():
     return cand if cand and os.path.isfile(cand) else ""
 
 
+def _nodes_dmp():
+    # kraken2's own nodes.dmp -> roll a read's leaf assignment up to the validation rank (so a
+    # genus clade collects its species-assigned reads, and agreement is taxid-vs-taxid)
+    cand = os.path.join(DB.get("kraken2", ""), "taxonomy", "nodes.dmp") if DB.get("kraken2") else ""
+    return cand if cand and os.path.isfile(cand) else ""
+
+
 rule blast_validate:
     input:
         kreport=f"{OUT}/kraken2/{{sample}}.{READ_LABEL}.kreport",
@@ -55,6 +62,7 @@ rule blast_validate:
         blastn=config.get("blastn", {}),
         blast_db=_blast_db_for_validate(),
         names_dmp=_names_dmp(),
+        nodes_dmp=_nodes_dmp(),
         sample=lambda wc: wc.sample,
     script:
         "../scripts/blast_validate.py"

@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from . import formats
@@ -196,6 +197,60 @@ def top_taxa(kreport_path: str, level: str = "S", top_n: int = 10) -> List[Dict]
     return rows[:top_n]
 
 
+def ranks_present(kreport_path: str) -> List[str]:
+    """The distinct rank codes in a kraken2 report (e.g. ['D','G','R','S','U']), sorted.
+
+    Lets a caller explain a ``top_taxa`` miss: a synthetic-taxonomy DB is flat species-only, so a
+    genus request returns nothing and the note can say which ranks *do* exist."""
+    seen = set()
+    with open(kreport_path) as fh:
+        for line in fh:
+            row = formats.kreport_row(line)
+            if row and row.get("rank"):
+                seen.add(str(row["rank"]).upper())
+    return sorted(seen)
+
+
+def parse_nodes_dmp(path: str) -> Dict[str, Tuple[str, str]]:
+    """Parse an NCBI ``nodes.dmp`` into ``{taxid: (parent_taxid, rank_name)}``.
+
+    Enables rolling a leaf assignment (or a BLAST subject taxid) UP to a target rank, so
+    validation can compare taxid-vs-taxid at genus/family — robust where name-token matching
+    fails (viral names aren't binomial: genus "Orthoflavivirus" shares no token with species
+    "Dengue virus 1"). Fields are ``\\t|\\t``-separated; rank strings are interned to save memory
+    (a full NCBI nodes.dmp is ~2.5M rows)."""
+    tree: Dict[str, Tuple[str, str]] = {}
+    with open(path) as fh:
+        for line in fh:
+            parts = line.split("\t|\t")
+            if len(parts) >= 3:
+                tree[parts[0]] = (parts[1], sys.intern(parts[2].strip()))
+    return tree
+
+
+def ancestor_at_rank(taxid: str, target_rank: str,
+                     tree: Dict[str, Tuple[str, str]], max_hops: int = 64) -> Optional[str]:
+    """Walk parents from ``taxid`` until a node whose rank == ``target_rank`` (e.g. 'genus');
+    return that taxid, or None if the lineage has no node at that rank. ``max_hops`` guards a
+    malformed tree from looping."""
+    target = target_rank.lower()
+    cur, hops = str(taxid), 0
+    while cur in tree and hops < max_hops:
+        parent, rank = tree[cur]
+        if rank.lower() == target:
+            return cur
+        if parent == cur:                 # root self-loop
+            break
+        cur, hops = parent, hops + 1
+    return None
+
+
+def _first_staxid(hit: Dict) -> Optional[str]:
+    """First subject taxid from a BLAST hit's ``staxids`` (``;``-separated), or None."""
+    raw = str(hit.get("staxids") or "").split(";")[0].strip()
+    return raw or None
+
+
 def _norm_id(raw: str) -> str:
     """A read id as kraken records it: drop a leading @/>, trim at whitespace, drop /1 /2."""
     rid = raw.lstrip("@>").split()[0] if raw.strip() else ""
@@ -325,15 +380,23 @@ def _blast_name(hit: Dict, name_resolver=None) -> str:
 
 
 def assess(query_taxon: Dict[str, str], best_hits: Dict[str, Dict],
-           level: str = "genus", name_resolver=None) -> Dict:
-    """Per-query agreement between the classifier name and the best BLAST hit.
+           level: str = "genus", name_resolver=None,
+           query_taxids: Optional[Dict[str, str]] = None,
+           tree: Optional[Dict[str, Tuple[str, str]]] = None) -> Dict:
+    """Per-query agreement between the classifier call and the best BLAST hit.
+
+    Two comparison modes, best-first:
+      * **taxid** (robust): when a taxonomy ``tree`` (nodes.dmp) and per-query classifier taxids
+        (``query_taxids``: {query_id: taxid the read was grouped at, i.e. the clade at ``level``})
+        are given AND the hit carries a subject taxid, agreement = the subject's taxid rolled up
+        to ``level`` equals the classifier's clade taxid. This is correct even where names don't
+        share tokens (viruses at genus).
+      * **name** (fallback): otherwise compare the classifier taxon name to the hit's organism
+        name (via ``name_resolver`` when the DB carries kraken2's taxids), token-overlap at ``level``.
 
     Args:
       query_taxon  : {query_id: classifier_taxon_name} for the sequences we BLASTed.
       best_hits    : {query_id: blast6_row}.
-      name_resolver: optional taxid->name (kraken2's names.dmp) — when the BLAST DB carries
-                     kraken2's taxids, the comparison uses the SAME taxonomy (in-sync), not
-                     BLAST's free-text title.
     Returns aggregate counts + per-query verdicts.
     """
     n = len(query_taxon)
@@ -347,8 +410,16 @@ def assess(query_taxon: Dict[str, str], best_hits: Dict[str, Dict],
                               "has_hit": False, "agree": False})
             continue
         with_hits += 1
+        ok = None
+        # taxid-vs-taxid at the requested rank when we can (nodes.dmp + both taxids present)
+        if tree and query_taxids and query_taxids.get(q):
+            staxid = _first_staxid(hit)
+            if staxid:
+                subj = ancestor_at_rank(staxid, level, tree) or staxid
+                ok = (subj == query_taxids[q])
         bname = _blast_name(hit, name_resolver=name_resolver)
-        ok = names_agree(cname, bname, level=level)
+        if ok is None:                                   # fall back to name-token agreement
+            ok = names_agree(cname, bname, level=level)
         agree += int(ok)
         per_query.append({"query": q, "classifier": cname, "blast": bname,
                           "pident": hit.get("pident"), "has_hit": True, "agree": ok})

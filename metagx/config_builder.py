@@ -12,7 +12,7 @@ from typing import Any, Dict, List
 
 import yaml
 
-from . import presets, registry
+from . import formats, presets, registry
 
 # (the canonical module->tools map lives in tool_advisor.MODULE_TOOLS; a stale duplicate here
 # and in report.py was dead code and was removed to avoid drift — see metagx/wiring.py)
@@ -81,73 +81,77 @@ def _backfill_platforms(samples: Any, probe_report: Dict[str, Any] | None) -> Li
     return applied
 
 
+def _check_sample_record(rec: Dict[str, Any], i: int) -> None:
+    """Structural checks for one sample record (an inline dict OR a parsed TSV row)."""
+    name = rec.get("sample")
+    if not name or (not rec.get("r1") and not str(rec.get("contigs", "")).strip()):
+        raise registry.ValidationError(
+            f"sample #{i} needs a 'sample' name and either 'r1' (reads) or 'contigs'")
+    if "." in str(name):
+        # sample ids flow into per-(sample.label.level) output filenames; a '.' mis-parses them
+        # (e.g. combine_bracken splits on '.') and silently mis-attributes rows.
+        raise registry.ValidationError(
+            f"sample id '{name}' contains '.', which collides with metagx's per-sample output "
+            f"filenames; use letters, digits, '_' or '-'")
+    plat = str(rec.get("platform", "illumina")).lower()
+    if plat not in KNOWN_PLATFORMS:
+        raise registry.ValidationError(f"sample '{name}': unknown platform '{plat}'")
+    lay = str(rec.get("layout", "")).lower()
+    if lay and lay not in {"se", "pe", "interleaved"}:
+        raise registry.ValidationError(f"sample '{name}': layout must be se|pe|interleaved")
+    if plat in LONG_PLATFORMS and (rec.get("r2") or lay in {"pe", "interleaved"}):
+        raise registry.ValidationError(
+            f"sample '{name}': long-read platforms are single-end (no r2, layout=se)")
+    if lay == "interleaved" and plat not in {"illumina", "mgi", "bgi"}:
+        raise registry.ValidationError(f"sample '{name}': interleaved layout is for short reads only")
+    lib = str(rec.get("library", "wgs")).lower()
+    if lib not in {"wgs", "amplicon", "ancient"}:
+        raise registry.ValidationError(
+            f"sample '{name}': library must be 'wgs', 'amplicon', or 'ancient'")
+    if lib == "ancient" and plat not in {"illumina", "mgi", "bgi"}:
+        raise registry.ValidationError(
+            f"sample '{name}': ancient library is short-read shotgun; platform must be "
+            f"illumina/mgi/bgi, got '{plat}'")
+    if str(rec.get("bracken_read_length", "")).strip():
+        try:
+            int(rec["bracken_read_length"])
+        except (TypeError, ValueError):
+            raise registry.ValidationError(f"sample '{name}': bracken_read_length must be an integer")
+    # (an empty 'group' — common in a TSV where not every sample is grouped — is treated as
+    #  "no group" downstream, so it needs no validation here.)
+    if rec.get("long_reads"):
+        lp = str(rec.get("long_platform", "ont")).lower()
+        if lp not in LONG_PLATFORMS:
+            raise registry.ValidationError(
+                f"sample '{name}': long_platform must be a long-read platform ({sorted(LONG_PLATFORMS)})")
+        if plat in LONG_PLATFORMS:
+            raise registry.ValidationError(
+                f"sample '{name}': long_reads is for hybrid assembly of a short-read sample; "
+                "this sample is already long-read")
+
+
 def _validate_samples(samples: Any) -> Any:
-    """Accept a path to a TSV sample sheet or an inline list of records.
+    """Accept a path to a TSV sample sheet or an inline list of records, validating both.
 
     Inline records may carry optional 'platform' (illumina/mgi/ont/pacbio_hifi/pacbio_clr)
-    and 'layout' (se/pe/interleaved). Combinations are checked so bad sheets fail clearly.
-    (TSV paths are validated by the workflow at runtime.)
+    and 'layout' (se/pe/interleaved). A TSV path is now parsed and its records checked too (so a
+    bad sheet fails `metagx validate` with a clear message instead of a raw Snakemake traceback
+    at run time); an absent file is left for the workflow (it may be produced later).
     """
     if isinstance(samples, str):
+        if os.path.isfile(samples):
+            rows = formats.read_tsv_dicts(samples)
+            if not rows:
+                raise registry.ValidationError(f"sample sheet '{samples}' has no data rows")
+            for i, rec in enumerate(rows):
+                _check_sample_record(rec, i)
         return samples
     if not isinstance(samples, list):
         raise registry.ValidationError(
             "samples must be a path to a TSV or a list of {sample, r1, r2?, platform?, layout?}"
         )
     for i, rec in enumerate(samples):
-        if "sample" not in rec or "r1" not in rec:
-            raise registry.ValidationError(f"sample #{i} needs at least 'sample' and 'r1'")
-        plat = str(rec.get("platform", "illumina")).lower()
-        if plat not in KNOWN_PLATFORMS:
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': unknown platform '{plat}'"
-            )
-        lay = str(rec.get("layout", "")).lower()
-        if lay and lay not in {"se", "pe", "interleaved"}:
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': layout must be se|pe|interleaved"
-            )
-        if plat in LONG_PLATFORMS and (rec.get("r2") or lay in {"pe", "interleaved"}):
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': long-read platforms are single-end (no r2, layout=se)"
-            )
-        if lay == "interleaved" and plat not in {"illumina", "mgi", "bgi"}:
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': interleaved layout is for short reads only"
-            )
-        lib = str(rec.get("library", "wgs")).lower()
-        if lib not in {"wgs", "amplicon", "ancient"}:
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': library must be 'wgs', 'amplicon', or 'ancient'"
-            )
-        if lib == "ancient" and plat not in {"illumina", "mgi", "bgi"}:
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': ancient library is short-read shotgun; "
-                f"platform must be illumina/mgi/bgi, got '{plat}'"
-            )
-        if rec.get("bracken_read_length") is not None:
-            try:
-                int(rec["bracken_read_length"])
-            except (TypeError, ValueError):
-                raise registry.ValidationError(
-                    f"sample '{rec['sample']}': bracken_read_length must be an integer"
-                )
-        if rec.get("group") is not None and not str(rec["group"]).strip():
-            raise registry.ValidationError(
-                f"sample '{rec['sample']}': group, if given, must be a non-empty label"
-            )
-        if rec.get("long_reads"):
-            lp = str(rec.get("long_platform", "ont")).lower()
-            if lp not in LONG_PLATFORMS:
-                raise registry.ValidationError(
-                    f"sample '{rec['sample']}': long_platform must be a long-read platform "
-                    f"({sorted(LONG_PLATFORMS)})"
-                )
-            if plat in LONG_PLATFORMS:
-                raise registry.ValidationError(
-                    f"sample '{rec['sample']}': long_reads is for hybrid assembly of a "
-                    "short-read sample; this sample is already long-read"
-                )
+        _check_sample_record(rec, i)
     return samples
 
 
@@ -250,7 +254,19 @@ def _validate_validate(val: Dict[str, Any] | None, db: Dict[str, Any]) -> Dict[s
     if target not in {"reads"}:
         raise registry.ValidationError(
             "validate.target must be 'reads' (contig-level BLAST validation is not yet wired)")
-    level = str(val.get("level", "genus")).lower()
+    # Pick the default validation rank from what's being classified against:
+    #   * synthetic taxonomy  -> FLAT species-only (no genus node exists at all); and
+    #   * a custom DB (the user's own genomes) -> validate the EXACT calls at the leaf, because
+    #     reads are assigned at species and organism names are often non-binomial (e.g. viruses:
+    #     "Orthoflavivirus" the genus vs "Dengue virus 1" the species share no name tokens, so
+    #     genus name-matching is unreliable).
+    # Genus stays the default only for a broad standard/prebuilt DB (bacterial, binomial names,
+    # many relatives — where genus tolerates species-level BLAST ambiguity). User can override.
+    _build = db.get("build") or {}
+    _strategy = str(_build.get("strategy", "")).lower()
+    _species_default = (str(_build.get("taxonomy", "real")).lower() == "synthetic"
+                        or _strategy in {"custom-fasta", "custom-folder"})
+    level = str(val.get("level", "species" if _species_default else "genus")).lower()
     if level not in {"genus", "species"}:
         raise registry.ValidationError("validate.level must be genus or species")
     try:
@@ -324,15 +340,26 @@ def _validate_phylogenetics(phylo: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 
+def _sample_records(samples: Any) -> List[Dict[str, Any]]:
+    """Sample records as dicts — an inline list as-is, or a TSV path parsed (BOM-tolerant).
+
+    Empty when a TSV path doesn't exist yet, so cross-sample checks (groups/control/ancient) enforce
+    for inline records AND an existing sheet, but defer for a sheet the user will create later."""
+    if isinstance(samples, list):
+        return samples
+    if isinstance(samples, str) and os.path.isfile(samples):
+        return formats.read_tsv_dicts(samples)
+    return []
+
+
 def _sample_groups(samples: Any, group_column: str = "group") -> Dict[str, int]:
-    """Count samples per group label (inline lists only; TSV checked at runtime)."""
-    if not isinstance(samples, list):
-        return {}
+    """Count samples per group label (inline OR a TSV sheet)."""
     counts: Dict[str, int] = {}
-    for rec in samples:
+    for rec in _sample_records(samples):
         g = rec.get(group_column) or rec.get("group")
-        if g:
-            counts[str(g)] = counts.get(str(g), 0) + 1
+        if g and str(g).strip():
+            label = str(g).strip()
+            counts[label] = counts.get(label, 0) + 1
     return counts
 
 
@@ -341,10 +368,8 @@ def _any_provided_contigs(samples: Any) -> bool:
     if isinstance(samples, list):
         return any(str(r.get("contigs", "")).strip() for r in samples)
     if isinstance(samples, str) and os.path.isfile(samples):
-        import csv
-        with open(samples) as fh:
-            return any(str(row.get("contigs", "")).strip()
-                       for row in csv.DictReader(fh, delimiter="\t"))
+        return any(str(row.get("contigs", "")).strip()
+                   for row in formats.read_tsv_dicts(samples))
     return False
 
 
@@ -361,9 +386,7 @@ def _sheet_platforms(path: str) -> set:
     """The set of platform labels declared in a sample-sheet TSV."""
     if not (isinstance(path, str) and os.path.isfile(path)):
         return set()
-    import csv
-    with open(path) as fh:
-        return {str(row.get("platform", "")).lower() for row in csv.DictReader(fh, delimiter="\t")}
+    return {str(row.get("platform", "")).lower() for row in formats.read_tsv_dicts(path)}
 
 
 def _platform_read_lengths(samples: Any) -> List[int]:
@@ -458,7 +481,7 @@ def build_config(
     outdir: str = "results",
     threads: int = 8,
     samples: Any,
-    db: Dict[str, str],
+    db: Dict[str, str] | None = None,   # optional: DB-free runs (phylogenetics-only, amplicon-only)
     preset: str | None = None,
     modules: Dict[str, bool] | None = None,
     sweep: Dict[str, Any] | None = None,
@@ -581,10 +604,22 @@ def build_config(
         raise registry.ValidationError(
             "reconcile requires contigs (assembly or provided) and classify (for read calls)"
         )
-    if mods.get("filtered_assembly") and not (mods.get("assembly") and mods.get("classify")):
-        raise registry.ValidationError(
-            "filtered_assembly requires assembly (unfiltered baseline) and classify (read calls)"
-        )
+    if mods.get("filtered_assembly"):
+        if not (mods.get("assembly") and mods.get("classify")):
+            raise registry.ValidationError(
+                "filtered_assembly requires assembly (unfiltered baseline) and classify (read calls)"
+            )
+        # The taxonomic read-filter rules are single-end only (filter.smk); a paired sample has no
+        # producer for filtered/<s>.filtered.fastq and the run dies with a cryptic
+        # MissingInputException. Reject it here with a clear message instead.
+        if isinstance(samples, list):
+            paired = [r["sample"] for r in samples
+                      if str(r.get("layout", "")).lower() in {"pe", "interleaved"} or r.get("r2")]
+            if paired:
+                raise registry.ValidationError(
+                    f"filtered_assembly is single-end only for now, but sample(s) {paired} are "
+                    "paired/interleaved — use single-end reads there, or disable filtered_assembly."
+                )
     if mods.get("stats") and not mods.get("abundance"):
         raise registry.ValidationError("stats (diversity) requires abundance (Bracken table)")
     if mods.get("differential"):
@@ -592,11 +627,11 @@ def build_config(
             raise registry.ValidationError(
                 "differential abundance requires abundance (it tests the Bracken table)")
         gcol = str((differential or {}).get("group_column", "group"))
-        counts = _sample_groups(samples, gcol)
-        if isinstance(samples, list):  # inline sheets are checked now; TSV at runtime
+        if _sample_records(samples):   # inline OR an existing TSV; a not-yet-created sheet defers
+            counts = _sample_groups(samples, gcol)
             if len(counts) < 2:
                 raise registry.ValidationError(
-                    "differential needs >=2 sample groups; add a `group` column with "
+                    f"differential needs >=2 sample groups; add a '{gcol}' column with "
                     "two labels (e.g. case/control)")
             small = [g for g, n in counts.items() if n < 2]
             if small:
@@ -620,8 +655,9 @@ def build_config(
             raise registry.ValidationError(
                 "damage (aDNA authentication) requires assembly — reads are mapped to contigs"
             )
-        if isinstance(samples, list) and not any(
-                str(r.get("library", "wgs")).lower() == "ancient" for r in samples):
+        _recs = _sample_records(samples)
+        if _recs and not any(str(r.get("library", "wgs")).strip().lower() == "ancient"
+                             for r in _recs):
             raise registry.ValidationError(
                 "damage needs at least one sample with library=ancient to authenticate"
             )
@@ -635,9 +671,9 @@ def build_config(
             raise registry.ValidationError(
                 "decontam requires abundance (it operates on the combined Bracken table)"
             )
-        if isinstance(samples, list) and not any(
-                str(r.get("control", "")).lower() in {"1", "true", "yes", "y"}
-                for r in samples):
+        _recs = _sample_records(samples)
+        if _recs and not any(str(r.get("control", "")).strip().lower() in {"1", "true", "yes", "y"}
+                             for r in _recs):
             raise registry.ValidationError(
                 "decontam needs at least one sample marked `control: true` (negative/blank)"
             )

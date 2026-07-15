@@ -26,6 +26,14 @@ import yaml
 
 from . import report, runner, schedulers
 
+# The install source baked into every generated 00_setup.sh. Kept in ONE place and overridable at
+# run time via the METAGX_REPO env var — point it at the canonical repo or a pinned release tag for
+# a reproducible hand-off (a moving default means a folder handed out today may install a different
+# metagx tomorrow).
+METAGX_REPO_URL = "https://github.com/MdRasheduz-zaman/metagenomics-skill.git"
+
+_SHORT_PLATFORMS = {"illumina", "mgi", "bgi"}
+
 
 def plan_env(cfg: Dict[str, Any], env_yml_path: Optional[str]) -> Dict[str, Any]:
     """Collision-safe environment plan for a config (pure; no IO beyond reading env_yml_path).
@@ -48,10 +56,51 @@ def plan_env(cfg: Dict[str, Any], env_yml_path: Optional[str]) -> Dict[str, Any]
 # --------------------------------------------------------------------------- #
 # File templates (parameterized; keep them correct + minimal)                 #
 # --------------------------------------------------------------------------- #
-def _samples_template(platform: str) -> str:
-    return ("sample\tr1\tr2\tplatform\tlayout\tlibrary\n"
-            f"SAMPLE1\treads/SAMPLE1.fastq.gz\t\t{platform}\tse\twgs\n"
-            f"SAMPLE2\treads/SAMPLE2.fastq.gz\t\t{platform}\tse\twgs\n")
+def _samples_template(platform: str, cfg: Optional[Dict[str, Any]] = None) -> str:
+    """Generate the sample sheet whose STRUCTURE matches the analysis (from the config, no data).
+
+    The columns + example rows are derived from the enabled modules so the user fills the right
+    shape — a differential run gets a group column with two groups of two, a decontam run gets a
+    control column with a blank/negative-control row, an aDNA run marks library=ancient. Short-read
+    platforms show the paired-end form (r2 + layout=pe) so paired Illumina isn't silently single-end.
+    """
+    cfg = cfg or {}
+    mods = cfg.get("modules", {}) or {}
+    short = platform in _SHORT_PLATFORMS
+    library = "ancient" if mods.get("damage") else "wgs"
+    gcol = (str((cfg.get("differential") or {}).get("group_column", "group"))
+            if mods.get("differential") else None)
+    ctrl = bool(mods.get("decontam"))
+
+    cols = ["sample", "r1", "r2", "platform", "layout", "library"]
+    if gcol:
+        cols.append(gcol)
+    if ctrl:
+        cols.append("control")
+
+    def _reads(name: str):
+        return ((f"reads/{name}_R1.fastq.gz", f"reads/{name}_R2.fastq.gz", "pe") if short
+                else (f"reads/{name}.fastq.gz", "", "se"))
+
+    def _row(name: str, group: str = "", control: str = "") -> str:
+        r1, r2, lay = _reads(name)
+        cells = [name, r1, r2, platform, lay, library]
+        if gcol:
+            cells.append(group)
+        if ctrl:
+            cells.append(control)
+        return "\t".join(cells)
+
+    rows = ["\t".join(cols)]
+    if gcol:
+        # differential needs >=2 groups with >=2 samples each — show exactly that shape
+        rows += [_row("CASE1", "case"), _row("CASE2", "case"),
+                 _row("CTRL1", "control"), _row("CTRL2", "control")]
+    else:
+        rows += [_row("SAMPLE1"), _row("SAMPLE2")]
+    if ctrl:
+        rows.append(_row("BLANK", control="true"))   # decontam needs a negative/blank control
+    return "\n".join(rows) + "\n"
 
 
 def _setup_sh(env_name: str, use_conda: bool, executor: Optional[str]) -> str:
@@ -67,7 +116,7 @@ def _setup_sh(env_name: str, use_conda: bool, executor: Optional[str]) -> str:
 # conda env for exactly THIS analysis. Prereqs: git + conda/mamba (Miniforge). Re-runnable.
 #   WITH_SLURM=1 bash 00_setup.sh   # on an HPC that submits via SLURM
 set -euo pipefail
-METAGX_REPO="${{METAGX_REPO:-https://github.com/MdRasheduz-zaman/metagenomics-skill.git}}"
+METAGX_REPO="${{METAGX_REPO:-{METAGX_REPO_URL}}}"
 METAGX_HOME="${{METAGX_HOME:-$HOME/metagx}}"
 WITH_SLURM="${{WITH_SLURM:-0}}"
 
@@ -188,7 +237,7 @@ def scaffold(cfg: Dict[str, Any], outdir: str, executor: Optional[str] = None,
 
     files: Dict[str, str] = {
         "config.yaml": yaml.safe_dump(cfg, sort_keys=False),
-        "samples.tsv": _samples_template(platform),
+        "samples.tsv": _samples_template(platform, cfg),
         "env.yaml": report.config_env_yaml(inline_view, env_yml_path, name=plan["env_name"]),
         "00_setup.sh": _setup_sh(plan["env_name"], plan["use_conda"], executor),
         "run.sh": _run_sh(project, plan["env_name"], plan["use_conda"], executor),

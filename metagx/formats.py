@@ -7,11 +7,29 @@ QC (a FASTQ-only step) is skipped automatically for it.
 
 from __future__ import annotations
 
+import csv
 import gzip
 import os
+from typing import Dict, List
 
 FASTQ_EXTS = (".fastq", ".fq")
 FASTA_EXTS = (".fasta", ".fa", ".fna", ".fas")
+
+
+def read_tsv_dicts(path: str) -> List[Dict[str, str]]:
+    """Read a TSV into a list of ``{column: value}`` rows, tolerant of real-world sheets.
+
+    The target audience edits sample sheets in Excel, which commonly saves UTF-8 **with a BOM**;
+    a naive ``open`` then makes the first header ``"\\ufeffsample"``, so ``row["sample"]`` raises a
+    cryptic ``KeyError``. Opening with ``utf-8-sig`` strips the BOM, and we also normalize
+    surrounding whitespace on the header names (``" sample "`` -> ``"sample"``). Values are left
+    as-is; callers strip where they need to. Every sample-sheet reader routes through here so the
+    tolerance can't drift between the CLI, the config builder, the probe, and the workflow.
+    """
+    with open(path, encoding="utf-8-sig", newline="") as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        return [{(k.strip() if isinstance(k, str) else k): v for k, v in row.items()}
+                for row in reader]
 
 
 def is_gzipped(path: str) -> bool:

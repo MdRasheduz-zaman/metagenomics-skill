@@ -107,25 +107,15 @@ def environment_file_path() -> Optional[str]:
     return None
 
 
-def run(
-    config: str = "config.yaml",
-    cores: str | int = "all",
-    dry_run: bool = False,
-    use_conda: bool = False,
-    profile: str | None = None,
-    extra: List[str] | None = None,
-) -> subprocess.CompletedProcess:
-    """Run the workflow. Returns the completed process (check returncode/stdout).
+def _build_command(config: str, cores: str | int, dry_run: bool, use_conda: bool,
+                   profile: str | None, extra: List[str] | None) -> List[str]:
+    """The Snakemake argv, shared by ``run`` (foreground) and ``start_run`` (background).
 
-    ``use_conda`` makes Snakemake create/use the per-rule conda envs under workflow/envs/,
-    so the heavy domain tools are provisioned automatically on first run.
+    Invoked under *this* interpreter (``sys.executable -m snakemake``), not a bare ``snakemake``
+    off PATH: the workflow's common.smk does ``from metagx import ...`` in the Snakemake process,
+    so PATH could pick an env without metagx → ModuleNotFoundError at load. Raises
+    ``CondaFrontendError`` when ``use_conda`` is requested but the frontend can't drive it.
     """
-    # Invoke Snakemake under *this* interpreter, not a bare "snakemake" off PATH.
-    # The workflow's common.smk does `from metagx import ...`, evaluated in the
-    # Snakemake process's Python; resolving snakemake via PATH can pick an env that
-    # lacks metagx (e.g. running `metagx` by absolute path without activating its
-    # env) → ModuleNotFoundError at load time. sys.executable + `-m snakemake`
-    # guarantees the subprocess shares metagx's interpreter (snakemake is a hard dep).
     cmd = [
         sys.executable, "-m", "snakemake",
         "--snakefile", workflow_path(),
@@ -137,15 +127,118 @@ def run(
         cmd.append("--dry-run")
     if use_conda:
         frontend = pick_conda_frontend()
-        # A plain dry-run never provisions envs, so don't block it on the frontend version.
-        if not dry_run:
+        if not dry_run:                       # a plain dry-run never provisions envs
             problem = conda_preflight(frontend)
             if problem:
                 raise CondaFrontendError(problem)
         cmd += ["--use-conda", "--conda-frontend", frontend]
     if profile:
-        # a directory containing config.yaml (e.g. the bundled SLURM profile)
         cmd += ["--workflow-profile", os.path.abspath(profile)]
     if extra:
         cmd.extend(extra)
+    return cmd
+
+
+def _jobs_root(root: str | None) -> str:
+    return root or os.path.join(".metagx", "jobs")
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except (OSError, ProcessLookupError):
+        return False
+    return True
+
+
+def start_run(
+    config: str = "config.yaml",
+    cores: str | int = "all",
+    use_conda: bool = False,
+    profile: str | None = None,
+    extra: List[str] | None = None,
+    jobs_root: str | None = None,
+) -> dict:
+    """Launch the workflow **detached** and return a job handle immediately.
+
+    For the MCP/HTTP surface: a real run is minutes-to-hours, so blocking the request until it
+    finishes times out the transport (and only the tail of the log survives). This spawns Snakemake
+    in its own session, tees all output to ``<jobs_root>/<job_id>/run.log``, and records the exit
+    code to ``returncode`` on completion. Poll with ``run_status(job_id)``. Raises
+    ``CondaFrontendError`` before launching if ``use_conda`` can't be driven.
+    """
+    import json
+    import shlex
+    import time
+
+    cmd = _build_command(config, cores, False, use_conda, profile, extra)
+    root = _jobs_root(jobs_root)
+    job_id = time.strftime("%Y%m%dT%H%M%S") + f"-{os.getpid()}"
+    d = os.path.join(root, job_id)
+    os.makedirs(d, exist_ok=True)
+    log = os.path.join(d, "run.log")
+    rc = os.path.join(d, "returncode")
+    inner = " ".join(shlex.quote(a) for a in cmd)
+    # tee to the log and record the exit code so run_status can report done+returncode after the
+    # detached process is gone (we can't wait() on a reparented child).
+    wrapper = f"{inner} > {shlex.quote(log)} 2>&1; printf '%s' \"$?\" > {shlex.quote(rc)}"
+    proc = subprocess.Popen(["sh", "-c", wrapper], start_new_session=True)
+    meta = {"job_id": job_id, "pid": proc.pid, "config": os.path.abspath(config),
+            "dir": d, "log": log, "started": time.time()}
+    with open(os.path.join(d, "job.json"), "w") as fh:
+        json.dump(meta, fh)
+    return meta
+
+
+def run_status(job_id: str, jobs_root: str | None = None, tail_lines: int = 40) -> dict:
+    """Status of a ``start_run`` job: ``running`` | ``done`` (with ``returncode``) | ``stopped`` |
+    ``unknown``, plus the last ``tail_lines`` of the log."""
+    import json
+
+    d = os.path.join(_jobs_root(jobs_root), job_id)
+    meta_path = os.path.join(d, "job.json")
+    if not os.path.isfile(meta_path):
+        return {"job_id": job_id, "status": "unknown", "error": "no such job"}
+    with open(meta_path) as fh:
+        meta = json.load(fh)
+    log = meta.get("log", os.path.join(d, "run.log"))
+    tail = ""
+    if os.path.isfile(log):
+        with open(log) as fh:
+            tail = "".join(fh.readlines()[-tail_lines:])
+    rc_path = os.path.join(d, "returncode")
+    if os.path.isfile(rc_path):
+        with open(rc_path) as fh:
+            raw = fh.read().strip()
+        rc = int(raw) if raw.isdigit() else 1
+        return {"job_id": job_id, "status": "done", "returncode": rc, "log": log, "log_tail": tail}
+    status = "running" if _pid_alive(meta.get("pid", -1)) else "stopped"
+    return {"job_id": job_id, "status": status, "log": log, "log_tail": tail}
+
+
+def run(
+    config: str = "config.yaml",
+    cores: str | int = "all",
+    dry_run: bool = False,
+    use_conda: bool = False,
+    profile: str | None = None,
+    extra: List[str] | None = None,
+    stream: bool = False,
+) -> subprocess.CompletedProcess:
+    """Run the workflow. Returns the completed process (check returncode/stdout).
+
+    ``use_conda`` makes Snakemake create/use the per-rule conda envs under workflow/envs/,
+    so the heavy domain tools are provisioned automatically on first run.
+
+    ``stream``: inherit this process's stdout/stderr so Snakemake's progress is shown **live**
+    instead of being captured and dumped only at the end. A metagenomics run is minutes-to-hours;
+    a captured run looks hung and loses everything on Ctrl-C. The CLI streams; callers that need the
+    log text back (the MCP/HTTP surface) leave ``stream`` off and read ``stdout``/``stderr`` (which
+    are ``None`` when streaming). The advisor/history read result *files*, not this output, so
+    streaming costs nothing there.
+    """
+    cmd = _build_command(config, cores, dry_run, use_conda, profile, extra)
+    if stream:
+        # Inherit stdio → live progress. stdout/stderr on the result are None by design.
+        return subprocess.run(cmd, text=True)
     return subprocess.run(cmd, capture_output=True, text=True)

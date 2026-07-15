@@ -1,7 +1,6 @@
 # Shared setup: sample sheet parsing, the sweep axis, and registry-driven helpers.
 # Imported by the top-level Snakefile before any rule modules.
 
-import csv
 import os
 import re
 from metagx import formats, registry
@@ -19,6 +18,12 @@ DB = config.get("db", {})
 # An optional db.build block builds the kraken2+Bracken DB as a pipeline step; classify/
 # abundance then depend on the produced manifest so the build runs first (and only once).
 DB_BUILD = DB.get("build")
+# Mirror build_config: a db.build with no explicit db.kraken2 writes the DB to
+# <outdir>/dbs/<strategy>. Default it here too so a hand-written/edited config that sets only
+# db.build still runs, instead of KeyError'ing on DB["kraken2"] (RT-2).
+if DB_BUILD and not DB.get("kraken2"):
+    DB["kraken2"] = os.path.join(OUTDIR, "dbs", str(DB_BUILD.get("strategy", "standard")))
+    DB.setdefault("bracken", DB["kraken2"])
 DB_MANIFEST = os.path.join(DB["kraken2"], ".metagx_db.json") if DB.get("kraken2") else None
 
 
@@ -63,9 +68,8 @@ KNOWN_PLATFORMS = SHORT_PLATFORMS | LONG_PLATFORMS
 def _load_samples(spec):
     records = []
     if isinstance(spec, str):
-        with open(spec) as fh:
-            for row in csv.DictReader(fh, delimiter="\t"):
-                records.append(row)
+        # BOM/whitespace-tolerant (Excel-saved sheets) — shared with the CLI/probe readers.
+        records = formats.read_tsv_dicts(spec)
     else:
         records = spec
     samples = {}
