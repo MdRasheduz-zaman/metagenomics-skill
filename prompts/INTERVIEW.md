@@ -48,6 +48,14 @@ If they pick a preset, start from its values and confirm only the data/db plus a
 
 ## Interview order
 **A. Project & data**
+- **execution target — ask this FIRST: local or HPC cluster?** A single workstation/fat node
+  (`local`, no scheduler) or a job scheduler? If HPC, ask *which*: `slurm` / `lsf` / `sge` /
+  `pbs` / `generic`. This does not change the `config.yaml` — the same config runs either way —
+  but it decides the scaffold: `metagx project --config config.yaml --dir <run> --executor <name>`
+  adds a `profile/` (submit command + per-rule CPU/mem/walltime) the user edits for their site.
+  Default `local`. See section **G** for the details and the two lines the user must set
+  (`slurm_partition`+`slurm_account`, or the LSF/SGE/PBS equivalents). (When the CLI is
+  available, `metagx schedulers` lists the real backends.)
 - project name (default `run`), output dir (default `results`), threads (default `8`)
 - samples: for each, a name, R1 path, and optional R2 path (R2 omitted = single-end)
 - **per sample, the sequencing platform** (this changes the QC tool and assembler):
