@@ -59,6 +59,19 @@ def test_short_read_assembly_adds_only_relevant_tools(tmp_path):
     assert "flye" not in bases                                  # long-read assembler not selected
 
 
+def test_reconcile_without_binning_still_pulls_mapping_stack(tmp_path):
+    """Regression: reconcile reuses the shared map_to_contigs -> contig_depth (jgi, in metabat2)
+    -> contig_breadth (samtools) rules, so its env must include the mapping stack even when
+    binning is off. Previously these were gated on binning alone and silently dropped."""
+    env = _fake_env_yml(tmp_path)
+    cfg = {"project": "p",
+           "modules": {"qc": True, "classify": True, "assembly": True,
+                       "reconcile": True, "binning": False},
+           "samples": [{"sample": "s", "r1": "x.fq", "platform": "illumina"}]}
+    bases = {p.split()[0] for p in report.active_core_packages(cfg, env)}
+    assert {"minimap2", "samtools", "metabat2"} <= bases
+
+
 def test_config_env_yaml_is_valid_and_named(tmp_path):
     env = _fake_env_yml(tmp_path)
     text = report.config_env_yaml(_gut_ont_cfg(), env)

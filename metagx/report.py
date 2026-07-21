@@ -180,8 +180,14 @@ def active_tools(cfg: Dict[str, Any]) -> List[str]:
             tools.append("metaspades" if asm == "metaspades" else "megahit")
         if plats & (ONT_P | PB_P):
             tools.append("flye")
-    if mods.get("binning"):
+    # Read-to-contig mapping (map_to_contigs -> contig_depth -> contig_breadth in
+    # assembly.smk/reconcile.smk) is SHARED: binning and reconcile both consume the sorted
+    # BAM + jgi depth, so the mapping stack must be present for either. metabat2 supplies
+    # jgi_summarize_bam_contig_depths (the depth step), not just the binner.
+    if mods.get("binning") or mods.get("reconcile"):
         tools += ["minimap2", "samtools", "metabat2"]
+    elif mods.get("filtered_assembly"):
+        tools += ["minimap2", "samtools"]   # maps to compare filtered vs unfiltered; no depth step
     if mods.get("bin_refinement"):
         tools += ["maxbin2", "concoct", "das_tool", "drep"]
     if mods.get("domain_taxonomy"):
